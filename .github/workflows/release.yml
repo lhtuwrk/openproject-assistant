@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from manifest
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Manifest version: $VERSION"
+
+      - name: Require a changelog entry for this version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const v = process.env.VERSION;
+          const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
+          const head = new RegExp('^## \[' + v.replace(/\./g, '\.') + '\](\s+-\s+\S+)?\s*$');
+          const start = lines.findIndex(l => head.test(l));
+          if (start < 0) { console.error(`CHANGELOG.md has no "## [${v}]" section`); process.exit(1); }
+          let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+          if (end < 0) end = lines.length;
+          const body = lines.slice(start + 1, end).filter(l => l.trim() && !/^###\s/.test(l));
+          if (!body.length) { console.error(`CHANGELOG.md section [${v}] is empty`); process.exit(1); }
+          console.log(`Changelog [${v}] has ${body.length} entries`);
+          JS
+
+      - name: Validate extension
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
+          git ls-files '*.js' | while read -r f; do node --check "$f"; done
+          if [ -f .gitea/scripts/check-manifest.js ]; then node .gitea/scripts/check-manifest.js; fi
+
+      - name: Stamp release date in changelog
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          node - "$DATE" <<'JS'
+          const fs = require('fs');
+          const date = process.argv[2], v = process.env.VERSION;
+          const head = new RegExp('^## \[' + v.replace(/\./g, '\.') + '\].*$', 'm');
+          const s = fs.readFileSync('CHANGELOG.md', 'utf8').replace(head, `## [${v}] - ${date}`);
+          fs.writeFileSync('CHANGELOG.md', s);
+          JS
+
+      - name: Zip extension
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          NAME="openproject-assistant-${VERSION}"
+          zip -r "${NAME}.zip" manifest.json background content pages shared icons fonts
+          # every tracked file in the shipped folders must be in the zip
+          unzip -Z1 "${NAME}.zip" | grep -v '/$' | sort > zipped.txt
+          git ls-files manifest.json background content pages shared icons fonts | sort > tracked.txt
+          diff tracked.txt zipped.txt
+          rm zipped.txt tracked.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openproject-assistant-${{ steps.ver.outputs.version }}
+          path: openproject-assistant-${{ steps.ver.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Bump manifest and changelog to next patch version
+        id: bump
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const v = process.env.VERSION;
+          const [a, b, c] = v.split('.').map(Number);
+          const next = `${a}.${b}.${c + 1}`;
+
+          const m = fs.readFileSync('manifest.json', 'utf8');
+          fs.writeFileSync('manifest.json', m.replace(/("version"\s*:\s*")[^"]+(")/, `$1${next}$2`));
+
+          // pending "Unreleased" notes become the next version's section (no date yet);
+          // otherwise open a fresh empty section above the one just released
+          let c2 = fs.readFileSync('CHANGELOG.md', 'utf8');
+          if (/^## \[Unreleased\]\s*$/m.test(c2)) {
+            c2 = c2.replace(/^## \[Unreleased\]\s*$/m, `## [${next}]`);
+          } else {
+            c2 = c2.replace(new RegExp('^## \[' + v.replace(/\./g, '\.') + '\]', 'm'), `## [${next}]\n\n## [${v}]`);
+          }
+          fs.writeFileSync('CHANGELOG.md', c2);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `next=${next}\n`);
+          JS
+
+      - name: Commit and merge to main
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          NEXT: ${{ steps.bump.outputs.next }}
+          REF: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json CHANGELOG.md
+          git commit -m "Release ${VERSION}, bump to ${NEXT}"
+          if [ "$REF" != "main" ]; then
+            RELEASE_SHA=$(git rev-parse HEAD)
+            git fetch origin main
+            git checkout -B main origin/main
+            git merge --no-ff "$RELEASE_SHA" -m "Merge ${REF}: release ${VERSION}"
+          fi
+          git push origin HEAD:main
