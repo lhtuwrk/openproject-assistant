@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.5.4]
 
+### Added
+- With Jira style on, a floating "Child work items" button on work-package pages (full page and split view) jumps to the child work items, so they are one click away under a long description.
+
 ### Changed
 - The quote of the day in the work-package list's bottom bar is larger, in the main text colour and kept to one line.
 

@@ -1091,6 +1091,14 @@ html.${BL_CLASS} #rb li.story > .story_points .t:not(:empty) {
    as in Jira's issue view; OpenProject keeps them in the Relations tab.
    Built by renderChildren(); the assignee button opens the picker. */
 html.${WP_CLASS} .blm-jx-children { padding-top: var(--jx-space-6); }
+html.${WP_CLASS} .blm-jx-jump {
+  position: fixed; right: 32px; bottom: 72px; z-index: 50;
+  padding: 8px 14px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 600 13px/16px var(--jx-font); color: #fff; background: var(--jx-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+html.${WP_CLASS} .blm-jx-jump:hover { filter: brightness(1.1); }
+html.${WP_CLASS} .blm-jx-jump:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
 html.${WP_CLASS} .blm-jx-children-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--jx-space-3);
   margin-bottom: var(--jx-space-2);
@@ -1803,6 +1811,49 @@ function renderChildren() {
     else closePicker();
   }
 }
+
+// Floating button that scrolls the child work items into view, for stories with a
+// long description. It shows as soon as the description is on screen (the section
+// itself only exists after the children load) and while the section's top is below
+// the fold. Scroll is listened to in the capture phase so the split-view pane's own
+// scroll container counts too.
+let jumpBtn = null;
+
+function jumpTarget() {
+  return document.querySelector('.blm-jx-children') ?? childAnchor();
+}
+
+function updateJump() {
+  if (!jumpBtn) return;
+  const target = jumpTarget();
+  if (!target) { jumpBtn.hidden = true; return; }
+  const rect = target.getBoundingClientRect();
+  // Section: its top is below the fold. Description (children still loading): its end is.
+  const edge = target.classList.contains('blm-jx-children') ? rect.top : rect.bottom;
+  jumpBtn.hidden = edge < window.innerHeight - 80;
+}
+
+function syncJump() {
+  const on = skinEnabled && onWorkPackagePage() && viewWpId() && childAnchor();
+  if (!on) {
+    jumpBtn?.remove();
+    jumpBtn = null;
+    return;
+  }
+  if (!jumpBtn) {
+    jumpBtn = el('button', 'blm-jx-jump', '↓ Child work items');
+    jumpBtn.type = 'button';
+    jumpBtn.addEventListener('click', () => {
+      const section = document.querySelector('.blm-jx-children');
+      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else childAnchor()?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+  }
+  if (!jumpBtn.isConnected) document.body.append(jumpBtn);
+  updateJump();
+}
+document.addEventListener('scroll', updateJump, { capture: true, passive: true });
+window.addEventListener('resize', updateJump);
 
 /** Replaces one child in the cache with a new object, so the next pass rebuilds. */
 function updateKid(wpId, kidId, patch) {
@@ -3479,19 +3530,22 @@ function schedule() {
   frame = requestAnimationFrame(() => {
     frame = 0;
     applyClasses();
-    if (!anyEnabled() || !document.body) return;
+    if (!anyEnabled() || !document.body) { syncJump(); return; }
     if (skinEnabled) animateTabSwitch();
     if (!onWorkPackagePage() || !viewWpId()) childrenFor(null);   // left: drop cache, close picker
     const onWp = onWorkPackagePage();
     if (onWp && !wasOnWp) pickQuote();
     wasOnWp = onWp;
     if (onWp) {
-      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); adjustRelationsCount(); }
+      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); syncJump(); adjustRelationsCount(); }
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();
       if (filesEnabled) renderFileCards();
-    } else if (skinEnabled && onBacklogsPage()) tagCells();
+    } else {
+      syncJump();
+      if (skinEnabled && onBacklogsPage()) tagCells();
+    }
   });
 }
 
@@ -3501,6 +3555,7 @@ function disable() {
   untagCells();
   restoreFullView();
   restoreRelationsCount();
+  syncJump();
   if (picker?.button.closest('.blm-jx-children')) closePicker();
   document.querySelector('.blm-jx-children')?.remove();
 }
