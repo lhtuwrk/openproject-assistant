@@ -144,8 +144,11 @@ html.blm-ui2-wp .work-package-details-activities-activity:not(:last-child)::befo
   content: ""; position: absolute; left: 13px; top: 38px; bottom: -8px; width: 1px; background: var(--g-hairline2);
 }
 html.blm-ui2-wp .work-package-details-activities-activity .op-avatar,
-html.blm-ui2-wp .work-package-details-activities-activity .op-principal--avatar {
-  width: 28px; height: 28px; border-radius: 50%;
+html.blm-ui2-wp .work-package-details-activities-activity .op-principal--avatar,
+html.blm-ui2-wp .work-package-details-activities-activity .op-user-activity--avatar,
+html.blm-ui2-wp .work-package-details-activities-activity .op-avatar img {
+  box-sizing: border-box; width: 28px !important; height: 28px !important; min-width: 28px !important; max-width: 28px !important;
+  aspect-ratio: 1; border-radius: 50%; object-fit: cover; background-size: cover; background-position: center;
 }
 
 /* Footer toolbar */
