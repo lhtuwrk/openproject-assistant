@@ -1,29 +1,39 @@
-/* UI 2.0 work-package list: toolbar and table. No blur on rows (Angular
-   re-renders them constantly); the table sits on one solid-ish card.
-   OpenProject-internal selectors: .toolbar-container, .toolbar-items .button,
-   .work-package-table (td.id/subject/status/type/priority/assignee,
-   tr.-group-header, tr.wp-table--row), .op-pagination. */
+/* UI 2.0 work-package list: toolbar band, status tabs, table. Flat white surfaces,
+   hairlines only. Status pills (.blm-jx-lozenge) and the type/priority icons
+   (.blm-jx-icon, styled in jira-skin.js) are added by jira-skin.js's DOM work.
+   OpenProject-internal selectors: .toolbar-container(.-editable) .toolbar,
+   editable-toolbar-title input, .toolbar-items .button, .work-package-table
+   (thead.-sticky, tr.wp-table--row(.-checked), tr.wp-table--group-header,
+   tr.wp-table--sums-row, td.id/subject/status/...), .op-pagination,
+   .work-packages-partitioned-page--content-left, .blm-native-bar. */
 
-/* Toolbar: title and buttons */
-html.blm-ui2-wp .toolbar-container,
-html.blm-ui2-wp #toolbar { font-family: var(--g-font); }
-html.blm-ui2-wp .toolbar-container .title-container,
-html.blm-ui2-wp .toolbar-container .title-container *,
-html.blm-ui2-wp .toolbar-container h2 {
-  font-family: var(--g-font); font-size: 24px; font-weight: 600; font-style: normal;
-  letter-spacing: -.02em; color: var(--g-text);
+/* Toolbar band */
+html.blm-ui2-wp .toolbar-container {
+  font-family: var(--g-font); background: var(--g-surface-solid);
+  border-bottom: 1px solid var(--g-hairline); padding: 12px 16px; margin: 0;
 }
+html.blm-ui2-wp .toolbar-container .toolbar { background: transparent; border: 0; padding: 0; margin: 0; }
+html.blm-ui2-wp .toolbar-container .editable-toolbar-title--input,
+html.blm-ui2-wp .toolbar-container .title-container h2,
+html.blm-ui2-wp .toolbar-container .title-container .editable-toolbar-title--input.-border-on-hover-only {
+  font-family: var(--g-font); font-size: 22px; font-weight: 650; font-style: normal;
+  letter-spacing: -.02em; color: var(--g-text);
+  background: transparent; border: 1px solid transparent; border-radius: var(--g-radius);
+  box-shadow: none;
+}
+html.blm-ui2-wp .toolbar-container .editable-toolbar-title--input:hover { background: var(--g-hover); border-color: transparent; }
+html.blm-ui2-wp .toolbar-container .editable-toolbar-title--input:focus { background: var(--g-surface-solid); border-color: var(--g-focus); outline: none; }
 html.blm-ui2-wp .toolbar-items .button,
 html.blm-ui2-wp .toolbar-container .button {
-  font-family: var(--g-font); font-size: 14px; font-weight: 500;
-  height: 34px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px;
-  background: var(--g-btn); color: var(--g-text2); box-shadow: none; white-space: nowrap;
+  font-family: var(--g-font); font-size: 13px; font-weight: 500;
+  height: 32px; min-height: 32px; padding: 0 12px; border: 1px solid var(--g-hairline2); border-radius: var(--g-radius-lg);
+  background: var(--g-btn); color: var(--g-text); box-shadow: none; white-space: nowrap;
   transition: background-color .14s ease-out, color .14s ease-out;
 }
 html.blm-ui2-wp .toolbar-items .button:hover,
 html.blm-ui2-wp .toolbar-container .button:hover { background: var(--g-btn-hover); color: var(--g-text); }
 html.blm-ui2-wp .toolbar-items .button.-active,
-html.blm-ui2-wp .toolbar-container .button.-active { background: var(--g-selected); color: var(--g-accent); }
+html.blm-ui2-wp .toolbar-container .button.-active { background: var(--g-selected); color: var(--g-accent); border-color: var(--g-selected); }
 html.blm-ui2-wp .toolbar-items .button:disabled,
 html.blm-ui2-wp .toolbar-items .button.-disabled { opacity: .5; cursor: not-allowed; }
 html.blm-ui2-wp .toolbar-items .button .button--icon,
@@ -31,28 +41,50 @@ html.blm-ui2-wp .toolbar-items .button .icon { color: inherit; }
 /* the single primary action (Create) */
 html.blm-ui2-wp .toolbar-items .button.-alt-highlight,
 html.blm-ui2-wp .toolbar-items .button.-highlight,
-html.blm-ui2-wp .toolbar-items .button.-primary { background: var(--g-accent); color: var(--g-on-accent); }
+html.blm-ui2-wp .toolbar-items .button.-primary { background: var(--g-accent); border-color: var(--g-accent); color: var(--g-on-accent); font-weight: 600; }
 html.blm-ui2-wp .toolbar-items .button.-alt-highlight:hover,
 html.blm-ui2-wp .toolbar-items .button.-highlight:hover,
 html.blm-ui2-wp .toolbar-items .button.-primary:hover { background: var(--g-accent); filter: brightness(1.1); color: var(--g-on-accent); }
+/* badges are plain numbers */
 html.blm-ui2-wp .toolbar-items .button .badge {
-  background: var(--g-text2); color: var(--g-surface-solid);
-  border-radius: 8px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px;
+  background: transparent; color: var(--g-text2); border: 0; padding: 0; margin-left: 4px;
+  font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
 }
+html.blm-ui2-wp .toolbar-items .button.-alt-highlight .badge { color: inherit; }
 html.blm-ui2-wp .toolbar-items .button:focus-visible,
 html.blm-ui2-wp .toolbar-container .button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
-/* Table: one floating card, 44 px rows, hairlines only */
-html.blm-ui2-wp .work-package-table {
-  font-family: var(--g-font); font-size: 14px; color: var(--g-text);
-  background: var(--g-surface-solid); border-collapse: separate; border-spacing: 0;
-  box-shadow: var(--g-shadow); border-radius: var(--g-radius-lg);
+/* Status quick-filter tabs (built by ui2.js, grouped lists only) */
+.blm-ui2-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 16px 0;
+  background: var(--g-surface-solid); border-bottom: 1px solid var(--g-hairline);
+  font-family: var(--g-font);
 }
-html.blm-ui2-wp .work-package-table thead th:first-child { border-top-left-radius: var(--g-radius-lg); }
-html.blm-ui2-wp .work-package-table thead th:last-child { border-top-right-radius: var(--g-radius-lg); }
+.blm-ui2-tabs button {
+  appearance: none; margin: 0 0 -1px; padding: 6px 10px 8px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--g-text2); cursor: pointer;
+  font: 500 13px/18px var(--g-font); white-space: nowrap;
+}
+.blm-ui2-tabs button span { color: var(--g-muted); font-variant-numeric: tabular-nums; }
+.blm-ui2-tabs button:hover { color: var(--g-text); }
+.blm-ui2-tabs button[aria-pressed="true"] { color: var(--g-accent); border-bottom-color: var(--g-accent); }
+.blm-ui2-tabs button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; border-radius: var(--g-radius); }
+
+/* Table */
+html.blm-ui2-wp .work-package-table-container,
+html.blm-ui2-wp .work-package-table--container,
+html.blm-ui2-wp .work-packages-partitioned-page--content-left { background: var(--g-surface-solid); }
+html.blm-ui2-wp .work-package-table {
+  font-family: var(--g-font); font-size: 13px; color: var(--g-text);
+  background: var(--g-surface-solid); border-collapse: separate; border-spacing: 0;
+}
+html.blm-ui2-wp .work-package-table thead,
+html.blm-ui2-wp .work-package-table thead.-sticky th {
+  background: var(--g-surface-solid);
+}
 html.blm-ui2-wp .work-package-table thead th {
-  background: var(--g-surface-solid); border: 0; border-bottom: 1px solid var(--g-hairline);
-  height: 40px; padding: 0 10px; vertical-align: middle;
+  background: var(--g-surface-solid); border: 0; border-bottom: 1px solid var(--g-hairline2);
+  height: 36px; padding: 0 10px; vertical-align: middle;
 }
 html.blm-ui2-wp .work-package-table thead th *,
 html.blm-ui2-wp .work-package-table thead th *::before,
@@ -66,85 +98,103 @@ html.blm-ui2-wp .work-package-table thead th span {
 html.blm-ui2-wp .work-package-table thead th a:hover { color: var(--g-text); text-decoration: none; }
 
 html.blm-ui2-wp .work-package-table tbody td {
-  height: 44px; padding: 0 10px; vertical-align: middle;
+  height: 40px; padding: 0 10px; vertical-align: middle;
   border: 0; border-bottom: 1px solid var(--g-hairline);
-  background: transparent; color: var(--g-text);
+  background: var(--g-surface-solid); color: var(--g-text);
 }
 html.blm-ui2-wp .work-package-table tbody tr.wp-table--row:hover > td { background: var(--g-hover); }
+/* Selected row: solid tint on tr and td (OpenProject paints its own blue on both)
+   and a cobalt bar on the first cell. */
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked,
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked:hover,
 html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked > td,
-html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--g-selected); }
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--g-selected) !important; }
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked > td:first-child { box-shadow: inset 3px 0 0 var(--g-accent); }
 
+/* IDs and subjects read as links */
 html.blm-ui2-wp .work-package-table td.id a {
   color: var(--g-accent); font-weight: 500; text-decoration: none; font-variant-numeric: tabular-nums;
 }
 html.blm-ui2-wp .work-package-table td.id a:hover { text-decoration: underline; }
 html.blm-ui2-wp .work-package-table td.subject,
-html.blm-ui2-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 450; }
+html.blm-ui2-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 500; }
+html.blm-ui2-wp .work-package-table td.subject a:hover { color: var(--g-accent); }
 
-/* Quieter columns; type and priority keep OpenProject's own icon and dot */
+/* Quieter columns */
 html.blm-ui2-wp .work-package-table td.priority *,
 html.blm-ui2-wp .work-package-table td.type *,
 html.blm-ui2-wp .work-package-table td.version *,
 html.blm-ui2-wp .work-package-table td[class*="customField"] * { color: var(--g-text2); }
-html.blm-ui2-wp .work-package-table td.type * { text-transform: none; font-weight: 400; letter-spacing: 0; }
-html.blm-ui2-wp .work-package-table td.storyPoints,
-html.blm-ui2-wp .work-package-table td.spentTime,
-html.blm-ui2-wp .work-package-table td.estimatedTime { font-variant-numeric: tabular-nums; }
 html.blm-ui2-wp .work-package-table [class*="__hl_inline_type"],
 html.blm-ui2-wp .work-package-table [class*="__hl_inline_priority"] {
   color: var(--g-text2) !important; text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
 }
+/* Numbers: right-aligned, tabular */
+html.blm-ui2-wp .work-package-table td.storyPoints,
+html.blm-ui2-wp .work-package-table td.spentTime,
+html.blm-ui2-wp .work-package-table td.estimatedTime,
+html.blm-ui2-wp .work-package-table td.remainingTime,
+html.blm-ui2-wp .work-package-table td.percentageDone { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* Status chip (tagged by ui2.js) */
-html.blm-ui2-wp .work-package-table .blm-g-chip {
+/* Status pill (class added by jira-skin.js) */
+html.blm-ui2-wp .work-package-table .blm-jx-lozenge {
   display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-  padding: 2px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
-  font-family: var(--g-font); font-size: 12px; font-weight: 600; line-height: 16px;
+  padding: 2px 9px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
+  font-family: var(--g-font); font-size: 12px; font-weight: 600; line-height: 18px;
   text-transform: none; letter-spacing: 0;
-  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+  background: var(--g-chip-todo-bg); color: var(--g-chip-todo-fg);
 }
-html.blm-ui2-wp .work-package-table .blm-g-chip[data-blm-tone="progress"] {
-  background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important;
-}
-html.blm-ui2-wp .work-package-table .blm-g-chip[data-blm-tone="done"] {
-  background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important;
-}
+html.blm-ui2-wp .work-package-table .blm-jx-lozenge[data-blm-tone="progress"] { background: var(--g-chip-progress-bg); color: var(--g-chip-progress-fg); }
+html.blm-ui2-wp .work-package-table .blm-jx-lozenge[data-blm-tone="done"] { background: var(--g-chip-done-bg); color: var(--g-chip-done-fg); }
 
 /* Avatars */
 html.blm-ui2-wp .work-package-table td.assignee .op-principal--avatar,
 html.blm-ui2-wp .work-package-table td.assignee .op-avatar,
 html.blm-ui2-wp .work-package-table td.assignee img {
-  box-sizing: border-box; flex: none; width: 26px; height: 26px; min-width: 26px; max-width: 26px;
+  box-sizing: border-box; flex: none; width: 22px; height: 22px; min-width: 22px; max-width: 22px;
   aspect-ratio: 1; border-radius: 50%; object-fit: cover; background-size: cover; background-position: center;
 }
 html.blm-ui2-wp .work-package-table td.assignee * { color: var(--g-text); }
 
-/* Group headers and sum rows */
+/* Group headers: a band; the count keeps OpenProject's brackets, as plain text */
+html.blm-ui2-wp .work-package-table tr.wp-table--group-header > td,
 html.blm-ui2-wp .work-package-table tr.-group-header > td,
 html.blm-ui2-wp .work-package-table tr[class*="group-header"] > td {
-  height: 44px; background: var(--g-sunken); border-bottom: 1px solid var(--g-hairline); padding: 0 10px;
+  height: 40px; background: var(--g-band) !important; border-bottom: 1px solid var(--g-hairline2); padding: 0 10px;
 }
-html.blm-ui2-wp .work-package-table tr.-group-header .group--value,
 html.blm-ui2-wp .work-package-table tr[class*="group-header"] .group--value {
   font-family: var(--g-font); font-size: 14px; font-weight: 600; color: var(--g-text);
 }
-html.blm-ui2-wp .work-package-table tr.-group-header .count,
 html.blm-ui2-wp .work-package-table tr[class*="group-header"] .count {
-  display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
-  background: var(--g-chip-todo-bg); color: var(--g-text2);
-  font-size: 12px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+  display: inline; margin-left: 6px; padding: 0; background: transparent; border-radius: 0;
+  color: var(--g-text2); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
 }
+html.blm-ui2-wp .work-package-table tr[class*="group-header"] .expander { color: var(--g-text2); }
+html.blm-ui2-wp .work-package-table tr.wp-table--sums-row > td,
 html.blm-ui2-wp .work-package-table tr[class*="sums"] > td {
-  height: 36px; background: var(--g-surface-solid); color: var(--g-text2);
+  height: 32px; background: var(--g-surface-solid); color: var(--g-text2);
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 
+/* Progress overlay (content.js): a slim 6 px bar; the in-bar count is too small
+   for it and is hidden, the % beside the bar stays right-aligned. */
+html.blm-ui2-wp .blm-native-bar {
+  height: 6px !important; min-height: 6px; border: 0 !important; border-radius: 3px;
+  background: var(--g-chip-todo-bg) !important;
+}
+html.blm-ui2-wp .blm-native-bar > .blm-native-done { background: var(--g-chip-done-fg); }
+html.blm-ui2-wp .blm-native-bar > .blm-native-prog { background: var(--g-accent); }
+html.blm-ui2-wp .blm-native-bar > .blm-count { display: none !important; }
+html.blm-ui2-wp .blm-native-host:hover > .blm-native-bar { box-shadow: 0 0 0 3px var(--g-selected); }
+html.blm-ui2-wp .blm-warn { background: transparent; border-color: var(--g-muted); color: var(--g-muted); }
+
+/* Footer: pagination and the quote */
+html.blm-ui2-wp .op-pagination { font-family: var(--g-font); font-size: 12px; color: var(--g-text2); border-top: 1px solid var(--g-hairline); }
+html.blm-ui2-wp .op-pagination a { color: var(--g-text2); }
+
+/* Dark: OpenProject paints its table backgrounds itself */
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table th,
-html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table td { background-color: transparent; }
-html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tbody tr.wp-table--row:hover > td { background-color: var(--g-hover); }
-html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tbody tr.wp-table--row.-checked > td { background-color: var(--g-selected); }
-html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tr.-group-header > td,
-html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tr[class*="group-header"] > td { background-color: var(--g-sunken); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table td { border-color: var(--g-hairline); }
 
 @media (prefers-reduced-motion: reduce) {
   html.blm-ui2-wp .toolbar-container .button { transition: none; }

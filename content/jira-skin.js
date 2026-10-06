@@ -3561,6 +3561,8 @@ function schedule() {
 function disable() {
   document.documentElement.classList.remove(ROOT_CLASS, WP_CLASS, BL_CLASS);
   delete document.documentElement.dataset.blmTheme;
+  welcomeEl?.remove();
+  welcomeEl = null;
   if (!domOn()) undoDom();
 }
 

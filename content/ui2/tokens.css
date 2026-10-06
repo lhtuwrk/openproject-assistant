@@ -1,68 +1,142 @@
-/* UI 2.0 (liquid glass) tokens. Scoped under html.blm-ui2 so nothing leaks into
-   OpenProject while the switch is off. Values derive from shared/tokens.css
-   (graphite + cobalt); content scripts can't import it, so they are repeated
-   here: keep in step. See design.md "Injected skin 2.0". */
+/* UI 2.0 tokens: graphite + cobalt, flat white surfaces (no glass). Scoped under
+   html.blm-ui2 so nothing leaks into OpenProject while the switch is off.
+   Values derive from shared/tokens.css; content scripts can't import it, so they
+   are repeated here: keep in step. See design.md "Injected skin 2.0".
+   --g-* are UI 2.0's own tokens; --jx-* re-point jira-skin.js's shared structural
+   CSS (children section, full-page layout, icons) at the same palette. */
+
+/* Geist from the extension (web-accessible). If the __MSG_ substitution does not
+   run for a runtime-registered script the face just fails and the system stack
+   below is used. */
+@font-face {
+  font-family: 'Geist'; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(chrome-extension://__MSG_@@extension_id__/fonts/geist-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist'; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(chrome-extension://__MSG_@@extension_id__/fonts/geist-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist'; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(chrome-extension://__MSG_@@extension_id__/fonts/geist-vietnamese.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
 html.blm-ui2 {
-  --g-accent: #2f5fe0;
-  --g-text: #16181d;
-  --g-text2: #4a4f5a;
-  --g-canvas: linear-gradient(160deg, #eef1f8 0%, #f7f7f8 55%, #e9eefc 100%);
-  --g-surface: rgba(255, 255, 255, .62);
+  --g-font: 'Geist', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --g-paper: #f6f7f9;
   --g-surface-solid: #ffffff;
-  --g-border: rgba(255, 255, 255, .7);
-  --g-hairline: rgba(22, 24, 29, .08);
-  --g-shadow: 0 1px 2px rgba(22, 24, 29, .06), 0 8px 24px rgba(22, 24, 29, .08);
-  --g-blur: blur(20px) saturate(160%);
-  --g-raised: #ffffff;
-  --g-sunken: rgba(22, 24, 29, .035);
-  --g-hover: rgba(47, 95, 224, .06);
-  --g-selected: rgba(47, 95, 224, .12);
-  --g-btn: rgba(22, 24, 29, .06);
-  --g-btn-hover: rgba(22, 24, 29, .11);
+  --g-band: #f8f9fb;
+  --g-hairline: #eceef2;
+  --g-hairline2: #e2e5ea;
+  --g-text: #16181d;
+  --g-text2: #5b616d;
+  --g-muted: #8a909b;
+  --g-accent: #2f5fe0;
   --g-on-accent: #ffffff;
   --g-focus: #2f5fe0;
-  --g-chip-todo-bg: rgba(22, 24, 29, .07);
+  --g-raised: #ffffff;
+  --g-sunken: #f6f7f9;
+  --g-hover: #f5f7fb;
+  --g-selected: #eaf0fd;
+  --g-btn: #ffffff;
+  --g-btn-hover: #f5f7fb;
+  --g-shadow: 0 1px 2px rgba(22, 24, 29, .05), 0 8px 24px rgba(22, 24, 29, .06);
+  --g-chip-todo-bg: #f0f1f4;
   --g-chip-todo-fg: #4a4f5a;
-  --g-chip-progress-bg: rgba(47, 95, 224, .12);
+  --g-chip-progress-bg: #e8eefc;
   --g-chip-progress-fg: #2447b8;
-  --g-chip-done-bg: rgba(26, 127, 75, .13);
+  --g-chip-done-bg: #e5f4ec;
   --g-chip-done-fg: #146a3c;
-  --g-radius: 14px;
-  --g-radius-lg: 16px;
-  --g-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --g-radius: 6px;
+  --g-radius-lg: 8px;
 }
 
 html.blm-ui2[data-blm-ui2-theme="dark"] {
-  --g-accent: #4c7dff;
+  --g-paper: #0f1014;
+  --g-surface-solid: #17191e;
+  --g-band: #1b1e24;
+  --g-hairline: rgba(255, 255, 255, .07);
+  --g-hairline2: rgba(255, 255, 255, .11);
   --g-text: #ececef;
   --g-text2: #a4a8b3;
-  --g-canvas: linear-gradient(160deg, #15171c 0%, #111214 55%, #151a2b 100%);
-  --g-surface: rgba(30, 33, 40, .6);
-  --g-surface-solid: #1c1e24;
-  --g-border: rgba(255, 255, 255, .18);
-  --g-hairline: rgba(255, 255, 255, .08);
-  --g-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
-  --g-raised: #262932;
-  --g-sunken: rgba(255, 255, 255, .04);
-  --g-hover: rgba(255, 255, 255, .05);
-  --g-selected: rgba(76, 125, 255, .2);
-  --g-btn: rgba(255, 255, 255, .08);
-  --g-btn-hover: rgba(255, 255, 255, .14);
-  --g-on-accent: #0b0d12;
+  --g-muted: #7d828d;
+  --g-accent: #4c7dff;
+  --g-on-accent: #ffffff;
   --g-focus: #4c7dff;
-  --g-chip-todo-bg: rgba(255, 255, 255, .09);
+  --g-raised: #1f222a;
+  --g-sunken: #13151a;
+  --g-hover: #1d2027;
+  --g-selected: #1c2745;
+  --g-btn: #17191e;
+  --g-btn-hover: #1d2027;
+  --g-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  --g-chip-todo-bg: rgba(255, 255, 255, .08);
   --g-chip-todo-fg: #b5b9c4;
-  --g-chip-progress-bg: rgba(76, 125, 255, .22);
+  --g-chip-progress-bg: rgba(76, 125, 255, .2);
   --g-chip-progress-fg: #9ab6ff;
-  --g-chip-done-bg: rgba(61, 196, 120, .18);
+  --g-chip-done-bg: rgba(61, 196, 120, .16);
   --g-chip-done-fg: #6fdc9f;
   color-scheme: dark;
 }
 
-/* No blur available or transparency not wanted: opaque panels. */
-@media (prefers-reduced-transparency: reduce) {
-  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
+/* --jx-* for jira-skin.js's shared rules. Doubled class so the light block wins
+   over the later <style> jira-skin.js injects (0,1,1); dark follows it in source order. */
+html.blm-ui2.blm-ui2 {
+  --jx-font: var(--g-font);
+  --jx-text: var(--g-text);
+  --jx-text-subtle: var(--g-text2);
+  --jx-text-subtlest: var(--g-muted);
+  --jx-link: var(--g-accent);
+  --jx-link-hover: var(--g-accent);
+  --jx-surface: var(--g-surface-solid);
+  --jx-surface-sunken: var(--g-band);
+  --jx-surface-raised: var(--g-raised);
+  --jx-hover: var(--g-hover);
+  --jx-selected: var(--g-selected);
+  --jx-selected-hover: var(--g-selected);
+  --jx-border: var(--g-hairline2);
+  --jx-btn: var(--g-btn);
+  --jx-btn-hover: var(--g-btn-hover);
+  --jx-btn-press: var(--g-hairline2);
+  --jx-primary: var(--g-accent);
+  --jx-primary-hover: var(--g-accent);
+  --jx-primary-press: var(--g-accent);
+  --jx-on-primary: var(--g-on-accent);
+  --jx-focus: var(--g-focus);
+  --jx-todo-bg: var(--g-chip-todo-bg);
+  --jx-todo-fg: var(--g-chip-todo-fg);
+  --jx-progress-bg: var(--g-chip-progress-bg);
+  --jx-progress-fg: var(--g-chip-progress-fg);
+  --jx-done-bg: var(--g-chip-done-bg);
+  --jx-done-fg: var(--g-chip-done-fg);
+  --jx-done-bar: var(--g-chip-done-fg);
+  --jx-todo-bg-hover: var(--g-chip-todo-bg);
+  --jx-progress-bg-hover: var(--g-chip-progress-bg);
+  --jx-done-bg-hover: var(--g-chip-done-bg);
+  --jx-error: #e5484d;
+  --jx-type-story: #2f9e57;
+  --jx-type-bug: #e5484d;
+  --jx-type-task: #4c7dff;
+  --jx-type-epic: #8b6fd9;
+  --jx-type-feature: #2898bd;
+  --jx-type-other: #8a909b;
+  --jx-on-icon: #ffffff;
+  --jx-prio-highest: #e5484d;
+  --jx-prio-high: #f2884b;
+  --jx-prio-medium: #c9a227;
+  --jx-prio-low: #4c7dff;
+  --jx-radius: 4px;
+  --jx-radius-panel: 8px;
+  --jx-shadow-raised: var(--g-shadow);
+  --jx-side-w: 300px;
+  --jx-col-assignee: 160px;
 }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
+html.blm-ui2[data-blm-ui2-theme="dark"] {
+  --jx-error: #ff6b70;
+  --jx-prio-highest: #ff6b70;
+  --jx-prio-high: #ff9d66;
+  --jx-prio-medium: #e0bd47;
 }
