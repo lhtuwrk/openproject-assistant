@@ -119,13 +119,6 @@ function syncRail() {
   const nav = document.createElement('nav');
   nav.className = RAIL_CLASS;
   nav.setAttribute('aria-label', 'Main menu');
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.title = 'Expand menu';
-  toggle.setAttribute('aria-label', 'Expand menu');
-  toggle.textContent = '☰';   // decorative: the button has an aria-label
-  toggle.addEventListener('click', () => document.getElementById('main-menu-toggle')?.click());
-  nav.append(toggle);
   for (const a of links) {
     const item = document.createElement('a');
     item.href = a.getAttribute('href');
