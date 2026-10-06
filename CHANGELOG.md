@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.5.4]
 
+### Changed
+- The quote of the day in the work-package list's bottom bar is larger, in the main text colour and kept to one line.
+
+### Fixed
+- Dark mode: the Time and costs report table (cells, headers, links, hover) and its group-by bars now follow the dark theme instead of staying light.
+
 ## [1.5.3] - 2026-10-06
 
 ### Changed

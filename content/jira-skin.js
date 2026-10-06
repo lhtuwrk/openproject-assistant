@@ -3100,6 +3100,27 @@ ${D} :is(.work-packages--details, .work-packages--show-view) :is(table, thead, t
 ${D} :is(.work-packages--details, .work-packages--show-view) :is(th, th *) { color: var(--jx-text-subtlest); }
 ${D} :is(.work-packages--details, .work-packages--show-view) :is(td, tr) { border-color: var(--jx-border) !important; }
 
+/* Time and costs report: the result table paints grey cells and light-blue links
+   that vanish on dark */
+${D} #result-table :is(table, thead, tbody, tr, td, th) { background-color: transparent !important; color: var(--jx-text) !important; border-color: var(--jx-border) !important; }
+${D} #result-table :is(th, td.top, td.inner) { background-color: var(--jx-surface-sunken) !important; }
+${D} #result-table :is(th, th *) { color: var(--jx-text-subtle) !important; }
+${D} #result-table a { color: var(--jx-link) !important; }
+${D} #result-table td.result,
+${D} #result-table tr.result td { background-color: var(--jx-surface-raised) !important; }
+${D} #result-table :is(td, th, tr):is(:hover, .hover, .highlight, .highlighted, [class*="hover"]) { background: var(--jx-hover) !important; }
+${D} #result-table :is(td, th) { background-image: none !important; }
+${D} #result-table :is(tr, td, th, div, span, p):hover,
+${D} #result-table :is(tr, td, th):hover > * { background-color: var(--jx-hover) !important; background-image: none !important; color: var(--jx-text) !important; }
+${D} #result-table tr:hover :is(td, th) { background-color: var(--jx-hover) !important; }
+${D} #result-table td[style] { background: transparent !important; color: var(--jx-text) !important; }
+${D} #result-table td:not(:hover) *:not(a) { color: var(--jx-text) !important; background: transparent !important; }
+${D} .report-form-container :is(label, legend, h2, h3, .filter-label, .form--label, .form--field-container),
+${D} #query_form :is(label, legend, .form--label, .form--radio-button-container) { color: var(--jx-text) !important; }
+/* Group-by bars: light-grey strips holding the selected attribute chips */
+${D} :is(#group-by--container, .group-by--container) :is(.group-by--selected-elements, .group-by--selected-elements *:not(.group-by--selected-element):not(.group-by--selected-element *), .group-by--add-container) { background: var(--jx-surface-sunken) !important; }
+${D} :is(#group-by--container, .group-by--container) :is(select, .group-by--add-element) { background: var(--jx-surface-sunken) !important; color: var(--jx-text) !important; }
+
 /* The header is sticky: it needs a solid background or rows scroll through it.
    The column that gets highlighted white on header hover is painted by a <col> or by
    a header pseudo-element, not by the cells */
@@ -3374,8 +3395,8 @@ const EXTRAS = `
 .blm-quote {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   max-width: 45%; text-align: center; pointer-events: none;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  font: italic 13px/1.4 var(--jx-font, system-ui, sans-serif); color: var(--jx-text-subtle, #6b778c);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  font: italic 500 16px/1.45 var(--jx-font, system-ui, sans-serif); color: var(--jx-text, #172b4d);
 }
 `;
 const STYLE = CSS + DARK + MOTION + DRAG + EXTRAS;
