@@ -24,6 +24,10 @@ const WP_CLASS      = 'blm-jira-wp';
 const BL_CLASS      = 'blm-jira-bl';
 
 let skinEnabled = true;
+// UI 2.0 (content/ui2) reuses this file's DOM work (cells, children, full-page layout) with its own look.
+const CFG_UI2 = '__blm_ui2';
+let ui2Enabled = false;
+const domOn = () => skinEnabled || ui2Enabled;
 
 // "Animations": entrance animations and hover transitions of the skin; on by default.
 const CFG_ANIMATION = '__blm_jira_animation';
@@ -244,12 +248,16 @@ const GLYPH = {
   low:     svg(`<path d='M4 5.5l4 4 4-4'/>`),
 };
 
+// Shared scopes: the structural rules below apply to both the Jira skin and UI 2.0.
+const SH = ':is(html.blm-jira-wp, html.blm-ui2-wp)';
+const SR = ':is(html.blm-jira, html.blm-ui2)';
+
 const CSS = `
 /* Hallmark · scope: injected skin · reference: Jira (top bar, list view, issue view) · genre: modern-minimal
  * theme: studied-DNA (source: Jira) · paper #fff · accent blue
  * pre-emit critique: P4 H4 E4 S4 R5 V4
  */
-html.${ROOT_CLASS}, html.${AS_CLASS}, html.${ACT_CLASS}, html.${FILES_CLASS} {
+html.${ROOT_CLASS}, html.blm-ui2, html.${AS_CLASS}, html.${ACT_CLASS}, html.${FILES_CLASS} {
   --jx-font: ui-sans-serif, -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
   --jx-text: #172b4d;
   --jx-text-subtle: #44546f;
@@ -568,23 +576,23 @@ html.${WP_CLASS} .work-package-table td.type * {
 }
 
 /* Icons (type and priority), inserted before the cell text */
-html.${ROOT_CLASS} .blm-jx-icon {
+${SR} .blm-jx-icon {
   display: inline-block; position: relative; flex: none;
   width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px;
 }
-html.${ROOT_CLASS} .blm-jx-icon[data-type] { border-radius: var(--jx-radius); }
-html.${ROOT_CLASS} .blm-jx-icon::after {
+${SR} .blm-jx-icon[data-type] { border-radius: var(--jx-radius); }
+${SR} .blm-jx-icon::after {
   content: ""; position: absolute; inset: 0;
   -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
           mask: var(--jx-glyph) center / 12px no-repeat;
   background: var(--jx-on-icon);
 }
-html.${ROOT_CLASS} .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
+${SR} .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
 ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
-html.${ROOT_CLASS} .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+${SR} .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 ${['highest', 'high', 'medium', 'low'].map(k => `
-html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
-html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }`).join('')}
+${SR} .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
+${SR} .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }`).join('')}
 
 /* Status lozenges */
 html.${WP_CLASS} .work-package-table .blm-jx-lozenge {
@@ -761,7 +769,7 @@ html.${WP_CLASS} .user-comment--date { color: var(--jx-text-subtlest); }
    Jira:        left = summary, description, activity; right = status + Details.
    arrangeFullView() moves the status block and the attribute groups into
    aside.blm-jx-side; the split container becomes a two-column grid. */
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-container {
+${SH} .work-packages--show-view .work-packages-full-view--split-container {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) var(--jx-side-w);
   grid-template-rows: auto 1fr;
@@ -770,188 +778,188 @@ html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-conta
   overflow-y: auto !important;
   padding: 0 var(--jx-space-6) var(--jx-space-6);
 }
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-left,
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-right,
-html.${WP_CLASS} .work-packages--show-view .work-packages--panel-inner,
-html.${WP_CLASS} .work-packages--show-view wp-single-view,
-html.${WP_CLASS} .work-packages--show-view .work-package--single-view {
+${SH} .work-packages--show-view .work-packages-full-view--split-left,
+${SH} .work-packages--show-view .work-packages-full-view--split-right,
+${SH} .work-packages--show-view .work-packages--panel-inner,
+${SH} .work-packages--show-view wp-single-view,
+${SH} .work-packages--show-view .work-package--single-view {
   display: block !important;
   position: static !important;
   width: auto !important; max-width: none !important; min-width: 0 !important;
   height: auto !important; overflow: visible !important;
   flex: none !important; border: 0 !important; padding: 0 !important; margin: 0 !important;
 }
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-left { grid-column: 1; grid-row: 1; }
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-right { grid-column: 1; grid-row: 2; }
-html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--resizer { display: none !important; }
+${SH} .work-packages--show-view .work-packages-full-view--split-left { grid-column: 1; grid-row: 1; }
+${SH} .work-packages--show-view .work-packages-full-view--split-right { grid-column: 1; grid-row: 2; }
+${SH} .work-packages--show-view .work-packages-full-view--resizer { display: none !important; }
 
 /* Right column: status, then one panel per attribute group */
-html.${WP_CLASS} .blm-jx-side {
+${SH} .blm-jx-side {
   grid-column: 2; grid-row: 1 / span 2;
   display: flex; flex-direction: column; gap: var(--jx-space-3);
   min-width: 0; padding-top: var(--jx-space-4);
 }
-html.${WP_CLASS} .blm-jx-side .wp-info-wrapper {
+${SH} .blm-jx-side .wp-info-wrapper {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--jx-space-2);
   margin: 0 !important; padding: 0 !important;
 }
-html.${WP_CLASS} .blm-jx-side .work-packages--info-row {
+${SH} .blm-jx-side .work-packages--info-row {
   flex-basis: 100%; order: 2; margin: 0 !important;
   font-size: 12px; line-height: 1.33; color: var(--jx-text-subtlest);
 }
-html.${WP_CLASS} .blm-jx-side .work-packages--info-row * {
+${SH} .blm-jx-side .work-packages--info-row * {
   font-size: 12px; color: var(--jx-text-subtlest);
 }
-html.${WP_CLASS} .blm-jx-side .attributes-group {
+${SH} .blm-jx-side .attributes-group {
   margin: 0 !important; padding: 0 !important;
   border: 1px solid var(--jx-border); border-radius: var(--jx-radius-panel);
   background: var(--jx-surface);
 }
-html.${WP_CLASS} .blm-jx-side .attributes-group--header {
+${SH} .blm-jx-side .attributes-group--header {
   margin: 0 !important; padding: var(--jx-space-3) var(--jx-space-4) !important;
   border-bottom: 1px solid var(--jx-border);
 }
-html.${WP_CLASS} .blm-jx-side .wp-attribute-group {
+${SH} .blm-jx-side .wp-attribute-group {
   display: block !important; columns: auto !important;
   margin: 0 !important; padding: var(--jx-space-2) var(--jx-space-4) var(--jx-space-3) !important;
 }
-html.${WP_CLASS} .blm-jx-side .attributes-key-value {
+${SH} .blm-jx-side .attributes-key-value {
   display: flex !important; align-items: flex-start; gap: var(--jx-space-3);
   width: auto !important; max-width: none !important;
   margin: 0 !important; padding: var(--jx-space-1) 0 !important;
 }
-html.${WP_CLASS} .blm-jx-side .attributes-key-value--key {
+${SH} .blm-jx-side .attributes-key-value--key {
   flex: 0 0 40%; min-width: 0; max-width: none !important;
   margin: 0 !important; padding: var(--jx-space-1) 0 0 !important;
   overflow-wrap: anywhere;
 }
-html.${WP_CLASS} .blm-jx-side .attributes-key-value--value-container {
+${SH} .blm-jx-side .attributes-key-value--value-container {
   flex: 1 1 auto; min-width: 0; width: auto !important; max-width: none !important;
   margin: 0 !important;
 }
 
 /* Left column: description, then activity */
-html.${WP_CLASS} .work-packages--show-view .description-group {
+${SH} .work-packages--show-view .description-group {
   margin: 0 !important; padding: var(--jx-space-4) 0 0 !important;
 }
-html.${WP_CLASS} .work-packages--show-view .description-group::before,
-html.${WP_CLASS} .work-packages--show-view op-wp-tabs::before {
+${SH} .work-packages--show-view .description-group::before,
+${SH} .work-packages--show-view op-wp-tabs::before {
   display: block; margin-bottom: var(--jx-space-2);
   font-family: var(--jx-font); font-size: 16px; font-weight: 600; color: var(--jx-text);
 }
-html.${WP_CLASS} .work-packages--show-view .description-group::before { content: "Description"; }
-html.${WP_CLASS} .work-packages--show-view .description-group .op-uc-container { padding: 0 !important; }
-html.${WP_CLASS} .work-packages--show-view op-wp-tabs { display: block; padding-top: var(--jx-space-6); }
-html.${WP_CLASS} .work-packages--show-view op-wp-tabs::before { content: "Activity"; }
-html.${WP_CLASS} .work-packages--show-view .tabcontent { padding: var(--jx-space-4) 0 0 !important; }
+${SH} .work-packages--show-view .description-group::before { content: "Description"; }
+${SH} .work-packages--show-view .description-group .op-uc-container { padding: 0 !important; }
+${SH} .work-packages--show-view op-wp-tabs { display: block; padding-top: var(--jx-space-6); }
+${SH} .work-packages--show-view op-wp-tabs::before { content: "Activity"; }
+${SH} .work-packages--show-view .tabcontent { padding: var(--jx-space-4) 0 0 !important; }
 
 /* Header: back · type · summary on one line, actions to the right */
-html.${WP_CLASS} .work-packages--show-view .toolbar-container {
+${SH} .work-packages--show-view .toolbar-container {
   padding: var(--jx-space-2) var(--jx-space-6) 0;
   border-bottom: 0 !important;
 }
-html.${WP_CLASS} .work-packages--show-view wp-breadcrumb { display: block; padding: var(--jx-space-1) var(--jx-space-6) 0; line-height: 1; }
-html.${WP_CLASS} .work-packages--show-view wp-breadcrumb :is(.op-wp-breadcrumb, .wp-breadcrumb, ul, li, div) { margin: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; min-height: 0 !important; }html.${WP_CLASS} .work-packages--show-view .wp-show--header-container {
+${SH} .work-packages--show-view wp-breadcrumb { display: block; padding: var(--jx-space-1) var(--jx-space-6) 0; line-height: 1; }
+${SH} .work-packages--show-view wp-breadcrumb :is(.op-wp-breadcrumb, .wp-breadcrumb, ul, li, div) { margin: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; min-height: 0 !important; }${SH} .work-packages--show-view .wp-show--header-container {
   display: flex; align-items: center; gap: var(--jx-space-3); min-width: 0;
 }
-html.${WP_CLASS} .work-packages--show-view .subject-header { flex: 1 1 auto; min-width: 0; }
+${SH} .work-packages--show-view .subject-header { flex: 1 1 auto; min-width: 0; }
 /* Type marker and summary centred on one line, in the split view and the full page */
-html.${WP_CLASS} .work-packages--subject-type-row {
+${SH} .work-packages--subject-type-row {
   display: flex !important; align-items: center; gap: var(--jx-space-2); min-width: 0;
 }
 /* The wrappers OpenProject puts around the type and the summary centre their
    content and add no vertical offset, so the two line up whatever the markup.
    The innermost divs (read view / editor) keep OpenProject's own display, which
    is what hides the read view while the summary or type is being edited. */
-html.${WP_CLASS} .work-packages--subject-type-row > .work-packages--subject-element,
-html.${WP_CLASS} .work-packages--subject-type-row op-editable-attribute-field,
-html.${WP_CLASS} .work-packages--subject-type-row .inline-edit--container {
+${SH} .work-packages--subject-type-row > .work-packages--subject-element,
+${SH} .work-packages--subject-type-row op-editable-attribute-field,
+${SH} .work-packages--subject-type-row .inline-edit--container {
   display: flex !important; align-items: center !important; min-width: 0;
   margin-top: 0 !important; margin-bottom: 0 !important;
   padding-top: 0 !important; padding-bottom: 0 !important;
   top: auto !important; vertical-align: middle !important;
 }
-html.${WP_CLASS} .work-packages--subject-type-row .inline-edit--container > div {
+${SH} .work-packages--subject-type-row .inline-edit--container > div {
   margin-top: 0 !important; margin-bottom: 0 !important; min-width: 0;
 }
-html.${WP_CLASS} .work-packages--subject-type-row > .work-packages--type-selector { flex: none; }
+${SH} .work-packages--subject-type-row > .work-packages--type-selector { flex: none; }
 /* While the type is being edited, its select needs room: a flex item with
    min-width 0 would otherwise collapse it (and its drop-down) to nothing.
    OpenProject's drop-down panel may be placed inside this row; nothing above
    targets it (only the two known children are flexed), so it keeps its layout. */
-html.${WP_CLASS} .work-packages--subject-type-row > .work-packages--type-selector:has(.ng-select, select) .inline-edit--container > div:has(.ng-select, select) {
+${SH} .work-packages--subject-type-row > .work-packages--type-selector:has(.ng-select, select) .inline-edit--container > div:has(.ng-select, select) {
   min-width: 200px !important; flex: 0 0 auto;
 }
-html.${WP_CLASS} .work-packages--subject-type-row .work-packages--type-selector .ng-select { min-width: 200px; }
+${SH} .work-packages--subject-type-row .work-packages--type-selector .ng-select { min-width: 200px; }
 /* OpenProject appends the type's drop-down panel to this row: keep it a plain
    block so its options list lays out normally. */
-html.${WP_CLASS} .work-packages--subject-type-row > .ng-dropdown-panel { display: block !important; }
+${SH} .work-packages--subject-type-row > .ng-dropdown-panel { display: block !important; }
 /* The summary takes the rest of the line, so its editor is full width. */
-html.${WP_CLASS} .work-packages--subject-type-row > .work-packages--details--subject,
-html.${WP_CLASS} .work-packages--subject-type-row .work-packages--details--subject op-editable-attribute-field,
-html.${WP_CLASS} .work-packages--subject-type-row .inline-edit--container.work-packages--details--subject,
-html.${WP_CLASS} .work-packages--subject-type-row .inline-edit--container.work-packages--details--subject > div {
+${SH} .work-packages--subject-type-row > .work-packages--details--subject,
+${SH} .work-packages--subject-type-row .work-packages--details--subject op-editable-attribute-field,
+${SH} .work-packages--subject-type-row .inline-edit--container.work-packages--details--subject,
+${SH} .work-packages--subject-type-row .inline-edit--container.work-packages--details--subject > div {
   flex: 1 1 auto; width: 100%;
 }
-html.${WP_CLASS} .work-packages--subject-type-row .work-packages--details--subject input {
+${SH} .work-packages--subject-type-row .work-packages--details--subject input {
   width: 100% !important; box-sizing: border-box;
 }
 /* Type next to the summary: Jira's icon + grey label. Drawn with pseudo-elements
    on OpenProject's own field, so it stays clickable and the row keeps its layout. */
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type] {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type] {
   position: relative;   /* display left to OpenProject: it hides this while the type is edited */
   font-family: var(--jx-font) !important; font-size: 14px !important; font-weight: 500 !important;
   line-height: 16px !important; text-transform: none !important; letter-spacing: 0 !important;
   white-space: nowrap; color: var(--jx-text-subtle) !important;
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type],
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:focus {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type],
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:focus {
   border: 0 !important; outline: 0; box-shadow: none !important; background: transparent !important;
   border-radius: var(--jx-radius); padding: var(--jx-space-1) var(--jx-space-2) var(--jx-space-1) 30px !important;
   transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .inline-edit--container.work-packages--type-selector:not(:focus-within),
-html.${WP_CLASS} .inline-edit--container.work-packages--type-selector:not(:focus-within) > div {
+${SH} .inline-edit--container.work-packages--type-selector:not(:focus-within),
+${SH} .inline-edit--container.work-packages--type-selector:not(:focus-within) > div {
   border-color: transparent !important; box-shadow: none !important; background: transparent !important;
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:hover {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:hover {
   background: var(--jx-hover) !important; color: var(--jx-text) !important;
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:focus-visible {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]:focus-visible {
   outline: 2px solid var(--jx-focus); outline-offset: 2px;
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::before,
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::after {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::before,
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::after {
   content: ""; position: absolute; left: var(--jx-space-2); top: 50%;
   width: 16px; height: 16px; margin-top: -8px; border-radius: var(--jx-radius);
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::before {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::before {
   background: var(--jx-type-c);
 }
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::after {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type]::after {
   -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
           mask: var(--jx-glyph) center / 12px no-repeat;
   background: var(--jx-on-icon);
 }
 ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
-html.${WP_CLASS} .work-packages--type-selector .inline-edit--display-field[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
-html.${WP_CLASS} .work-packages--show-view .work-packages--details--subject .inline-edit--display-field.subject {
+${SH} .work-packages--type-selector .inline-edit--display-field[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+${SH} .work-packages--show-view .work-packages--details--subject .inline-edit--display-field.subject {
   font-family: var(--jx-font); font-size: 24px !important; font-weight: 500 !important;
   font-style: normal; line-height: 1.25; letter-spacing: -0.01em; color: var(--jx-text);
   overflow-wrap: anywhere;
 }
-html.${WP_CLASS} .work-packages--show-view .op-back-button {
+${SH} .work-packages--show-view .op-back-button {
   width: 32px; height: 32px; padding: 0; justify-content: center;
 }
 
 /* Narrow windows: one column, sidebar between description and activity */
 @media (max-width: 1011px) {
-  html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-container {
+  ${SH} .work-packages--show-view .work-packages-full-view--split-container {
     grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
     padding: 0 var(--jx-space-4) var(--jx-space-4);
   }
-  html.${WP_CLASS} .blm-jx-side { grid-column: 1; grid-row: 2; }
-  html.${WP_CLASS} .work-packages--show-view .work-packages-full-view--split-right { grid-row: 3; }
+  ${SH} .blm-jx-side { grid-column: 1; grid-row: 2; }
+  ${SH} .work-packages--show-view .work-packages-full-view--split-right { grid-row: 3; }
 }
 
 /* ── Backlogs page laid out like Jira's backlog ─────────────────────────────
@@ -1090,88 +1098,88 @@ html.${BL_CLASS} #rb li.story > .story_points .t:not(:empty) {
 /* Child work items: a section under the description (full page and split view),
    as in Jira's issue view; OpenProject keeps them in the Relations tab.
    Built by renderChildren(); the assignee button opens the picker. */
-html.${WP_CLASS} .blm-jx-children { padding-top: var(--jx-space-6); }
-html.${WP_CLASS} .blm-jx-jump {
+${SH} .blm-jx-children { padding-top: var(--jx-space-6); }
+${SH} .blm-jx-jump {
   position: fixed; right: 32px; bottom: 72px; z-index: 50;
   padding: 8px 14px; border: 0; border-radius: 999px; cursor: pointer;
   font: 600 13px/16px var(--jx-font); color: #fff; background: var(--jx-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-html.${WP_CLASS} .blm-jx-jump:hover { filter: brightness(1.1); }
-html.${WP_CLASS} .blm-jx-jump:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
-html.${WP_CLASS} .blm-jx-children-head {
+${SH} .blm-jx-jump:hover { filter: brightness(1.1); }
+${SH} .blm-jx-jump:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
+${SH} .blm-jx-children-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--jx-space-3);
   margin-bottom: var(--jx-space-2);
 }
-html.${WP_CLASS} .blm-jx-children-title {
+${SH} .blm-jx-children-title {
   font-family: var(--jx-font); font-size: 16px; font-weight: 600; font-style: normal;
   color: var(--jx-text); margin: 0;
 }
-html.${WP_CLASS} .blm-jx-children-sum {
+${SH} .blm-jx-children-sum {
   margin-left: auto;
   font-size: 12px; color: var(--jx-text-subtlest); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-html.${WP_CLASS} .blm-jx-children-actions { display: inline-flex; gap: var(--jx-space-1); margin-left: var(--jx-space-2); }
-html.${WP_CLASS} .blm-jx-children-head { flex-wrap: wrap; }
-html.${WP_CLASS} .blm-jx-children-note { flex-basis: 100%; font-size: 12px; color: var(--jx-error); text-align: right; }
-html.${WP_CLASS} .blm-jx-children-action {
+${SH} .blm-jx-children-actions { display: inline-flex; gap: var(--jx-space-1); margin-left: var(--jx-space-2); }
+${SH} .blm-jx-children-head { flex-wrap: wrap; }
+${SH} .blm-jx-children-note { flex-basis: 100%; font-size: 12px; color: var(--jx-error); text-align: right; }
+${SH} .blm-jx-children-action {
   height: 28px; padding: 0 var(--jx-space-2); margin: 0; border: 0; border-radius: var(--jx-radius); cursor: pointer;
   background: transparent; color: var(--jx-text-subtle); font-family: var(--jx-font); font-size: 13px; font-weight: 500;
   white-space: nowrap; transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .blm-jx-children-action:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
-html.${WP_CLASS} .blm-jx-children-action:active { background: var(--jx-btn-press); }
-html.${WP_CLASS} .blm-jx-children-action:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
+${SH} .blm-jx-children-action:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
+${SH} .blm-jx-children-action:active { background: var(--jx-btn-press); }
+${SH} .blm-jx-children-action:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
 /* Relations tab: the children are listed in Child work items, so its Children
    heading and table are hidden; OpenProject's create / add-existing controls stay. */
-html.${WP_CLASS} wp-relations-hierarchy .wp-relations--children > .attributes-group--header,
-html.${WP_CLASS} wp-relations-hierarchy .wp-relations--children table.work-package-table,
-html.${WP_CLASS} wp-relations-hierarchy .wp-relations--children .work-package-table { display: none !important; }
+${SH} wp-relations-hierarchy .wp-relations--children > .attributes-group--header,
+${SH} wp-relations-hierarchy .wp-relations--children table.work-package-table,
+${SH} wp-relations-hierarchy .wp-relations--children .work-package-table { display: none !important; }
 /* New-item row for + Create child */
-html.${WP_CLASS} .blm-jx-children li.blm-jx-create-row {
+${SH} .blm-jx-children li.blm-jx-create-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--jx-space-2);
   padding: var(--jx-space-2) var(--jx-space-3); background: var(--jx-surface-sunken);
 }
-html.${WP_CLASS} .blm-jx-create-type,
-html.${WP_CLASS} .blm-jx-create-input {
+${SH} .blm-jx-create-type,
+${SH} .blm-jx-create-input {
   height: 32px; box-sizing: border-box; margin: 0; padding: 0 var(--jx-space-2);
   border: 2px solid var(--jx-border); border-radius: var(--jx-radius);
   background: var(--jx-surface); color: var(--jx-text); font-family: var(--jx-font); font-size: 14px;
 }
-html.${WP_CLASS} .blm-jx-create-type { flex: none; max-width: 140px; }
-html.${WP_CLASS} .blm-jx-create-input { flex: 1 1 200px; min-width: 0; }
-html.${WP_CLASS} .blm-jx-create-type:focus,
-html.${WP_CLASS} .blm-jx-create-input:focus { border-color: var(--jx-focus); outline: none; }
-html.${WP_CLASS} .blm-jx-create-go,
-html.${WP_CLASS} .blm-jx-create-cancel {
+${SH} .blm-jx-create-type { flex: none; max-width: 140px; }
+${SH} .blm-jx-create-input { flex: 1 1 200px; min-width: 0; }
+${SH} .blm-jx-create-type:focus,
+${SH} .blm-jx-create-input:focus { border-color: var(--jx-focus); outline: none; }
+${SH} .blm-jx-create-go,
+${SH} .blm-jx-create-cancel {
   height: 32px; padding: 0 var(--jx-space-3); margin: 0; border: 0; border-radius: var(--jx-radius); cursor: pointer;
   font-family: var(--jx-font); font-size: 14px; font-weight: 500;
   transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .blm-jx-create-go { background: var(--jx-primary); color: var(--jx-on-primary); }
-html.${WP_CLASS} .blm-jx-create-go:hover { background: var(--jx-primary-hover); }
-html.${WP_CLASS} .blm-jx-create-go:active { background: var(--jx-primary-press); }
-html.${WP_CLASS} .blm-jx-create-go:disabled { opacity: 0.6; cursor: progress; }
-html.${WP_CLASS} .blm-jx-create-cancel { background: transparent; color: var(--jx-text-subtle); }
-html.${WP_CLASS} .blm-jx-create-cancel:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
-html.${WP_CLASS} .blm-jx-create-go:focus-visible,
-html.${WP_CLASS} .blm-jx-create-cancel:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
-html.${WP_CLASS} .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--jx-error); }
-html.${WP_CLASS} .blm-jx-children-empty { margin: 0; font-family: var(--jx-font); font-size: 14px; color: var(--jx-text-subtlest); }
-html.${WP_CLASS} .blm-jx-children.empty .blm-jx-children-head { margin-bottom: var(--jx-space-1); }
-html.${WP_CLASS} .blm-jx-children-bar {
+${SH} .blm-jx-create-go { background: var(--jx-primary); color: var(--jx-on-primary); }
+${SH} .blm-jx-create-go:hover { background: var(--jx-primary-hover); }
+${SH} .blm-jx-create-go:active { background: var(--jx-primary-press); }
+${SH} .blm-jx-create-go:disabled { opacity: 0.6; cursor: progress; }
+${SH} .blm-jx-create-cancel { background: transparent; color: var(--jx-text-subtle); }
+${SH} .blm-jx-create-cancel:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
+${SH} .blm-jx-create-go:focus-visible,
+${SH} .blm-jx-create-cancel:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
+${SH} .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--jx-error); }
+${SH} .blm-jx-children-empty { margin: 0; font-family: var(--jx-font); font-size: 14px; color: var(--jx-text-subtlest); }
+${SH} .blm-jx-children.empty .blm-jx-children-head { margin-bottom: var(--jx-space-1); }
+${SH} .blm-jx-children-bar {
   display: flex; height: 6px; margin-bottom: var(--jx-space-3);
   border-radius: 3px; overflow: hidden; background: var(--jx-todo-bg);
 }
-html.${WP_CLASS} .blm-jx-children-bar > .done { background: var(--jx-done-bar); }
-html.${WP_CLASS} .blm-jx-children-bar > .progress { background: var(--jx-primary); }
-html.${WP_CLASS} .blm-jx-children ul {
+${SH} .blm-jx-children-bar > .done { background: var(--jx-done-bar); }
+${SH} .blm-jx-children-bar > .progress { background: var(--jx-primary); }
+${SH} .blm-jx-children ul {
   list-style: none; margin: 0; padding: 0;
   border: 1px solid var(--jx-border); border-radius: var(--jx-radius); overflow: hidden;
 }
 /* Fixed columns (type · key · subject · assignee · status) so names and
    lozenges line up from row to row, whatever their length. */
-html.${WP_CLASS} .blm-jx-children li {
+${SH} .blm-jx-children li {
   display: grid; align-items: center; gap: var(--jx-space-3);
   grid-template-columns: 16px 64px minmax(0, 1fr) var(--jx-col-assignee) var(--jx-col-status);
   min-height: 40px; padding: 0 var(--jx-space-3);
@@ -1179,20 +1187,20 @@ html.${WP_CLASS} .blm-jx-children li {
   font-family: var(--jx-font); font-size: 14px; color: var(--jx-text);
   transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .blm-jx-children li:last-child { border-bottom: 0; }
-html.${WP_CLASS} .blm-jx-children li:hover { background: var(--jx-hover); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-icon { margin-right: 0; }
-html.${WP_CLASS} .blm-jx-children .key {
+${SH} .blm-jx-children li:last-child { border-bottom: 0; }
+${SH} .blm-jx-children li:hover { background: var(--jx-hover); }
+${SH} .blm-jx-children .blm-jx-icon { margin-right: 0; }
+${SH} .blm-jx-children .key {
   flex: none; min-width: 56px; color: var(--jx-text-subtle); font-weight: 500;
   font-variant-numeric: tabular-nums; text-decoration: none;
 }
-html.${WP_CLASS} .blm-jx-children .subject {
+${SH} .blm-jx-children .subject {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--jx-text); text-decoration: none;
 }
-html.${WP_CLASS} .blm-jx-children a:hover { color: var(--jx-link); text-decoration: underline; }
-html.${WP_CLASS} .blm-jx-children a:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
-html.${WP_CLASS} .blm-jx-children .assignee {
+${SH} .blm-jx-children a:hover { color: var(--jx-link); text-decoration: underline; }
+${SH} .blm-jx-children a:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
+${SH} .blm-jx-children .assignee {
   flex: none; display: inline-flex; align-items: center; gap: var(--jx-space-2);
   max-width: 220px; min-width: 0; white-space: nowrap;
   height: 32px; padding: 0 var(--jx-space-2) 0 var(--jx-space-1); margin: 0; border: 0; border-radius: var(--jx-radius);
@@ -1200,72 +1208,72 @@ html.${WP_CLASS} .blm-jx-children .assignee {
   font-family: var(--jx-font); font-size: 12px; font-weight: 500; color: var(--jx-text-subtle);
   transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .blm-jx-children .assignee:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
-html.${WP_CLASS} .blm-jx-children .assignee:active { background: var(--jx-btn-press); }
-html.${WP_CLASS} .blm-jx-children .assignee[aria-expanded="true"] { background: var(--jx-selected); color: var(--jx-link-hover); }
-html.${WP_CLASS} .blm-jx-children .assignee:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
-html.${WP_CLASS} .blm-jx-children .assignee.none { color: var(--jx-text-subtlest); }
-html.${WP_CLASS} .blm-jx-children li > .assignee,
-html.${WP_CLASS} .blm-jx-children li > .blm-jx-lozenge { justify-self: start; max-width: 100%; }
-html.${WP_CLASS} .blm-jx-children .key { min-width: 0; }
-html.${WP_CLASS} .blm-jx-children .assignee .name,
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+${SH} .blm-jx-children .assignee:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
+${SH} .blm-jx-children .assignee:active { background: var(--jx-btn-press); }
+${SH} .blm-jx-children .assignee[aria-expanded="true"] { background: var(--jx-selected); color: var(--jx-link-hover); }
+${SH} .blm-jx-children .assignee:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
+${SH} .blm-jx-children .assignee.none { color: var(--jx-text-subtlest); }
+${SH} .blm-jx-children li > .assignee,
+${SH} .blm-jx-children li > .blm-jx-lozenge { justify-self: start; max-width: 100%; }
+${SH} .blm-jx-children .key { min-width: 0; }
+${SH} .blm-jx-children .assignee .name,
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Avatars: initials first, the picture fades in over them once loaded */
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar {
   position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; border-radius: 50%; overflow: hidden;
   background: var(--jx-avatar-0); color: var(--jx-on-primary);
   font-family: var(--jx-font); font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0;
   text-transform: uppercase;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar img {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
   opacity: 0; transition: opacity var(--jx-dur) var(--jx-ease-out);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.none {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-avatar.none {
   background: transparent; border: 1.5px dashed var(--jx-text-subtlest); box-sizing: border-box;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
-html.${WP_CLASS} .blm-jx-children .assignee.saving { opacity: 0.6; cursor: progress; }
-html.${WP_CLASS} .blm-jx-children .assignee[aria-disabled="true"]:hover { background: transparent; }
-html.${WP_CLASS} .blm-jx-children .assignee.error { color: var(--jx-error); box-shadow: inset 0 0 0 1px var(--jx-error); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
+${SH} .blm-jx-children .assignee.saving { opacity: 0.6; cursor: progress; }
+${SH} .blm-jx-children .assignee[aria-disabled="true"]:hover { background: transparent; }
+${SH} .blm-jx-children .assignee.error { color: var(--jx-error); box-shadow: inset 0 0 0 1px var(--jx-error); }
 
 /* Assignee picker (fixed, appended to body) */
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker {
   position: fixed; z-index: 2147483646; width: 260px; padding: var(--jx-space-2);
   background: var(--jx-surface); border: 1px solid var(--jx-border); border-radius: var(--jx-radius-panel);
   box-shadow: var(--jx-shadow-raised); font-family: var(--jx-font); font-size: 14px; color: var(--jx-text);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker input {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker input {
   display: block; width: 100%; box-sizing: border-box; height: 32px; margin: 0 0 var(--jx-space-1);
   padding: 0 var(--jx-space-2); border: 2px solid var(--jx-border); border-radius: var(--jx-radius);
   background: var(--jx-surface); color: var(--jx-text); font: inherit;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker input:focus { border-color: var(--jx-focus); outline: none; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker ul { list-style: none; margin: 0; padding: 0; max-height: 264px; overflow-y: auto; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker input:focus { border-color: var(--jx-focus); outline: none; }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker ul { list-style: none; margin: 0; padding: 0; max-height: 264px; overflow-y: auto; }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option {
   padding: var(--jx-space-2); border-radius: var(--jx-radius); cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option.active,
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option:hover { background: var(--jx-hover); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option.current { color: var(--jx-link-hover); font-weight: 600; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone]::before {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option.active,
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option:hover { background: var(--jx-hover); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option.current { color: var(--jx-link-hover); font-weight: 600; }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone]::before {
   content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--jx-space-2);
   border-radius: 50%; vertical-align: 1px; background: var(--jx-todo-fg);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--jx-primary); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--jx-done-bar); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-note { padding: var(--jx-space-2); color: var(--jx-text-subtlest); font-size: 12px; }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge {
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--jx-primary); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--jx-done-bar); }
+:is(${SH}, html.${AS_CLASS}) .blm-jx-picker-note { padding: var(--jx-space-2); color: var(--jx-text-subtlest); font-size: 12px; }
+${SH} .blm-jx-children .blm-jx-lozenge {
   flex: none; display: inline-block; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
   height: 20px; padding: 0 6px; margin: 0; border: 0; border-radius: var(--jx-radius); cursor: pointer;
   font-family: var(--jx-font); font-size: 11px; font-weight: 700; line-height: 20px;
@@ -1273,24 +1281,24 @@ html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge {
   background: var(--jx-todo-bg); color: var(--jx-todo-fg);
   transition: filter var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:hover { filter: brightness(0.94); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:active { filter: brightness(0.86); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--jx-focus); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge.saving { opacity: 0.6; cursor: progress; }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge.error { box-shadow: inset 0 0 0 1px var(--jx-error); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[data-blm-tone="progress"] {
+${SH} .blm-jx-children .blm-jx-lozenge:hover { filter: brightness(0.94); }
+${SH} .blm-jx-children .blm-jx-lozenge:active { filter: brightness(0.86); }
+${SH} .blm-jx-children .blm-jx-lozenge[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--jx-focus); }
+${SH} .blm-jx-children .blm-jx-lozenge:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
+${SH} .blm-jx-children .blm-jx-lozenge.saving { opacity: 0.6; cursor: progress; }
+${SH} .blm-jx-children .blm-jx-lozenge.error { box-shadow: inset 0 0 0 1px var(--jx-error); }
+${SH} .blm-jx-children .blm-jx-lozenge[data-blm-tone="progress"] {
   background: var(--jx-progress-bg); color: var(--jx-progress-fg);
 }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[data-blm-tone="done"] {
+${SH} .blm-jx-children .blm-jx-lozenge[data-blm-tone="done"] {
   background: var(--jx-done-bg); color: var(--jx-done-fg);
 }
 @media (max-width: 640px) {
-  html.${WP_CLASS} .blm-jx-children li {
+  ${SH} .blm-jx-children li {
     grid-template-columns: 16px 56px minmax(0, 1fr) 32px var(--jx-col-status);
   }
-  html.${WP_CLASS} .blm-jx-children .assignee { max-width: 32px; padding: 0; }
-  html.${WP_CLASS} .blm-jx-children .assignee .name { display: none; }
+  ${SH} .blm-jx-children .assignee { max-width: 32px; padding: 0; }
+  ${SH} .blm-jx-children .assignee .name { display: none; }
 }
 
 /* Assignee column in OpenProject's Children table (Relations tab) */
@@ -1834,7 +1842,7 @@ function updateJump() {
 }
 
 function syncJump() {
-  const on = skinEnabled && onWorkPackagePage() && viewWpId() && childAnchor();
+  const on = domOn() && onWorkPackagePage() && viewWpId() && childAnchor();
   if (!on) {
     jumpBtn?.remove();
     jumpBtn = null;
@@ -2113,14 +2121,14 @@ async function openPicker(button) {
 
 document.addEventListener('click', e => {
   const button = e.target.closest?.('.blm-jx-children [data-field]');
-  if (button && skinEnabled) { togglePicker(button); return; }
+  if (button && domOn()) { togglePicker(button); return; }
   if (picker && !picker.el.contains(e.target)) closePicker();
 });
 // OpenProject's own inline editors (assignee, status, ...) stay open when you click
 // away, and the skin's cells stop their clicks from reaching OpenProject's outside-click
 // handling. Escape cancels an unchanged edit, so send it on any outside press.
 document.addEventListener('mousedown', e => {
-  if (!skinEnabled) return;
+  if (!domOn()) return;
   const field = document.querySelector('.inline-edit--active-field');
   if (!field || field.closest('.inline-edit--container')?.contains(e.target)) return;
   if (e.target.closest?.('.ng-dropdown-panel, .op-modal, .spot-modal, [role="dialog"]')) return;
@@ -2835,7 +2843,7 @@ function openAddExisting(button) {
 
 document.addEventListener('click', e => {
   const b = e.target.closest?.('.blm-jx-children [data-child-action]');
-  if (!b || !skinEnabled) return;
+  if (!b || !domOn()) return;
   e.preventDefault();
   e.stopPropagation();          // the document handler below would close the picker at once
   if (b.dataset.childAction === 'create') createChild(b);
@@ -3475,7 +3483,7 @@ function applyClasses() {
   if (anyEnabled()) ensureStyle();
 }
 
-const anyEnabled = () => skinEnabled || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
+const anyEnabled = () => skinEnabled || ui2Enabled || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
 
 // Sub-tab switch (Overview, Activity, Files...): OpenProject reuses the content
 // container, so animate it whenever the selected tab changes.
@@ -3537,14 +3545,15 @@ function schedule() {
     if (onWp && !wasOnWp) pickQuote();
     wasOnWp = onWp;
     if (onWp) {
-      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); syncJump(); adjustRelationsCount(); }
+      if (domOn()) { tagCells(); arrangeFullView(); renderChildren(); syncJump(); adjustRelationsCount(); }
+      if (skinEnabled) greet();
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();
       if (filesEnabled) renderFileCards();
     } else {
       syncJump();
-      if (skinEnabled && onBacklogsPage()) tagCells();
+      if (domOn() && onBacklogsPage()) tagCells();
     }
   });
 }
@@ -3552,6 +3561,11 @@ function schedule() {
 function disable() {
   document.documentElement.classList.remove(ROOT_CLASS, WP_CLASS, BL_CLASS);
   delete document.documentElement.dataset.blmTheme;
+  if (!domOn()) undoDom();
+}
+
+// Moves everything the DOM work added or relocated back; skipped while UI 2.0 still needs it.
+function undoDom() {
   untagCells();
   restoreFullView();
   restoreRelationsCount();
@@ -3583,17 +3597,19 @@ function disableAssign() {
 // Runs at document_start: applied before the first paint so the header never
 // flashes OpenProject blue, then corrected once the stored switch is read.
 applyClasses();
-chrome.storage.local.get([CFG_JIRA_SKIN, CFG_CHILD_ASSIGN, CFG_ACTIVITY_ON, CFG_FILES_ON, CFG_THEME, CFG_ANIMATION, CFG_QUOTE]).then(s => {
+chrome.storage.local.get([CFG_JIRA_SKIN, CFG_UI2, CFG_CHILD_ASSIGN, CFG_ACTIVITY_ON, CFG_FILES_ON, CFG_THEME, CFG_ANIMATION, CFG_QUOTE]).then(s => {
   quoteEnabled = s[CFG_QUOTE] ?? true;
   if (!quoteEnabled) disableQuote();
   animationEnabled = s[CFG_ANIMATION] ?? true;
   skinEnabled     = s[CFG_JIRA_SKIN] ?? true;
+  ui2Enabled      = s[CFG_UI2] ?? false;
   assignEnabled   = s[CFG_CHILD_ASSIGN] ?? true;
   activityEnabled = s[CFG_ACTIVITY_ON] ?? true;
   filesEnabled    = s[CFG_FILES_ON] ?? true;
   theme = s[CFG_THEME] === 'light' ? 'light' : 'dark';
   try { localStorage.setItem('__blm_theme', theme); } catch { /* storage blocked */ }
   if (!skinEnabled)     disable();
+  if (!domOn())         undoDom();
   if (!assignEnabled)   disableAssign();
   if (!activityEnabled) disableActivity();
   if (!filesEnabled)    disableFiles();
@@ -3613,6 +3629,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (CFG_JIRA_SKIN in changes) {
     skinEnabled = changes[CFG_JIRA_SKIN].newValue ?? true;
     if (!skinEnabled) disable();
+  }
+  if (CFG_UI2 in changes) {
+    ui2Enabled = changes[CFG_UI2].newValue ?? false;
+    if (!domOn()) undoDom();
   }
   if (CFG_CHILD_ASSIGN in changes) {
     assignEnabled = changes[CFG_CHILD_ASSIGN].newValue ?? true;
