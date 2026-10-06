@@ -65,7 +65,8 @@ function renderQuote() {
   const host = document.querySelector('.op-pagination');
   removeQuote();
   if (!quote || !host) return;
-  quoteEl = Object.assign(document.createElement('span'), { className: 'blm-quote', textContent: `“${quote.quote}” — ${quote.author}` });
+  const text = `“${quote.quote}” — ${quote.author}`;
+  quoteEl = Object.assign(document.createElement('span'), { className: 'blm-quote', textContent: text, title: text });
   host.append(quoteEl);
 }
 
@@ -3458,8 +3459,8 @@ const EXTRAS = `
 .op-pagination:has(> .blm-quote) { position: relative; }
 .blm-quote {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  max-width: 45%; text-align: center; pointer-events: none;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  max-width: 45%; text-align: center; cursor: default;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   font: italic 500 16px/1.45 var(--jx-font, system-ui, sans-serif); color: var(--jx-text, #172b4d);
 }
 `;
