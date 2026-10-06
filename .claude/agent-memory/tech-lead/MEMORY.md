@@ -1,1 +1,1 @@
-- [Review rules](review_rules.md) — display-only claims, isolated-world writes, retry storms, planning.js focus/shortcut and per-WP write traps
+- [Review rules](review_rules.md) — display-only claims, isolated-world writes, retry storms, planning.js focus/shortcut and per-WP write traps, jira-skin/ui2 shared tone tag

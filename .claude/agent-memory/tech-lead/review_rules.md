@@ -20,5 +20,8 @@ metadata:
 **Rule:** planning.js re-renders via innerHTML with single-letter shortcuts (P/D/S/V/U, Space): a control disabled while saving loses focus to body, so the next keystrokes trigger game actions; a `<select>` that writes on `change` fires on Windows arrow keys. Check both on any new write control.
 **Evidence:** planning.js writeField/statusSelect/createSubtask review 2026-10-05.
 
+**Rule:** jira-skin.js and content/ui2/ui2.js both tag the same nodes (td.status leaf, status button) and both skip when `data-blm-tone` already matches, so if both run, whichever is first suppresses the other's class. Check any change that lets both tag passes run at once.
+**Evidence:** jira-skin.js tagCells ~137 vs ui2.js tagCells; commit 15ea3af review 2026-10-06.
+
 **Rule:** patchWorkPackage reads lockVersion then PATCHes; two writes to the same WP in flight (different fields) 409. Writes must be serialized per WP id, not per field.
 **Evidence:** shared/api.js patchWorkPackage; planning.js rt.saving keyed `${wp}:${field}`.
