@@ -145,28 +145,65 @@ The Files tab shows attachments as cards (thumbnail or file-type tile, name,
 size · date · uploader) with a Grid | List toggle (`__blm_file_view`); own switch
 ("Attachment cards", `html.blm-files`), works with Jira style off. Backlogs versions become grey sprint containers of white rows.
 
-## Injected skin 2.0 (liquid glass)
-Planned replacement for the Jira skin on work packages, behind its own switch
-("UI 2.0", `__blm_ui2`, default off while it rolls out; mutually exclusive with Jira
-style). Covers the work-package list, split view and full page only; Backlogs,
-boards and Gantt stay native. Unlike the Jira skin it follows this system's
-graphite and cobalt: tokens `--g-*` in `content/ui2/tokens.css` derive from
-`tokens.css` (accent #4c7dff / #2f5fe0), scoped under `html.blm-ui2` so nothing
-leaks when the switch is off. Light and dark follow `html[data-blm-ui2-theme]`
-(its own copy of the theme: the Jira skin deletes `data-blm-theme` when it switches off).
-- Glass is for chrome and floating panels only: top bar, toolbar, the split-view
-  panel, pickers. Blur 20 px, saturate 160 %, a 1 px inner hairline
-  (`rgba(255,255,255,.18)`), a soft layered shadow, 14–16 px radii. Never on
-  table rows (OpenProject re-renders them constantly).
-- A calm gradient canvas sits behind; content floats on it. Fewer borders, more
-  whitespace, 44 px rows.
-- Status, type and priority are small tinted glass chips, sentence case, not
-  upper-case lozenges. One signal colour each, as in the rest of the system.
-- Type: system font stack (Geist is not exposed to the host page).
-- Motion: colour, background and transform only; `prefers-reduced-motion` drops
-  transitions to 0. `prefers-reduced-transparency` and browsers without
-  `backdrop-filter` get opaque `--surface` panels. Text on glass keeps 4.5:1
-  contrast over both canvases.
-- Selectors that depend on OpenProject internals are listed once per CSS file so
-  an OpenProject upgrade is a one-place fix; `!important` only to beat ng-select
-  and Angular specificity.
+## Injected skin 2.0
+A second look for work packages, behind its own switch ("UI 2.0", `__blm_ui2`,
+default off until the look is approved). It is mutually exclusive with Jira style:
+turning UI 2.0 on turns Jira style off and remembers it (`__blm_jira_before_ui2`);
+turning UI 2.0 off brings Jira style back if it was on.
+
+**Direction: a professional Linear/Jira hybrid.** White surfaces, very light grey
+separators, one cobalt, semantic status colours, restrained shadows. Hierarchy
+does the work, not decoration. (An earlier "liquid glass" direction was dropped:
+pastel canvases and translucent cards cut contrast and made cards blend.)
+
+**Separate look, shared behaviour.** UI 2.0 has its own CSS (`content/ui2/*.css`,
+every selector under `html.blm-ui2`) but reuses the Jira skin's DOM work, which is
+proven on the live site: type and priority icons (`.blm-jx-icon`), the Child work
+items section with its writes (`.blm-jx-children`), and the full-page sidebar
+(`aside.blm-jx-side`). `jira-skin.js` runs that work when either skin is on; its
+own `blm-jira*` classes and CSS stay tied to Jira style alone. Scope:
+`html.blm-ui2` (top bar and sidebar) on every page of the host, `html.blm-ui2-wp`
+(content) on work-package routes only. Backlogs, boards and Gantt keep native content.
+Light and dark follow `html[data-blm-ui2-theme]` (its own copy: the Jira skin
+deletes `data-blm-theme` when it switches off).
+
+### Surfaces and colour
+- Paper #f6f7f9 light / #0f1014 dark; surfaces #fff / #17191e; separators
+  #eceef2 / rgba(255,255,255,.07). Shadow only on floating things (menus, the
+  split panel edge): `0 1px 2px` + `0 8px 24px` at low alpha.
+- Pills are reserved for state: status, priority, type. Counts, labels, versions
+  and everything else are plain text.
+- Status tones: to do grey, in progress cobalt, done green. Type: 16 px glyph
+  tile in its type colour. Priority: a small glyph (▲ red / orange, ═ amber, ▼ blue).
+- Primary action: cobalt fill, white text, 32 px tall, 8 px radius, one per view.
+  Radii: 6 px controls, 8 px cards and the split panel, full pill for status.
+- Geist, loaded from the extension (`fonts/*.woff2` web-accessible); tabular
+  figures for IDs, points, hours, percentages.
+
+### Typography and density
+Page title 22 px / 650. Section headings 13 px / 600 in full ink. Group headers
+14 px / 600 with a plain count. Body and rows 13 px; secondary metadata 12 px in
+`--text2`. Rows 40 px.
+
+### Layout
+- **List**: compact toolbar band (title, then actions) above the table; the
+  column header is OpenProject's own sticky `thead`. Group headers are strong
+  section rows (chevron, name, count) on a light band. Rows: clear hover tint,
+  selected row = accent-tinted fill plus a 3 px cobalt bar on the left, painted on
+  the row and its cells. IDs and subjects read as links. Progress is a slim bar +
+  right-aligned percentage; spent time right-aligned.
+- **Split view**: docked beside the list (OpenProject's own split, resizer kept),
+  styled as one white workspace with a hairline edge. Compact header: type icon,
+  ID, subject, status pill; tabs as an underline bar.
+- **Full page**: Back link; compact header card (type icon, ID, subject, status,
+  actions) with a one-line meta strip (assignee, priority, type, points,
+  progress). Two columns: main (Description → Child work items → Activity) and a
+  compact sticky Details sidebar. Child work items are the visual anchor: progress
+  bar, status icon per child, status pill, chevron. Activity is a timeline:
+  avatar, name, time, then the comment; the comment box sits at the end. One
+  column below 1100 px.
+
+### Fallbacks and motion
+Motion: colour, background, transform only; `prefers-reduced-motion` drops it to 0.
+Selectors that depend on OpenProject internals are listed at the top of each CSS
+file. `!important` only to beat OpenProject's own `!important` and inline sizes.

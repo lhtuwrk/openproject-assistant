@@ -201,3 +201,26 @@ html.blm-ui2[data-blm-ui2-theme="dark"] { scrollbar-color: rgba(255, 255, 255, .
 @media (prefers-reduced-motion: reduce) {
   html.blm-ui2 .op-app-header *, html.blm-ui2 #main-menu *, html.blm-ui2 .top-menu-search--input { transition: none !important; }
 }
+
+/* Icon rail (built by ui2.js): only while the main menu is collapsed. It sits
+   under the top bar and over OpenProject's collapsed toggler strip. */
+.blm-ui2-rail { display: none; }
+html.blm-ui2:has(#main.hidden-navigation) .blm-ui2-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  position: fixed; left: 0; bottom: 0; top: var(--blm-ui2-header-h, 48px); z-index: 9;
+  width: 52px; box-sizing: border-box; padding: 8px 0; overflow-y: auto;
+  background: var(--g-surface-solid); border-right: 1px solid var(--g-hairline);
+}
+html.blm-ui2:has(#main.hidden-navigation) #content-wrapper { padding-left: 52px; }
+.blm-ui2-rail > button,
+.blm-ui2-rail > a {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0;
+  border-radius: var(--g-radius-lg); background: transparent; color: var(--g-text2);
+  font: 16px/1 var(--g-font); cursor: pointer; text-decoration: none;
+}
+.blm-ui2-rail > button:hover,
+.blm-ui2-rail > a:hover { background: var(--g-hover); color: var(--g-text); }
+.blm-ui2-rail > a[aria-current="page"] { background: var(--g-selected); color: var(--g-accent); }
+.blm-ui2-rail > button:focus-visible,
+.blm-ui2-rail > a:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+.blm-ui2-rail i { color: inherit; }

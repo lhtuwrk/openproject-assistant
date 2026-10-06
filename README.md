@@ -40,7 +40,7 @@ though OpenProject itself doesn't retain it.
 | `shared/api.js` | OpenProject API client helpers used by the background worker |
 | `pages/popup.html` / `pages/popup.js` | Toolbar popup UI |
 | `pages/sidepanel.html` / `pages/sidepanel.js` | Quick settings, opened from the popup's settings button |
-| `content/ui2/` | UI 2.0 (liquid glass): an experimental, translucent alternative to the Jira skin for work-package lists, the split view and the work-package page (`ui2.js` toggles the classes and tags status chips; `tokens.css`, `base.css`, `list.css`, `detail.css` hold the styles); off by default, mutually exclusive with Jira style, toggled in Settings |
+| `content/ui2/` | UI 2.0 (Linear/Jira hybrid): a flat white look for the top bar, sidebar, work-package list (status tabs, type/priority icons), docked split view and work-package page with editable Child work items (`ui2.js` toggles the classes and builds the status tabs and the collapsed-menu icon rail; `tokens.css`, `base.css`, `list.css`, `detail.css` hold the styles; the icons, status pills and Child work items come from `jira-skin.js`); off by default, mutually exclusive with Jira style (turning UI 2.0 off restores Jira style if it was on), toggled in Settings |
 | `content/quick-settings-host.js` | Shows Quick settings as a drawer on the right of the current page (every http(s) site; acts only on the popup's message) |
 | `pages/dashboard.html` / `pages/dashboard.js` | Dashboard: Settings page (feature switches) |
 | `shared/shell.css` / `shared/shell.js` | Dashboard side rail (profile, nav) shared by Settings, Burndown, Time log |

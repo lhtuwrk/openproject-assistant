@@ -1,142 +1,157 @@
-/* UI 2.0 work-package detail: split view (.work-packages--details) and full
-   page (.work-packages--show-view). CSS only: OpenProject's layout is kept and no
-   nodes are moved, so there is nothing to restore when the switch is off.
-   The split panel and the full-page content are glass; their inner containers
-   are transparent. OpenProject-internal selectors: .work-packages--details,
-   .work-packages--show-view, .work-packages-full-view--split-*, .work-package--single-view,
-   .op-tab-row(--link), .attributes-group(--header), .attributes-key-value--*,
-   .inline-edit--display-field, .op-uc-container, wp-status-button. */
+/* UI 2.0 work-package detail: the docked split view (.work-packages--details) and
+   the full page (.work-packages--show-view). The full-page structure (two columns,
+   aside.blm-jx-side, Child work items) is jira-skin.js's shared DOM work and CSS;
+   this file only restyles it. Rules that must beat jira-skin.js's later <style> use
+   the doubled prefix html.blm-ui2.blm-ui2-wp (0,2,1).
+   OpenProject-internal selectors: .work-packages--details(-header), op-scrollable-tabs,
+   .op-tab-row(--link), .attributes-group(--header-text), .attributes-key-value--*,
+   .inline-edit--display-field, .op-uc-container, .op-wp-status-button--button,
+   .op-user-activity, .work-package-details-activities-*. */
 
-/* The independent sub-features (Children assign, Activity filter, Attachment
-   cards) style themselves with --jx-* tokens that are light unless the Jira skin
-   is on; point them at the UI 2.0 tokens so they follow light/dark too. */
-html.blm-ui2.blm-assign,
-html.blm-ui2.blm-activity,
-html.blm-ui2.blm-files {
-  --jx-text: var(--g-text);
-  --jx-text-subtle: var(--g-text2);
-  --jx-text-subtlest: var(--g-text2);
-  --jx-link: var(--g-accent);
-  --jx-link-hover: var(--g-accent);
-  --jx-surface: var(--g-surface-solid);
-  --jx-surface-sunken: var(--g-sunken);
-  --jx-surface-raised: var(--g-raised);
-  --jx-hover: var(--g-hover);
-  --jx-selected: var(--g-selected);
-  --jx-border: var(--g-hairline);
-  --jx-btn: var(--g-btn);
-  --jx-btn-hover: var(--g-btn-hover);
-  --jx-primary: var(--g-accent);
-  --jx-on-primary: var(--g-on-accent);
-  --jx-focus: var(--g-focus);
-}
-
-/* Panels: glass, rounded, floating */
+/* Panels: white, hairline edge, no card chrome (OpenProject's split and resizer are kept) */
 html.blm-ui2-wp .work-packages--details,
 html.blm-ui2-wp .work-packages--show-view {
-  font-family: var(--g-font); color: var(--g-text);
-  background: var(--g-surface);
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
-  border: 1px solid var(--g-border); border-radius: var(--g-radius-lg);
-  box-shadow: var(--g-shadow);
+  font-family: var(--g-font); font-size: 13px; color: var(--g-text);
+  background: var(--g-surface-solid);
 }
+html.blm-ui2-wp .work-packages--details { border-left: 1px solid var(--g-hairline2); box-shadow: none; }
 html.blm-ui2-wp .work-packages--details-content,
 html.blm-ui2-wp .work-packages-full-view--split-container,
 html.blm-ui2-wp .work-package--single-view,
 html.blm-ui2-wp .work-packages--panel-inner,
 html.blm-ui2-wp .tabcontent,
-html.blm-ui2-wp .op-uc-container { background: transparent !important; color: var(--g-text); }
+html.blm-ui2-wp .op-uc-container { background: transparent; color: var(--g-text); }
 
-/* Breadcrumb, id and type line */
+/* Compact header: breadcrumb, type icon, subject, status */
+html.blm-ui2-wp .work-packages--details-header { padding: 12px 20px 0; }
 html.blm-ui2-wp .work-packages--info-row,
 html.blm-ui2-wp .work-packages--info-row *,
 html.blm-ui2-wp .wp-breadcrumb,
-html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 13px; color: var(--g-text2); }
+html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 12px; color: var(--g-text2); }
 html.blm-ui2-wp .work-packages--info-row a,
 html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-text2); text-decoration: none; }
 html.blm-ui2-wp .work-packages--info-row a:hover,
 html.blm-ui2-wp .wp-breadcrumb a:hover { color: var(--g-accent); text-decoration: underline; }
-
-/* Subject */
-html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
-  font-family: var(--g-font); font-size: 22px !important; font-weight: 600 !important;
-  font-style: normal; line-height: 1.3; letter-spacing: -.02em; color: var(--g-text);
+html.blm-ui2-wp .work-packages--details .inline-edit--display-field.subject {
+  font-family: var(--g-font); font-size: 18px !important; font-weight: 650 !important;
+  font-style: normal; line-height: 1.3; letter-spacing: -.01em; color: var(--g-text);
   overflow-wrap: anywhere;
 }
+html.blm-ui2.blm-ui2-wp .work-packages--show-view .inline-edit--display-field.subject {
+  font-family: var(--g-font); font-size: 22px !important; font-weight: 650 !important;
+  letter-spacing: -.02em; color: var(--g-text);
+}
 
-/* Status button: same chip colours as the list, bigger, pill */
-html.blm-ui2-wp .blm-g-status {
-  display: inline-flex !important; align-items: center; gap: 8px;
-  height: 34px !important; min-height: 34px !important; line-height: 1 !important;
-  padding: 0 12px 0 14px !important; margin: 0 !important;
+/* Status button (class added by jira-skin.js): a pill, as in the list */
+html.blm-ui2-wp .blm-jx-status {
+  display: inline-flex !important; align-items: center; gap: 6px;
+  height: 28px !important; min-height: 28px !important; line-height: 1 !important;
+  padding: 0 10px 0 12px !important; margin: 0 !important;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   white-space: nowrap; cursor: pointer;
-  font-family: var(--g-font) !important; font-size: 14px !important; font-weight: 600 !important;
+  font-family: var(--g-font) !important; font-size: 12px !important; font-weight: 600 !important;
   text-transform: none !important; letter-spacing: 0 !important;
   background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
   transition: filter .14s ease-out;
 }
-html.blm-ui2-wp .blm-g-status[data-blm-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
-html.blm-ui2-wp .blm-g-status[data-blm-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
-html.blm-ui2-wp .blm-g-status:hover { filter: brightness(.95); }
-html.blm-ui2-wp .blm-g-status:disabled { opacity: .5; cursor: not-allowed; }
-html.blm-ui2-wp .blm-g-status * { color: inherit !important; font: inherit !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
-html.blm-ui2-wp .blm-g-status:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ui2-wp .blm-jx-status[data-blm-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
+html.blm-ui2-wp .blm-jx-status[data-blm-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
+html.blm-ui2-wp .blm-jx-status:hover { filter: brightness(.95); }
+html.blm-ui2-wp .blm-jx-status:disabled { opacity: .5; cursor: not-allowed; }
+html.blm-ui2-wp .blm-jx-status * { color: inherit !important; font: inherit !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
+html.blm-ui2-wp .blm-jx-status:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
-/* Tabs: a segmented pill row */
+/* Tabs: an underline bar. No padding on the scroll strip (it has a fixed height),
+   so nothing is cut off. */
+html.blm-ui2-wp op-scrollable-tabs .op-scrollable-tabs--tab-container,
+html.blm-ui2-wp .op-scrollable-tabs--tab-container { padding: 0; border-bottom: 1px solid var(--g-hairline); }
 html.blm-ui2-wp .op-tab-row,
-html.blm-ui2-wp .tabrow {
-  display: inline-flex; gap: 2px; padding: 3px; margin: 8px 0;
-  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: 999px;
-}
+html.blm-ui2-wp .tabrow { display: flex; gap: 20px; padding: 0 20px; margin: 0; background: transparent; border: 0; border-radius: 0; }
+html.blm-ui2-wp .op-tab-row--tab { margin: 0; }
 html.blm-ui2-wp .op-tab-row--link,
 html.blm-ui2-wp .tabrow li a {
+  display: inline-flex; align-items: center; height: 38px; box-sizing: border-box;
   font-family: var(--g-font); font-size: 13px; font-weight: 500;
-  padding: 5px 14px; border: 0; border-radius: 999px; box-shadow: none; text-decoration: none;
+  padding: 0; margin: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; box-shadow: none; text-decoration: none;
   color: var(--g-text2); text-transform: none; letter-spacing: 0;
-  transition: background-color .14s ease-out, color .14s ease-out;
+  transition: color .14s ease-out, border-color .14s ease-out;
 }
 html.blm-ui2-wp .op-tab-row--link:hover,
-html.blm-ui2-wp .tabrow li a:hover { color: var(--g-text); }
+html.blm-ui2-wp .tabrow li a:hover { color: var(--g-text); background: transparent; }
 html.blm-ui2-wp .op-tab-row--link_selected,
 html.blm-ui2-wp .op-tab-row--link_selected:hover,
-html.blm-ui2-wp .tabrow li.selected a {
-  background: var(--g-surface-solid); color: var(--g-accent); box-shadow: 0 1px 2px rgba(22, 24, 29, .12);
-}
+html.blm-ui2-wp .tabrow li.selected a { color: var(--g-accent); background: transparent; border-bottom-color: var(--g-accent); }
+html.blm-ui2-wp .op-tab-row--link [data-qa-selector="tab-count"] { color: var(--g-muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
-/* Attribute groups: soft cards, no rules */
-html.blm-ui2-wp .attributes-group {
-  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: var(--g-radius);
-  padding: 4px 16px 12px; margin-bottom: 12px;
+/* Attribute groups: separator sections, not cards */
+html.blm-ui2-wp .work-packages--details .attributes-group {
+  background: transparent; border: 0; border-bottom: 1px solid var(--g-hairline); border-radius: 0;
+  padding: 12px 20px; margin: 0;
 }
-html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin-bottom: 4px; padding: 10px 0 2px; }
+html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin-bottom: 4px; padding: 0 0 4px; }
 html.blm-ui2-wp .attributes-group--header-text,
 html.blm-ui2-wp .attributes-group--header h3 {
   font-family: var(--g-font); font-size: 13px !important; font-weight: 600 !important;
-  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text2);
+  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text);
 }
 html.blm-ui2-wp .attributes-key-value--key {
-  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-text2); text-transform: none;
+  font-family: var(--g-font); font-size: 13px; font-weight: 400; color: var(--g-text2); text-transform: none;
 }
 html.blm-ui2-wp .attributes-key-value--value-container,
-html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 13px; color: var(--g-text); }
 html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field {
-  border-radius: 8px; transition: background-color .14s ease-out;
+  border-radius: var(--g-radius); transition: background-color .14s ease-out;
 }
 html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:hover { background: var(--g-hover); }
 html.blm-ui2-wp .attributes-key-value--value-container a { color: var(--g-accent); }
 
-/* Description and activity */
+/* Description */
 html.blm-ui2-wp .work-packages--details .op-uc-container,
 html.blm-ui2-wp .work-packages--show-view .op-uc-container {
-  font-family: var(--g-font); font-size: 14px; line-height: 1.65; color: var(--g-text);
+  font-family: var(--g-font); font-size: 13px; line-height: 1.6; color: var(--g-text);
 }
+/* "Description" and "Activity" labels (drawn by jira-skin.js's shared full-page CSS) */
+html.blm-ui2.blm-ui2-wp .work-packages--show-view .description-group::before,
+html.blm-ui2.blm-ui2-wp .work-packages--show-view op-wp-tabs::before { font-size: 13px; font-weight: 600; }
+
+/* Full page: header card and sidebar panels use the card radius */
+html.blm-ui2.blm-ui2-wp .work-packages--show-view .toolbar-container {
+  margin: 12px 24px 0; padding: 12px 16px; background: var(--g-surface-solid);
+  border: 1px solid var(--g-hairline2) !important; border-radius: var(--g-radius-lg);
+}
+html.blm-ui2.blm-ui2-wp .blm-jx-side { position: sticky; top: 64px; align-self: start; }
+html.blm-ui2.blm-ui2-wp .blm-jx-side .attributes-group--header { padding: 12px 16px 8px !important; border-bottom: 0; }
+@media (max-width: 1100px) {
+  html.blm-ui2.blm-ui2-wp .work-packages--show-view .work-packages-full-view--split-container { grid-template-columns: minmax(0, 1fr) !important; }
+  html.blm-ui2.blm-ui2-wp .blm-jx-side { position: static; grid-column: 1; grid-row: auto; }
+}
+
+/* Child work items: the shared markup, with a few UI 2.0 touches (colours come from --jx-*) */
+html.blm-ui2.blm-ui2-wp .blm-jx-children-title { font-size: 13px; }
+html.blm-ui2.blm-ui2-wp .blm-jx-children-bar { height: 4px; }
+html.blm-ui2.blm-ui2-wp .blm-jx-children ul { border-radius: var(--g-radius-lg); }
+html.blm-ui2.blm-ui2-wp .blm-jx-children li { font-size: 13px; }
+html.blm-ui2.blm-ui2-wp .blm-jx-children .subject:hover { color: var(--g-accent); }
+
+/* Activity as a timeline: avatar, name, time, comment */
 html.blm-ui2-wp .op-user-activity--user-name,
 html.blm-ui2-wp .user-comment--user { font-weight: 600; color: var(--g-text); }
 html.blm-ui2-wp .op-user-activity--date,
-html.blm-ui2-wp .user-comment--date { color: var(--g-text2); }
+html.blm-ui2-wp .user-comment--date { color: var(--g-muted); font-size: 12px; }
+html.blm-ui2-wp .work-package-details-activities-activity { position: relative; padding: 8px 0; }
+html.blm-ui2-wp .work-package-details-activities-activity:not(:last-child)::before {
+  content: ""; position: absolute; left: 13px; top: 38px; bottom: -8px; width: 1px; background: var(--g-hairline2);
+}
+html.blm-ui2-wp .work-package-details-activities-activity .op-avatar,
+html.blm-ui2-wp .work-package-details-activities-activity .op-principal--avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+}
 
-/* Dark: text that OpenProject keeps grey nearly vanishes on dark glass */
+/* Footer toolbar */
+html.blm-ui2-wp .work-packages--details-toolbar-container { background: var(--g-surface-solid); border-top: 1px solid var(--g-hairline); }
+
+/* Dark: text that OpenProject keeps grey would nearly vanish */
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--details,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--show-view,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-package--single-view,
@@ -156,6 +171,6 @@ html.blm-ui2[data-blm-ui2-theme="dark"] .op-principal--avatar { background-color
 
 @media (prefers-reduced-motion: reduce) {
   html.blm-ui2-wp .op-tab-row--link,
-  html.blm-ui2-wp .blm-g-status,
+  html.blm-ui2-wp .blm-jx-status,
   html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none; }
 }
