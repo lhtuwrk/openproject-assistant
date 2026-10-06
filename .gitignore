@@ -1,0 +1,17 @@
+# Packaged extension builds
+*.zip
+
+# Editor / tooling
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dependencies (if ever introduced)
+node_modules/

@@ -1,0 +1,128 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench (app) · nav: side-rail (app) · footer: none (rail foot)
+ * design-system: design.md · designed-as-app
+ *
+ * shell.css — the dashboard frame shared by Settings, Burndown and Time log:
+ * a fixed left rail (brand · profile · nav · foot) and a page bar per page.
+ * shell.js fills the rail; the space for it is reserved here so nothing jumps.
+ */
+
+html, body { overflow-x: clip; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg); color: var(--text);
+  padding-inline-start: var(--rail-w);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Rail ─────────────────────────────────────────────────────────────── */
+.rail {
+  position: fixed; inset: 0 auto 0 0; z-index: 120; width: var(--rail-w);
+  display: flex; flex-direction: column; gap: var(--space-lg);
+  padding: var(--space-md) var(--space-sm);
+  background: var(--surface); border-inline-end: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.rail-brand {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
+  color: var(--text); text-decoration: none;
+  font-size: var(--text-md); font-weight: 650; letter-spacing: -0.01em;
+}
+.rail-brand img { width: 22px; height: 22px; border-radius: var(--radius-sm); }
+.rail-brand .ver { margin-inline-start: auto; font: 500 var(--text-2xs) var(--font-mono); color: var(--muted); }
+
+/* Profile */
+.profile {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-sm); border-radius: var(--radius-lg);
+  background: var(--bg); border: 1px solid var(--border);
+}
+.profile-id { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.profile-who { min-width: 0; }
+.profile .avatar { width: 36px; height: 36px; font-size: var(--text-sm); font-weight: 600; }
+.profile-name {
+  font-size: var(--text-md); font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.profile-login {
+  font: var(--text-xs) var(--font-mono); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.profile-stats { display: flex; flex-direction: column; gap: var(--space-xs); }
+.stat { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.stat-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xs); font-size: var(--text-xs); color: var(--text2); }
+.stat-row b { font: 500 var(--text-sm) var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.stat-row b small { font-size: var(--text-xs); color: var(--muted); font-weight: 400; }
+.meter { height: 4px; border-radius: var(--radius-pill); background: var(--overlay); overflow: hidden; }
+.meter > i { display: block; height: 100%; width: var(--fill, 0%); background: var(--accent); border-radius: inherit; }
+.meter.short > i { background: var(--warn); }
+.profile-note { font-size: var(--text-xs); color: var(--red); }
+.profile-note.ok { color: var(--green-soft); }
+.profile-signin { font-size: var(--text-sm); color: var(--text2); line-height: 1.5; }
+.profile-signin a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.profile-signin a:hover { text-decoration: underline; }
+.profile.loading .profile-name,
+.profile.loading .profile-login { color: transparent; background: var(--overlay); border-radius: var(--radius-sm); }
+
+/* Nav */
+.rail-nav { display: flex; flex-direction: column; gap: var(--space-3xs); }
+.rail-nav a {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-xs); border-radius: var(--radius-md);
+  color: var(--text2); text-decoration: none; white-space: nowrap;
+  font-size: var(--text-md); font-weight: 500;
+  transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+}
+.rail-nav a svg { flex-shrink: 0; color: var(--muted); }
+.rail-nav a:hover { background: var(--surface2); color: var(--text); }
+.rail-nav a:active { background: var(--overlay); }
+.rail-nav a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.rail-nav a[aria-current="page"] { background: var(--accent-bg); color: var(--text); }
+.rail-nav a[aria-current="page"] svg { color: var(--accent); }
+.rail-nav .count { margin-inline-start: auto; font: 500 var(--text-xs) var(--font-mono); color: var(--muted); }
+
+/* Foot */
+.rail-foot {
+  margin-top: auto; display: flex; flex-direction: column; gap: var(--space-2xs);
+  padding: var(--space-sm) var(--space-xs) 0; border-top: 1px solid var(--border);
+  font-size: var(--text-xs); color: var(--muted);
+}
+.rail-foot a { color: var(--text2); text-decoration: none; white-space: nowrap; }
+.rail-foot a:hover { color: var(--text); text-decoration: underline; }
+.rail-foot a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.sync-line { display: flex; align-items: center; gap: var(--space-xs); }
+.sync-line[hidden], .rail-nav a[hidden], .profile-stats[hidden] { display: none; }
+.sync-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.sync-line.ok .dot { background: var(--green); }
+.sync-line.error .dot { background: var(--red); }
+.sync-line.syncing .dot { background: var(--accent); }
+
+/* ── Page bar (one per page; Burndown/Time log keep their own ids) ────── */
+.page-title {
+  font-size: var(--text-xl); font-weight: 650; letter-spacing: -0.02em; color: var(--text);
+  white-space: nowrap; margin-inline-end: var(--space-md);
+}
+
+/* ── Narrow windows: the rail becomes a top strip ────────────────────── */
+@media (max-width: 900px) {
+  body { padding-inline-start: 0; }
+  .rail {
+    position: static; width: auto; flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: var(--space-xs) var(--space-md); padding: var(--space-xs) var(--space-md);
+    border-inline-end: none; border-bottom: 1px solid var(--border); overflow: visible;
+  }
+  .rail-brand .ver, .profile-stats, .profile-login, .rail-foot { display: none; }
+  .profile { padding: 0; background: none; border: none; order: 3; margin-inline-start: auto; }
+  .profile .avatar { width: 28px; height: 28px; font-size: var(--text-2xs); }
+  .rail-nav { flex-direction: row; flex-wrap: wrap; }
+  .rail-nav .count { display: none; }
+}
+@media (max-width: 480px) {
+  .profile-name { display: none; }
+  .rail-nav a { padding: var(--space-2xs) var(--space-xs); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-nav a { transition-duration: 0s; }
+}

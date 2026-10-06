@@ -1,0 +1,2 @@
+- [Release zip drift](project_release_zip_drift.md) — release.yml folder list; check-manifest.js misses import/HTML-only files (shared/)
+- [Path resolution traps](project_path_resolution_traps.md) — shell.js markup, popup data-open/getURL, CSS url(); no manifest key => ID tied to load path

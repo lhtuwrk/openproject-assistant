@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="../shared/theme.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set up · Backlog Monitor</title>
+  <link rel="stylesheet" href="../shared/tokens.css" />
+  <style>
+    /* Setup: first-run page that asks for the OpenProject host. No rail — the rail
+     * needs a host to render. One card, one primary action (design.md). */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body); background: var(--bg); color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      font-size: var(--text-md); line-height: 1.5; min-height: 100vh;
+      display: grid; place-items: center; padding: var(--space-xl) var(--space-md);
+    }
+    main { width: 100%; max-width: 520px; }
+    .brand { display: flex; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-lg); color: var(--text2); font-weight: 600; }
+    .brand img { width: 24px; height: 24px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-md);
+    }
+    h1 { font-size: var(--text-2xl); font-weight: 650; letter-spacing: -0.02em; }
+    .lede { color: var(--text2); }
+    label { font-size: var(--text-sm); font-weight: 600; }
+    .field { display: flex; flex-direction: column; gap: var(--space-2xs); }
+    input[type="url"], input[type="text"] {
+      height: 34px; padding: 0 var(--space-sm); border-radius: var(--radius-md);
+      background: var(--bg); color: var(--text); border: 1px solid var(--border2);
+      font: 400 var(--text-md) var(--font-mono); color-scheme: var(--scheme);
+    }
+    input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    input[aria-invalid="true"] { border-color: var(--red); }
+    .hint { font-size: var(--text-sm); color: var(--muted); }
+    .actions { display: flex; gap: var(--space-xs); align-items: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2xs);
+      height: 30px; padding: 0 var(--space-md); border-radius: var(--radius-md); white-space: nowrap;
+      font-size: var(--text-sm); font-weight: 500; cursor: pointer; text-decoration: none;
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
+      transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+    }
+    .btn:hover:not(:disabled) { background: var(--overlay); border-color: var(--subtle); }
+    .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .btn:disabled { background: var(--disabled-bg); color: var(--muted); cursor: not-allowed; }
+    .btn.primary { background: var(--accent2); color: var(--on-accent); border-color: var(--accent2); font-weight: 600; }
+    .btn.primary:hover:not(:disabled) { background: var(--accent2-hover); border-color: var(--accent2-hover); }
+    .msg { font-size: var(--text-sm); }
+    .msg:empty { display: none; }
+    .msg.ok   { color: var(--green-soft); }
+    .msg.warn { color: var(--warn); }
+    .msg.err  { color: var(--red); }
+    .done { display: none; flex-direction: column; gap: var(--space-sm); }
+    .done.show { display: flex; }
+    .done a.go { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .done a.go:hover { text-decoration: underline; }
+    .done a.go:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+    .links { display: flex; gap: var(--space-md); flex-wrap: wrap; }
+    @media (prefers-reduced-motion: reduce) { .btn { transition-duration: 0s; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="../icons/icon-48.png" alt="" /> Backlog Monitor</div>
+    <form class="card" id="setup-form" novalidate>
+      <h1 id="title">Connect your backlog</h1>
+      <p class="lede">Enter the address of the OpenProject instance you work in. The extension reads it with your normal browser sign-in; no API key is stored.</p>
+      <div class="field">
+        <label for="host">OpenProject address</label>
+        <input type="url" id="host" name="host" placeholder="https://openproject.example.com"
+               autocomplete="url" spellcheck="false" required aria-describedby="host-hint" />
+        <p class="hint" id="host-hint">Only the site address is kept (scheme and host). Chrome will ask you to allow access to that site.</p>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn primary" id="save">Save and connect</button>
+        <span class="msg" id="msg" role="status" aria-live="polite"></span>
+      </div>
+      <div class="done" id="done">
+        <div class="links">
+          <a class="go" id="go-return" href="dashboard.html">Continue →</a>
+          <a class="go" id="go-backlog" href="#" target="_blank" rel="noopener">Open the backlog ↗</a>
+        </div>
+      </div>
+    </form>
+  </main>
+  <script type="module" src="setup.js"></script>
+</body>
+</html>

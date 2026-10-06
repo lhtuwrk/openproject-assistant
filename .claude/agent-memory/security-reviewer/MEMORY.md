@@ -1,0 +1,3 @@
+- [Trust model: OpenProject origin](trust-model-openproject-origin.md) — page script = same power as our content scripts; real attacker is other users' API strings
+- [Write path guards](write-path-guards.md) — CSRF meta + lockVersion + ids only from fetched API data
+- [Extension-page HTML sinks](extension-page-html-sinks.md) — default MV3 CSP; safeHtml re-parse gap (noscript); fetchBacklogBlob origin pin

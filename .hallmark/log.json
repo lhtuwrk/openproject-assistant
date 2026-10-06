@@ -1,0 +1,43 @@
+[
+  {
+    "date": "2026-10-05",
+    "scope": "page section",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "preserved palette (design.md)",
+    "enrichment": "none",
+    "brief": "Planning wrap-up redesign: report + Next panel with inline start-new confirm; larger story clock"
+  },
+  {
+    "date": "2026-10-05",
+    "scope": "page",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "preserved palette (design.md)",
+    "enrichment": "none",
+    "brief": "Planning Quest: sprint planning game page (lobby, arena with level track + countdown + card, loot)"
+  },
+  {
+    "date": "2026-10-01",
+    "scope": "page",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "preserved palette (design.md)",
+    "enrichment": "none",
+    "brief": "Settings redesign: two-column group grid on wide screens, switch beside each title"
+  },
+  {
+    "date": "2026-10-01",
+    "scope": "injected skin",
+    "macrostructure": "none (existing OpenProject list)",
+    "theme": "studied-DNA (Jira list view)",
+    "enrichment": "none",
+    "brief": "Jira-style skin for OpenProject work-package lists"
+  },
+  {
+    "date": "2026-10-01",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "preserved palette",
+    "enrichment": "none",
+    "nav": "side-rail (app)",
+    "brief": "Backlog Monitor · dashboard shell (Settings, Burndown, Time log) + profile rail + popup companion"
+  }
+]

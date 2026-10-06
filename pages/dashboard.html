@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="../shared/theme.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings · Backlog Monitor</title>
+  <link rel="stylesheet" href="../shared/tokens.css" />
+  <link rel="stylesheet" href="../shared/shell.css" />
+  <style>
+    /* Hallmark · genre: modern-minimal · macrostructure: Workbench (app) · page: Settings · design-system: design.md · designed-as-app
+     * layout: two-column group grid ≥ 1180 px, one 720 px column below · pre-emit critique: P4 H4 E4 S4 R5 V4 */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-size: var(--text-md); line-height: 1.5; min-height: 100vh; }
+
+    main { padding: var(--space-xl) var(--space-xl) var(--space-2xl); }
+    .settings { max-width: 720px; }
+
+    .page-head { display: flex; flex-direction: column; gap: var(--space-2xs); margin-bottom: var(--space-xl); }
+    .page-title { font-size: var(--text-2xl); }
+    .page-lede { color: var(--text2); max-width: 60ch; }
+
+    .groups { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+    .group { min-width: 0; }
+    /* Wide screens: the three groups share two columns, so each card stays
+       narrow enough for the switch to sit beside its label. */
+    @media (min-width: 1180px) {
+      .settings { max-width: 1240px; }
+      .groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas: "backlog bg" "backlog look";
+        align-items: start; column-gap: var(--space-xl); row-gap: var(--space-xl);
+      }
+      .group-backlog { grid-area: backlog; }
+      .group-bg      { grid-area: bg; }
+      .group-look    { grid-area: look; }
+    }
+    .group-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; margin-bottom: var(--space-2xs); }
+    .group-lede { color: var(--muted); font-size: var(--text-sm); margin-bottom: var(--space-sm); }
+
+    .features {
+      list-style: none; border: 1px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--surface); overflow: hidden;
+    }
+    .feature {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas: "name control" "desc desc" "meta meta";
+      gap: var(--space-2xs) var(--space-md);
+      align-items: center; padding: var(--space-md) var(--space-lg);
+    }
+    .feature + .feature { border-top: 1px solid var(--border); }
+    .feature .name { grid-area: name; min-width: 0; font-weight: 600; color: var(--text); }
+    .feature label.name { cursor: pointer; }
+    .feature .desc { grid-area: desc; color: var(--text2); font-size: var(--text-sm); max-width: 62ch; }
+    .feature .control { grid-area: control; display: flex; justify-content: flex-end; }
+    .feature .meta {
+      grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-sm);
+      margin-top: var(--space-2xs); font-size: var(--text-xs); color: var(--muted);
+    }
+    .scope {
+      display: inline-flex; align-items: center; gap: var(--space-2xs);
+      padding: 1px var(--space-xs); border-radius: var(--radius-pill);
+      border: 1px solid var(--border2); color: var(--text2); white-space: nowrap;
+    }
+    .status { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .status.ok   { color: var(--green-soft); }
+    .status.warn { color: var(--warn); }
+    .status.err  { color: var(--red); }
+    .feature a.go { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+    .feature a.go:hover { text-decoration: underline; }
+    .feature a.go:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+    .feature.off .meta .status { color: var(--muted); }
+    .feature.off a.go { display: none; }
+    .group-lede a.host-change { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+    .group-lede a.host-change:hover { text-decoration: underline; }
+    .group-lede a.host-change:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+    /* Segmented theme picker: radios, so arrow keys work */
+    .segmented {
+      display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-md);
+      background: var(--overlay); border: 1px solid var(--border2);
+    }
+    .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+    .segmented label {
+      padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-sm); cursor: pointer;
+      font-size: var(--text-sm); font-weight: 500; color: var(--text2); white-space: nowrap;
+      transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+    }
+    .segmented label:hover { color: var(--text); }
+    .segmented input:checked + label { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
+    .segmented input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+    @media (max-width: 640px) {
+      main { padding: var(--space-lg) var(--space-md) var(--space-xl); }
+      .feature { padding: var(--space-md); gap: var(--space-2xs) var(--space-md); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .segmented label { transition-duration: 0s; }
+    }
+  </style>
+</head>
+<body data-page="settings">
+  <main>
+    <div class="settings">
+    <header class="page-head">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-lede">Turn each feature on or off. Changes save as you click and reach open backlog tabs the next time they load.</p>
+    </header>
+
+    <div class="groups">
+    <section class="group group-backlog" aria-labelledby="g-backlog">
+      <h2 class="group-title" id="g-backlog">On backlog pages</h2>
+      <p class="group-lede">Runs inside work-package lists and detail views on <span class="num" id="host-label">your backlog</span>. <a class="go host-change" href="setup.html">Change host →</a></p>
+      <ul class="features">
+        <li class="feature" data-key="__blm_show_subtask_bar" data-default="true">
+          <label class="name" for="f-subtask">Subtask progress</label>
+          <p class="desc">Splits the Progress bar of each parent work package into its subtasks (done, in progress, open), with a breakdown on hover.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-subtask" /></div>
+          <div class="meta"><span class="scope">Work-package lists</span></div>
+        </li>
+        <li class="feature" data-key="__blm_children_assign" data-default="true">
+          <label class="name" for="f-childassign">Assign from the Children table</label>
+          <p class="desc">Adds an Assignee column to the Children table in a work package's Relations tab. Click a name to reassign that child. Works with or without Jira style.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-childassign" /></div>
+          <div class="meta"><span class="scope">Relations tab · writes the assignee</span></div>
+        </li>
+        <li class="feature" data-key="__blm_activity_filter_on" data-default="true">
+          <label class="name" for="f-activity">Activity filter</label>
+          <p class="desc">Adds Show All · Comments · History to a work package's Activity tab, and can hide the automatic progress updates children cause. Works with or without Jira style.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-activity" /></div>
+          <div class="meta"><span class="scope">Activity tab · display only</span></div>
+        </li>
+        <li class="feature" data-key="__blm_file_cards" data-default="true">
+          <label class="name" for="f-filecards">Attachment cards</label>
+          <p class="desc">Shows a work package's files as Jira-style cards in the Files tab: a thumbnail for images, a file-type tile otherwise, with size, date and uploader. A List toggle brings back OpenProject's list. Works with or without Jira style.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-filecards" /></div>
+          <div class="meta"><span class="scope">Files tab · display only</span></div>
+        </li>
+        <li class="feature" data-key="__blm_auto_progress" data-default="true">
+          <label class="name" for="f-autoprog">Auto 100 % on resolve</label>
+          <p class="desc">When a Task moves to Resolved, Closed or Done, its progress is set to 100 % in the same save. Reopening it sets progress back to 0 %.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-autoprog" /></div>
+          <div class="meta"><span class="scope">Status changes · Tasks only</span></div>
+        </li>
+        <li class="feature" data-key="__blm_confirm_subtasks" data-default="true">
+          <label class="name" for="f-confirm">Confirm open subtasks</label>
+          <p class="desc">Asks before a work package is resolved or closed while some of its subtasks are still open. Cancel keeps the old status.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-confirm" /></div>
+          <div class="meta"><span class="scope">Status changes</span></div>
+        </li>
+        <li class="feature" data-key="__blm_list_cache" data-default="true">
+          <label class="name" for="f-listcache">Short list cache</label>
+          <p class="desc">Reuses the work-package list for 15 seconds, so going back from a story doesn't reload it. Saves clear it at once; other people's changes show up after 15 seconds, and OpenProject's refresh button returns the same rows in that time. Turn off to always fetch fresh.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-listcache" /></div>
+          <div class="meta"><span class="scope">Work-package list</span></div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="group group-bg" aria-labelledby="g-bg">
+      <h2 class="group-title" id="g-bg">In the background</h2>
+      <p class="group-lede">Runs while Chrome is open, even with no backlog tab.</p>
+      <ul class="features">
+        <li class="feature" data-key="__blm_sync_burndown" data-default="false" id="feat-burndown">
+          <label class="name" for="f-burndown">Burndown sync</label>
+          <p class="desc">Saves one snapshot a day of every tracked version, syncs hourly, and rebuilds missed days from the activity feed at midnight.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-burndown" /></div>
+          <div class="meta">
+            <span class="scope">Hourly + midnight</span>
+            <span class="status" id="burndown-status"></span>
+            <a class="go" href="viewer.html">Open Burndown →</a>
+          </div>
+        </li>
+        <li class="feature" data-key="__blm_logtime_reminder" data-default="true" id="feat-reminder">
+          <label class="name" for="f-reminder">Log-time reminders</label>
+          <p class="desc">On the last working day of each sprint and month, and the day before, you get a "log your time" task until you click Done: a toolbar badge, a popup card, a floating card on websites from 16:00, and a Windows notification at most every 3 hours.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-reminder" /></div>
+          <div class="meta">
+            <span class="scope">Sprint + month end</span>
+            <span class="status" id="reminder-status"></span>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="group group-look" aria-labelledby="g-look">
+      <h2 class="group-title" id="g-look">Appearance</h2>
+      <ul class="features">
+        <li class="feature">
+          <span class="name" id="theme-label">Theme</span>
+          <p class="desc">Applies to the popup, every dashboard page and the backlog (with Jira style on).</p>
+          <div class="control">
+            <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+              <input type="radio" name="theme" id="t-dark" value="dark" /><label for="t-dark">Dark</label>
+              <input type="radio" name="theme" id="t-light" value="light" /><label for="t-light">Light</label>
+            </div>
+          </div>
+        </li>
+        <li class="feature" data-key="__blm_jira_skin" data-default="true">
+          <label class="name" for="f-jira">Jira style</label>
+          <p class="desc">Restyles OpenProject like Jira: a white top bar and light sidebar on every page; work-package lists with status lozenges and type and priority icons; the work-package page with Details in a right-hand sidebar and a Child work items section, where you can change a child's assignee and status; and the Backlogs page as Jira sprint containers. Those two changes are the only things it writes to OpenProject.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-jira" /></div>
+          <div class="meta"><span class="scope">Top bar · work packages · backlogs</span></div>
+        </li>
+        <li class="feature" data-key="__blm_jira_animation" data-default="true">
+          <label class="name" for="f-anim">Animations</label>
+          <p class="desc">Slide, fade and hover transitions on OpenProject pages. Turn off if dragging or scrolling feels slow; animations are always paused while you drag.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-anim" /></div>
+          <div class="meta"><span class="scope">Skin · welcome · activity filter</span></div>
+        </li>
+        <li class="feature" data-key="__blm_quote" data-default="true">
+          <label class="name" for="f-quote">Quote of the day</label>
+          <p class="desc">Shows a random motivational quote in the bottom bar of the work-package list, a new one each time you open the list. Long quotes are shortened to two lines.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-quote" /></div>
+          <div class="meta"><span class="scope">Work-package list</span></div>
+        </li>
+      </ul>
+    </section>
+    </div>
+    </div>
+  </main>
+
+  <script type="module" src="../shared/shell.js"></script>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

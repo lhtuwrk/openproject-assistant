@@ -1,0 +1,146 @@
+# Design — Backlog Monitor
+
+The locked design system for every extension page (popup, Settings, Burndown,
+Time log). Read this before changing any page. Extend this file when the system
+needs to grow; don't override it on one page.
+
+## Genre
+modern-minimal: a quiet internal tool. Function carries the page.
+
+## Macrostructure family
+- App pages (Settings, Burndown, Time log, Planning): **Workbench**. A fixed left rail
+  (`shell.css` / `shell.js`) holds the brand, the profile card, the nav and the
+  rail foot. Each page has a page bar with an `h1.page-title`, then its own
+  filters and actions.
+- Popup: a short companion column of cards (account, task, My time, Burndown)
+  above a nav to the dashboard pages (Burndown, Time log). Its settings button
+  opens Quick settings as a 380 px drawer on the right of the page
+  (`content/quick-settings-host.js`, Chrome's side panel as fallback): one compact
+  column of the Settings switches (read from dashboard.html) and the theme.
+
+## Theme
+**Graphite and cobalt**: neutral greys and one cobalt signal, in dark and light
+modes chosen in Settings (`theme.js`). All values live in `tokens.css`; pages
+reference tokens by name. Canvas charts (`getChartColors()` in `viewer.js`) and
+the floating reminder card (`reminder-banner.js`, which runs on other websites)
+can't read CSS variables, so they repeat these values. Keep them in step.
+- Paper `--bg` #111214 / #f7f7f8, panels `--surface` / `--surface2`, controls `--overlay`
+- Ink `--text` / `--text2`, quiet `--muted` / `--subtle`
+- Rules `--border` / `--border2`
+- Accent `--accent` #4c7dff / #2f5fe0: nav, focus, the current-page mark, meters,
+  and the single primary action per view (`--accent2` is the same cobalt)
+- Signals `--red` (missing), `--warn` (under target), `--green*` (synced or met)
+
+## Typography
+- Body and display: Geist 400–650, bundled in `fonts/` (Latin, Latin-ext and
+  Vietnamese subsets, so member names render correctly offline).
+- Numbers, dates, logins: Geist Mono with tabular figures (`.num`, `--font-mono`).
+- Scale: `--text-2xs` 10 → `--text-2xl` 22 px. Page titles 18–22 px, weight 650,
+  tracking −0.02em. Headings are never italic.
+
+## Spacing
+4-pt named scale (`--space-3xs` 2 px → `--space-2xl` 48 px).
+
+## Motion
+- Easings: `--ease-out`, `--ease-in`, `--ease-in-out`; durations `--dur-short` 140 ms
+  and `--dur-med` 220 ms.
+- Only colour, background and transform change. No reveals.
+- `prefers-reduced-motion`: transitions drop to 0.
+
+## Microinteractions stance
+- Settings save on change. No Save button, no "Saved!" toast (silent success).
+- Switches are real checkboxes (`.switch`); the theme picker is a radio group.
+- Focus rings: 2 px `--focus`, shown at once, never animated.
+
+## CTA voice
+- Primary (one per view): `--accent2` fill, 6 px radius, 28–30 px tall.
+- Secondary: `--surface` / `--surface2` fill, `--border2` outline, same size.
+- Text links: `--accent`, weight 600, ending in → for in-app or ↗ for external.
+
+## What pages MUST share
+The rail, the tokens, Geist + Geist Mono, the button sizes and radii, and the
+page-bar pattern.
+
+## What pages MAY differ on
+Their filters, data views (charts, ledger grid) and page-specific signal tokens
+(`--miss`, `--wk-bg` in Time log; `--lvl-goal` · `--lvl-big3` · `--lvl-break` ·
+`--lvl-fire` · `--lvl-high` in Planning, all aliases of palette tokens).
+
+## Planning (sprint planning game)
+One facilitator shares the page; the team plays the backlog level by level in
+priority order (label goal → pilot/chiron/VAB → coffee break → Immediate → High →
+side quests: every other story, by priority). The play order is the facilitator's
+to change in the lobby (drag a level, or ↑ ↓); which level a card belongs to
+stays fixed by that precedence.
+Playful inside the quiet system: the fun is in the copy (level names, "Boss
+defeated", loot, badges computed from real numbers), the pacing (a countdown per
+level, a time bank) and the numbers, never in extra colour or motion. Each level
+has one signal colour, used only for its mark, the card's top rule and the meter.
+The story on the table is the focus: levels and a compact level clock share one
+strip on top; below, the story takes the wide column (id, type, points, tags,
+title, then the Description · Subtasks · Relations · Attachments tabs at full
+length) and a sticky 320 px side column holds the story's own clock, Planned /
+Defer, Prev / Next, Status · Assignee · Author · Updated, the planned tally and
+what's up next. Under 1100 px the side column moves above the story. The
+story's own clock is the side column's headline: elapsed in 40 px Geist Mono over
+its share, with a meter that turns red past it.
+The wrap-up (after End game) reads like a report with one way out: a headline
+that says where the sprint stands ("Nothing decided yet" / "3 of 14 decided" /
+"… is planned"), one planned · deferred · not-planned bar, a row per level, and
+a Next panel (Copy summary, Review all stories, Back to the arena) ending in
+"Start a new planning…", which asks once, inline, only when decisions would be
+lost.
+Time follows the stories: each story gets minutes by its priority (set in the
+lobby), a level's timebox is the sum over its stories, and when the sprint
+doesn't fit the session every story is scaled down by the same share. The
+current story's own clock sits under its title.
+The card has ← Previous and Next → around Planned / Defer (also ← → or B / N,
+S for Next): the table walks the level in its fixed order, Next leaves a story
+unplanned, Previous goes back to any story, decided ones included (shown with
+their Planned / Deferred mark and Mark not planned). Planned / Defer / Undo
+answer to P / D / U; V opens View all,
+Space pauses. Only the sprint being planned is chosen; its open stories are the
+deck (a subtask of a story in the same sprint comes with its story). Planned and
+Defer are the game's own bookkeeping and write nothing. Under the card, the
+story's detail panel (Status · Assignee · Author · Updated, then Description ·
+Subtasks · Relations · Attachments tabs) is where the team reads and edits the
+story: status, assignee, new subtasks (type · subject · assignee, created in the
+sprint) and subtask status/assignee are written to OpenProject at once with no
+confirm dialog. The description is OpenProject's HTML, sanitized; images and
+attachment thumbnails are fetched with the session cookie. View all lists every
+story by level with a Planned / Deferred / On the table / Not planned chip and
+opens the same detail panel beside the list.
+
+## Injected skin on OpenProject
+`jira-skin.js` dresses OpenProject itself, not an extension page, so it follows
+Jira instead of this system: a white top bar and a light left sidebar on every
+page; on work-package lists, the split view and the full page, white paper,
+#172b4d ink, #0c66e4 links and primary button, upper-case status lozenges
+(grey to do, blue in progress, green done), a status button in the same three
+colours, 16 px type and priority icons, 40 px rows. Its tokens (`--jx-*`) live in
+that file, scoped under `html.blm-jira` (top bar), `html.blm-jira-wp` (work
+packages) and `html.blm-jira-bl` (Backlogs), so nothing leaks into OpenProject
+when the switch is off. On the full work-package page the status block and attribute groups move
+into a right sidebar (`aside.blm-jx-side`), Jira-style, and move back when the
+switch is turned off. A "Child work items" section (progress bar, then one row per
+child with type icon, ID, subject, assignee and status lozenge) sits under the
+description on the full page and in the split view, as in Jira, instead of only
+in the Relations tab (whose Children table is then hidden). The section's + Create
+child adds a new-item row (type · subject · Create / Cancel; Enter creates and keeps
+the row open, Escape closes); Add existing searches the
+project and sets the chosen work package's parent. Clicking a child's
+assignee or status lozenge opens a picker
+(search; Assign to me and Unassigned for people; the workflow's allowed statuses);
+the change shows at once, dims while saving, then shows what OpenProject saved, or
+reverts with the reason if it refuses. These are the skin's only writes, sent
+through progress-hook.js so Confirm open subtasks and Auto 100 % still apply.
+The Children table in the Relations tab gets an Assignee column (avatar + the same
+picker) under its own switch, "Assign from the Children table", which also works
+with Jira style off (`html.blm-assign` then carries the `--jx-*` tokens).
+The Activity tab gets a Jira-style filter bar (Show All · Comments · History, Hide
+automatic updates, remembered in `__blm_activity_filter`); one date heading per day.
+It has its own switch ("Activity filter", `html.blm-activity`) and works with Jira
+style off.
+The Files tab shows attachments as cards (thumbnail or file-type tile, name,
+size · date · uploader) with a Grid | List toggle (`__blm_file_view`); own switch
+("Attachment cards", `html.blm-files`), works with Jira style off. Backlogs versions become grey sprint containers of white rows.

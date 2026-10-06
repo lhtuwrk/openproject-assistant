@@ -1,0 +1,1 @@
+- [Review rules](review_rules.md) — display-only claims, isolated-world writes, retry storms, planning.js focus/shortcut and per-WP write traps
