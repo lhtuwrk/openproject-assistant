@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.5.3]
 
 ### Changed
 - The OpenProject host is no longer built in. A setup page opens on install (and after updating) to enter it and allow Chrome access to that one site; change it any time from Settings → Change host. Backlog content scripts are now registered at runtime for the chosen host.

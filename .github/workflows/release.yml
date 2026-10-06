@@ -32,13 +32,13 @@ jobs:
           node - <<'JS'
           const fs = require('fs');
           const v = process.env.VERSION;
-          const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
-          const head = new RegExp('^## \[' + v.replace(/\./g, '\.') + '\](\s+-\s+\S+)?\s*$');
-          const start = lines.findIndex(l => head.test(l));
+          const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(String.fromCharCode(10)).map(l => l.trimEnd());
+          const head = `## [${v}]`;
+          const start = lines.findIndex(l => l === head || l.startsWith(head + ' - '));
           if (start < 0) { console.error(`CHANGELOG.md has no "## [${v}]" section`); process.exit(1); }
           let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
           if (end < 0) end = lines.length;
-          const body = lines.slice(start + 1, end).filter(l => l.trim() && !/^###\s/.test(l));
+          const body = lines.slice(start + 1, end).filter(l => l.trim() && !l.startsWith('### '));
           if (!body.length) { console.error(`CHANGELOG.md section [${v}] is empty`); process.exit(1); }
           console.log(`Changelog [${v}] has ${body.length} entries`);
           JS
@@ -57,8 +57,7 @@ jobs:
           node - "$DATE" <<'JS'
           const fs = require('fs');
           const date = process.argv[2], v = process.env.VERSION;
-          const head = new RegExp('^## \[' + v.replace(/\./g, '\.') + '\].*$', 'm');
-          const s = fs.readFileSync('CHANGELOG.md', 'utf8').replace(head, `## [${v}] - ${date}`);
+          const s = fs.readFileSync('CHANGELOG.md', 'utf8').replace(`## [${v}]`, `## [${v}] - ${date}`);
           fs.writeFileSync('CHANGELOG.md', s);
           JS
 
@@ -97,10 +96,11 @@ jobs:
           // pending "Unreleased" notes become the next version's section (no date yet);
           // otherwise open a fresh empty section above the one just released
           let c2 = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const eol = c2.includes(String.fromCharCode(13)) ? String.fromCharCode(13, 10) : String.fromCharCode(10);
           if (/^## \[Unreleased\]\s*$/m.test(c2)) {
             c2 = c2.replace(/^## \[Unreleased\]\s*$/m, `## [${next}]`);
           } else {
-            c2 = c2.replace(new RegExp('^## \[' + v.replace(/\./g, '\.') + '\]', 'm'), `## [${next}]\n\n## [${v}]`);
+            c2 = c2.replace(`## [${v}]`, `## [${next}]${eol}${eol}## [${v}]`);
           }
           fs.writeFileSync('CHANGELOG.md', c2);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `next=${next}\n`);
