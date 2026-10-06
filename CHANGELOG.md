@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.5.4]
+## [1.5.4] - 2026-10-06
 
 ### Added
 - With Jira style on, a floating "Child work items" button on work-package pages (full page and split view) jumps to the child work items, so they are one click away under a long description.
