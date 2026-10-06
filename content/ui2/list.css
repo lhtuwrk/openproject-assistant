@@ -41,10 +41,10 @@ html.blm-ui2-wp .toolbar-items .button .icon { color: inherit; }
 /* the single primary action (Create) */
 html.blm-ui2-wp .toolbar-items .button.-alt-highlight,
 html.blm-ui2-wp .toolbar-items .button.-highlight,
-html.blm-ui2-wp .toolbar-items .button.-primary { background: var(--g-accent); border-color: var(--g-accent); color: var(--g-on-accent); font-weight: 600; }
+html.blm-ui2-wp .toolbar-items .button.-primary { background: var(--g-accent-btn); border-color: var(--g-accent-btn); color: var(--g-on-accent); font-weight: 600; }
 html.blm-ui2-wp .toolbar-items .button.-alt-highlight:hover,
 html.blm-ui2-wp .toolbar-items .button.-highlight:hover,
-html.blm-ui2-wp .toolbar-items .button.-primary:hover { background: var(--g-accent); filter: brightness(1.1); color: var(--g-on-accent); }
+html.blm-ui2-wp .toolbar-items .button.-primary:hover { background: var(--g-accent-btn); filter: brightness(1.1); color: var(--g-on-accent); }
 /* badges are plain numbers */
 html.blm-ui2-wp .toolbar-items .button .badge {
   background: transparent; color: var(--g-text2); border: 0; padding: 0; margin-left: 4px;

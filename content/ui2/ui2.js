@@ -69,6 +69,7 @@ function syncTabs() {
   const sig = groups.map(g => `${g.idx}|${g.name}|${g.count}`).join(';') + '#' + activeGroup;
   const existing = document.querySelector(`.${TABS_CLASS}`);
   if (existing && sig === tabsSig && existing.previousElementSibling === anchor) return;
+  const hadFocus = existing?.contains(document.activeElement);
   existing?.remove();
   tabsSig = sig;
 
@@ -91,6 +92,7 @@ function syncTabs() {
   add('All', String(total), null);
   for (const g of groups) add(g.name, g.count, g.idx);
   anchor.after(nav);
+  if (hadFocus) nav.querySelector('[aria-pressed="true"]')?.focus();   // rebuilt on click: keep keyboard focus
 }
 
 // ── Icon rail (main menu collapsed) ──────────────────────────────────────────
@@ -119,7 +121,7 @@ function syncRail() {
   toggle.type = 'button';
   toggle.title = 'Expand menu';
   toggle.setAttribute('aria-label', 'Expand menu');
-  toggle.textContent = '☰';
+  toggle.textContent = '☰';   // decorative: the button has an aria-label
   toggle.addEventListener('click', () => document.getElementById('main-menu-toggle')?.click());
   nav.append(toggle);
   for (const a of links) {
@@ -133,6 +135,7 @@ function syncRail() {
     if (icon) {
       const i = document.createElement('i');
       i.className = icon.className;
+      i.setAttribute('aria-hidden', 'true');
       item.append(i);
     }
     nav.append(item);

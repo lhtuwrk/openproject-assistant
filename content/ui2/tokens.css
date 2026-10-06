@@ -33,9 +33,10 @@ html.blm-ui2 {
   --g-hairline2: #e2e5ea;
   --g-text: #16181d;
   --g-text2: #5b616d;
-  --g-muted: #8a909b;
+  --g-muted: #6e727b;
   --g-accent: #2f5fe0;
   --g-on-accent: #ffffff;
+  --g-accent-btn: #2f5fe0;   /* fill behind white text */
   --g-focus: #2f5fe0;
   --g-raised: #ffffff;
   --g-sunken: #f6f7f9;
@@ -65,6 +66,7 @@ html.blm-ui2[data-blm-ui2-theme="dark"] {
   --g-muted: #7d828d;
   --g-accent: #4c7dff;
   --g-on-accent: #ffffff;
+  --g-accent-btn: #3d6bf0;   /* deeper than --g-accent: white text needs 4.5:1 */
   --g-focus: #4c7dff;
   --g-raised: #1f222a;
   --g-sunken: #13151a;
@@ -126,7 +128,7 @@ html.blm-ui2.blm-ui2 {
   --jx-on-icon: #ffffff;
   --jx-prio-highest: #e5484d;
   --jx-prio-high: #f2884b;
-  --jx-prio-medium: #c9a227;
+  --jx-prio-medium: #a07d00;
   --jx-prio-low: #4c7dff;
   --jx-radius: 4px;
   --jx-radius-panel: 8px;

@@ -20,14 +20,14 @@ html.blm-ui2-wp .work-packages-full-view--split-container,
 html.blm-ui2-wp .work-package--single-view,
 html.blm-ui2-wp .work-packages--panel-inner,
 html.blm-ui2-wp .tabcontent,
-html.blm-ui2-wp .op-uc-container { background: transparent; color: var(--g-text); }
+html.blm-ui2.blm-ui2-wp .op-uc-container { background: transparent; color: var(--g-text); }
 
 /* Compact header: breadcrumb, type icon, subject, status */
 html.blm-ui2-wp .work-packages--details-header { padding: 12px 20px 0; }
-html.blm-ui2-wp .work-packages--info-row,
-html.blm-ui2-wp .work-packages--info-row *,
-html.blm-ui2-wp .wp-breadcrumb,
-html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 12px; color: var(--g-text2); }
+html.blm-ui2.blm-ui2-wp .work-packages--info-row,
+html.blm-ui2.blm-ui2-wp .work-packages--info-row *,
+html.blm-ui2.blm-ui2-wp .wp-breadcrumb,
+html.blm-ui2.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 12px; color: var(--g-text2); }
 html.blm-ui2-wp .work-packages--info-row a,
 html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-text2); text-decoration: none; }
 html.blm-ui2-wp .work-packages--info-row a:hover,

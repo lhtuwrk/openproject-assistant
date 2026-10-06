@@ -78,7 +78,7 @@ html.blm-ui2 .top-menu-search--input {
   box-shadow: none !important; font-family: var(--g-font);
   transition: border-color .14s ease-out;
 }
-html.blm-ui2 .top-menu-search--input:focus-within { border-color: var(--g-focus) !important; }
+html.blm-ui2 .top-menu-search--input:focus-within { border-color: var(--g-focus) !important; outline: 2px solid var(--g-focus) !important; outline-offset: 1px; }
 html.blm-ui2 .top-menu-search--input *,
 html.blm-ui2 .top-menu-search--input input {
   border: 0 !important; box-shadow: none !important; outline: none !important;
