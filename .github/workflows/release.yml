@@ -60,6 +60,14 @@ jobs:
           const s = fs.readFileSync('CHANGELOG.md', 'utf8').replace(`## [${v}]`, `## [${v}] - ${date}`);
           fs.writeFileSync('CHANGELOG.md', s);
           JS
+          # release notes = this version's changelog section
+          awk -v h="## [${VERSION}]" 'index($0, h) == 1 { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          # the release tag points at the stamped commit, before the version bump
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "Release ${VERSION}"
+          git tag "v${VERSION}"
 
       - name: Zip extension
         env:
@@ -112,14 +120,20 @@ jobs:
           NEXT: ${{ steps.bump.outputs.next }}
           REF: ${{ github.ref_name }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json CHANGELOG.md
-          git commit -m "Release ${VERSION}, bump to ${NEXT}"
+          git commit -m "Bump to ${NEXT}"
           if [ "$REF" != "main" ]; then
             RELEASE_SHA=$(git rev-parse HEAD)
             git fetch origin main
             git checkout -B main origin/main
             git merge --no-ff "$RELEASE_SHA" -m "Merge ${REF}: release ${VERSION}"
           fi
-          git push origin HEAD:main
+          git push origin HEAD:main "v${VERSION}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" "openproject-assistant-${VERSION}.zip" \
+            --title "v${VERSION}" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
