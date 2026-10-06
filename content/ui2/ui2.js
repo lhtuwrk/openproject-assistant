@@ -1,6 +1,6 @@
 // ui2.js — UI 2.0 (Linear/Jira hybrid) switch for OpenProject.
 // Toggles html classes and adds two small widgets: the status quick-filter tabs
-// above the work-package list and the icon rail shown when the main menu is
+// in the work-package toolbar and the icon rail shown when the main menu is
 // collapsed. Every visual rule lives in content/ui2/*.css under html.blm-ui2, so
 // switch off = native OpenProject. The type/priority icons, status pills and Child
 // work items come from jira-skin.js, which runs its DOM work when UI 2.0 is on.
@@ -55,6 +55,7 @@ function setGroupFilter(idx) {
 }
 
 function removeTabs() {
+  document.querySelector('.blm-ui2-has-tabs')?.classList.remove('blm-ui2-has-tabs');
   document.querySelector(`.${TABS_CLASS}`)?.remove();
   document.getElementById(FILTER_STYLE_ID)?.remove();
   tabsSig = '';
@@ -68,7 +69,7 @@ function syncTabs() {
   if (activeGroup !== null && !groups.some(g => g.idx === activeGroup)) setGroupFilter(null);
   const sig = groups.map(g => `${g.idx}|${g.name}|${g.count}`).join(';') + '#' + activeGroup;
   const existing = document.querySelector(`.${TABS_CLASS}`);
-  if (existing && sig === tabsSig && existing.previousElementSibling === anchor) return;
+  if (existing && sig === tabsSig && existing.parentElement === anchor) return;
   const hadFocus = existing?.contains(document.activeElement);
   existing?.remove();
   tabsSig = sig;
@@ -91,7 +92,8 @@ function syncTabs() {
   };
   add('All', String(total), null);
   for (const g of groups) add(g.name, g.count, g.idx);
-  anchor.after(nav);
+  anchor.classList.add('blm-ui2-has-tabs');
+  anchor.append(nav);   // inside the toolbar: a new sibling would shift OpenProject's table layout
   if (hadFocus) nav.querySelector('[aria-pressed="true"]')?.focus();   // rebuilt on click: keep keyboard focus
 }
 
