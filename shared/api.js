@@ -410,6 +410,43 @@ export async function fetchMe() {
 }
 
 /**
+ * Returns the names of the projects the signed-in user has open work packages
+ * assigned in, most relevant first: projects with work assigned in a version whose
+ * name ends with `sprintName` come first, then by number of assigned packages.
+ * Empty when nothing is assigned.
+ * @param {string} sprintName e.g. "26.07.C"
+ * @returns {Promise<string[]>}
+ */
+export async function fetchAssignedProjectNames(sprintName) {
+  const filters = encodeURIComponent(JSON.stringify([
+    { assignee: { operator: '=', values: ['me'] } },
+    { status: { operator: 'o', values: [] } },
+  ]));
+  const data = await apiFetch(`/api/v3/work_packages?pageSize=200&filters=${filters}`);
+  const score = new Map();
+  for (const wp of data._embedded?.elements ?? []) {
+    const project = wp._links?.project?.title;
+    if (!project) continue;
+    const inSprint = (wp._links?.version?.title ?? '').endsWith(` ${sprintName}`);
+    score.set(project, (score.get(project) ?? 0) + (inSprint ? 1000 : 1));
+  }
+  return [...score].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+}
+
+/**
+ * Returns the names of the projects the signed-in user is a member of.
+ * @returns {Promise<string[]>}
+ */
+export async function fetchMyProjectNames() {
+  const filter = encodeURIComponent(
+    JSON.stringify([{ principal: { operator: '=', values: ['me'] } }])
+  );
+  const data = await apiFetch(`/api/v3/memberships?filters=${filter}&pageSize=200`);
+  const names = (data._embedded?.elements ?? []).map(m => m._links?.project?.title).filter(Boolean);
+  return [...new Set(names)];
+}
+
+/**
  * Returns the users who are members of a project (groups/placeholders excluded).
  * @param {number|string} projectId
  * @returns {Promise<Array<{id:string, name:string}>>}

@@ -1,5 +1,5 @@
 // viewer.js — Backlog Monitor
-import { fetchActiveProjects, fetchAllVersions } from '../shared/api.js';
+import { fetchActiveProjects, fetchAllVersions, fetchMyProjectNames, fetchAssignedProjectNames } from '../shared/api.js';
 import { requireHost } from '../shared/config.js';
 
 const BACKLOG_URL = await requireHost();
@@ -2022,12 +2022,40 @@ let sectionUpdaters = [];
 let sectionCanvasGetters = []; // { version, getCanvas }
 let dateListenersSet = false;
 
+let autoTrackTried = false;
+
+/** With nothing tracked yet, starts tracking the current sprint's version of the
+ *  user's project ("<project> <sprint>") so the chart opens on it. Returns the new
+ *  tracked list, or [] when the project/version isn't found or the lookup fails. */
+async function autoTrackCurrentVersion() {
+  const name = currentMainViewVersion();
+  if (!name) return [];
+  try {
+    const project = (await fetchActiveProjects()).find(p => p.name === mainViewProject);
+    if (!project) return [];
+    const v = (await fetchAllVersions(project.id)).find(v => v.name === name);
+    if (!v) return [];
+    const tracked = [{
+      projectId: project.id, projectName: project.name,
+      versionId: v.id,      versionName: v.name,
+      startDate: v.startDate ?? null, endDate: v.endDate ?? null,
+    }];
+    await chrome.storage.local.set({ [TRACKED_KEY]: tracked });
+    try { chrome.runtime.sendMessage({ type: 'sync-now' }); } catch { /* sw may be asleep */ }
+    return tracked;
+  } catch { return []; }
+}
+
 async function renderAll() {
   const output  = document.getElementById('output');
   const noData  = document.getElementById('no-data');
 
   // ── No versions tracked ───────────────────────────────────────────────────
-  const tracked = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
+  let tracked = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
+  if (!tracked.length && !autoTrackTried) {
+    autoTrackTried = true;
+    tracked = await autoTrackCurrentVersion();
+  }
   if (!tracked.length) {
     output.innerHTML = '';
     noData.style.display = 'block';
@@ -2123,15 +2151,18 @@ async function renderAll() {
 
 // ─── Main-view filter (auto-show only current sprint for one project) ────────
 
-const MAIN_VIEW_PROJECT   = 'Credit Utility';
-const MAIN_VIEW_STATE_KEY = '__blm_main_view_only';
+const MAIN_VIEW_STATE_KEY   = '__blm_main_view_only';
+const MAIN_VIEW_PROJECT_KEY = '__blm_main_view_project';
 let mainViewOnly = true;    // default ON; overwritten from storage on load
+let mainViewProject = null; // one of the signed-in user's projects; null = unknown
 
-/** The version name we auto-focus when Main-view is on. Uses the same sprint
- *  math as the sprint selector, so "Credit Utility 26.07.C" stays in sync. */
+/** The version name we auto-focus when Main-view is on: "<project> <sprint>"
+ *  using the same sprint math as the sprint selector, e.g. "Credit Utility 26.07.C".
+ *  Null until the user's project is known. */
 function currentMainViewVersion() {
+  if (!mainViewProject) return null;
   const s = sprintInfo(sprintIndexForDate(todayStr()));
-  return `${MAIN_VIEW_PROJECT} ${s.name}`;
+  return `${mainViewProject} ${s.name}`;
 }
 
 // ─── Sprint math (2-week sprints; anchor start: 2026-04-10 = "26.04.B") ───────
@@ -2873,14 +2904,42 @@ document.getElementById('filter-sprint').addEventListener('change', (ev) => {
 });
 document.getElementById('btn-clear').addEventListener('click', clearAll);
 
-// Main-view toggle: focus the dashboard on "Credit Utility <CurrentSprint>" only.
-(async () => {
+// Main-view toggle: focus the dashboard on "<project> <CurrentSprint>" only. The
+// project defaults to one of the signed-in user's projects (the saved choice, else
+// the first with a snapshot for the current sprint) and can be switched.
+const mainViewReady = (async () => {
   const chk = document.getElementById('filter-main-view');
+  const projSel = document.getElementById('filter-project');
   if (!chk) return;
-  const stored = await chrome.storage.local.get(MAIN_VIEW_STATE_KEY);
+  const stored = await chrome.storage.local.get([MAIN_VIEW_STATE_KEY, MAIN_VIEW_PROJECT_KEY]);
   mainViewOnly = stored[MAIN_VIEW_STATE_KEY] ?? true;      // default ON
   chk.checked = mainViewOnly;
-  chk.title = `Show only ${currentMainViewVersion()}`;
+
+  // Projects the user is assigned work in come first (the default), then the rest
+  // of their memberships for the dropdown.
+  const s = sprintInfo(sprintIndexForDate(todayStr()));
+  let assigned = [], projects = [];
+  try { assigned = await fetchAssignedProjectNames(s.name); } catch { /* signed out / offline */ }
+  try { projects = [...new Set([...assigned, ...await fetchMyProjectNames()])]; } catch { projects = assigned; }
+  const all = await chrome.storage.local.get(null);
+  const versions = new Set(Object.keys(all).map(k => /^\d{4}-\d\d-\d\d__(.+)$/.exec(k)?.[1]).filter(Boolean));
+  const saved = stored[MAIN_VIEW_PROJECT_KEY];
+  mainViewProject = projects.includes(saved) ? saved
+    : [...assigned, ...projects].find(p => versions.has(`${p} ${s.name}`)) ?? assigned[0] ?? projects[0] ?? null;
+
+  const refreshTitle = () => { chk.title = mainViewProject ? `Show only ${currentMainViewVersion()}` : 'Show only the current sprint'; };
+  refreshTitle();
+  if (projSel && projects.length) {
+    for (const p of projects) projSel.append(new Option(p, p));
+    projSel.value = mainViewProject;
+    projSel.style.display = projects.length < 2 ? 'none' : '';
+    projSel.addEventListener('change', async () => {
+      mainViewProject = projSel.value;
+      refreshTitle();
+      await chrome.storage.local.set({ [MAIN_VIEW_PROJECT_KEY]: mainViewProject });
+      renderAll();
+    });
+  }
   chk.addEventListener('change', async () => {
     mainViewOnly = chk.checked;
     await chrome.storage.local.set({ [MAIN_VIEW_STATE_KEY]: mainViewOnly });
@@ -2889,7 +2948,7 @@ document.getElementById('btn-clear').addEventListener('click', clearAll);
 })();
 
 initImportPanel();
-renderAll().then(async () => {
+mainViewReady.then(() => renderAll()).then(async () => {
   // Handle copy request set by popup before this tab existed (onChanged won't fire for pre-existing keys)
   const stored = await chrome.storage.local.get('__blm_copy_req');
   if (stored.__blm_copy_req) {
