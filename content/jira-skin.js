@@ -2170,7 +2170,12 @@ function renderTableAssignees() {
 
   for (const table of tables) {
     const rows = [...table.querySelectorAll('tbody tr')].filter(r => tableRowId(r));
-    if (!rows.length || !rows.every(r => byId.has(tableRowId(r)))) continue;
+    if (!rows.length) continue;
+    // A child just added in OpenProject is not in the cached list until the refetch
+    // lands; inside the Children part its row gets an empty cell meanwhile, so the
+    // column (and the header) don't vanish.
+    const inChildren = !!table.closest('.wp-relations--children');
+    if (!rows.every(r => byId.has(tableRowId(r))) && !(inChildren && rows.some(r => byId.has(tableRowId(r))))) continue;
 
     const headRow = table.querySelector('thead tr');
     if (headRow && !headRow.querySelector('.blm-assign-th')) {
@@ -2186,6 +2191,14 @@ function renderTableAssignees() {
 
     for (const row of rows) {
       const k = byId.get(tableRowId(row));
+      if (!k) {
+        if (!row.querySelector(':scope > td.blm-assign-cell')) {
+          const blank = el('td', 'blm-assign-cell');
+          const status = row.querySelector(':scope > td.status');
+          status ? status.before(blank) : row.append(blank);
+        }
+        continue;
+      }
       const key = `${k.id}:assignee`;
       const sig = [k.assigneeHref, k.assignee, pendingWrites.has(key), writeErrors.get(key) ?? ''].join('|');
       const cell = row.querySelector(':scope > td.blm-assign-cell');
