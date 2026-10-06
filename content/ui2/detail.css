@@ -1,0 +1,161 @@
+/* UI 2.0 work-package detail: split view (.work-packages--details) and full
+   page (.work-packages--show-view). CSS only: OpenProject's layout is kept and no
+   nodes are moved, so there is nothing to restore when the switch is off.
+   The split panel and the full-page content are glass; their inner containers
+   are transparent. OpenProject-internal selectors: .work-packages--details,
+   .work-packages--show-view, .work-packages-full-view--split-*, .work-package--single-view,
+   .op-tab-row(--link), .attributes-group(--header), .attributes-key-value--*,
+   .inline-edit--display-field, .op-uc-container, wp-status-button. */
+
+/* The independent sub-features (Children assign, Activity filter, Attachment
+   cards) style themselves with --jx-* tokens that are light unless the Jira skin
+   is on; point them at the UI 2.0 tokens so they follow light/dark too. */
+html.blm-ui2.blm-assign,
+html.blm-ui2.blm-activity,
+html.blm-ui2.blm-files {
+  --jx-text: var(--g-text);
+  --jx-text-subtle: var(--g-text2);
+  --jx-text-subtlest: var(--g-text2);
+  --jx-link: var(--g-accent);
+  --jx-link-hover: var(--g-accent);
+  --jx-surface: var(--g-surface-solid);
+  --jx-surface-sunken: var(--g-sunken);
+  --jx-surface-raised: var(--g-raised);
+  --jx-hover: var(--g-hover);
+  --jx-selected: var(--g-selected);
+  --jx-border: var(--g-hairline);
+  --jx-btn: var(--g-btn);
+  --jx-btn-hover: var(--g-btn-hover);
+  --jx-primary: var(--g-accent);
+  --jx-on-primary: var(--g-on-accent);
+  --jx-focus: var(--g-focus);
+}
+
+/* Panels: glass, rounded, floating */
+html.blm-ui2-wp .work-packages--details,
+html.blm-ui2-wp .work-packages--show-view {
+  font-family: var(--g-font); color: var(--g-text);
+  background: var(--g-surface);
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-border); border-radius: var(--g-radius-lg);
+  box-shadow: var(--g-shadow);
+}
+html.blm-ui2-wp .work-packages--details-content,
+html.blm-ui2-wp .work-packages-full-view--split-container,
+html.blm-ui2-wp .work-package--single-view,
+html.blm-ui2-wp .work-packages--panel-inner,
+html.blm-ui2-wp .tabcontent,
+html.blm-ui2-wp .op-uc-container { background: transparent !important; color: var(--g-text); }
+
+/* Breadcrumb, id and type line */
+html.blm-ui2-wp .work-packages--info-row,
+html.blm-ui2-wp .work-packages--info-row *,
+html.blm-ui2-wp .wp-breadcrumb,
+html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 13px; color: var(--g-text2); }
+html.blm-ui2-wp .work-packages--info-row a,
+html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-text2); text-decoration: none; }
+html.blm-ui2-wp .work-packages--info-row a:hover,
+html.blm-ui2-wp .wp-breadcrumb a:hover { color: var(--g-accent); text-decoration: underline; }
+
+/* Subject */
+html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
+  font-family: var(--g-font); font-size: 22px !important; font-weight: 600 !important;
+  font-style: normal; line-height: 1.3; letter-spacing: -.02em; color: var(--g-text);
+  overflow-wrap: anywhere;
+}
+
+/* Status button: same chip colours as the list, bigger, pill */
+html.blm-ui2-wp .blm-g-status {
+  display: inline-flex !important; align-items: center; gap: 8px;
+  height: 34px !important; min-height: 34px !important; line-height: 1 !important;
+  padding: 0 12px 0 14px !important; margin: 0 !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  white-space: nowrap; cursor: pointer;
+  font-family: var(--g-font) !important; font-size: 14px !important; font-weight: 600 !important;
+  text-transform: none !important; letter-spacing: 0 !important;
+  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+  transition: filter .14s ease-out;
+}
+html.blm-ui2-wp .blm-g-status[data-blm-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
+html.blm-ui2-wp .blm-g-status[data-blm-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
+html.blm-ui2-wp .blm-g-status:hover { filter: brightness(.95); }
+html.blm-ui2-wp .blm-g-status:disabled { opacity: .5; cursor: not-allowed; }
+html.blm-ui2-wp .blm-g-status * { color: inherit !important; font: inherit !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
+html.blm-ui2-wp .blm-g-status:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* Tabs: a segmented pill row */
+html.blm-ui2-wp .op-tab-row,
+html.blm-ui2-wp .tabrow {
+  display: inline-flex; gap: 2px; padding: 3px; margin: 8px 0;
+  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: 999px;
+}
+html.blm-ui2-wp .op-tab-row--link,
+html.blm-ui2-wp .tabrow li a {
+  font-family: var(--g-font); font-size: 13px; font-weight: 500;
+  padding: 5px 14px; border: 0; border-radius: 999px; box-shadow: none; text-decoration: none;
+  color: var(--g-text2); text-transform: none; letter-spacing: 0;
+  transition: background-color .14s ease-out, color .14s ease-out;
+}
+html.blm-ui2-wp .op-tab-row--link:hover,
+html.blm-ui2-wp .tabrow li a:hover { color: var(--g-text); }
+html.blm-ui2-wp .op-tab-row--link_selected,
+html.blm-ui2-wp .op-tab-row--link_selected:hover,
+html.blm-ui2-wp .tabrow li.selected a {
+  background: var(--g-surface-solid); color: var(--g-accent); box-shadow: 0 1px 2px rgba(22, 24, 29, .12);
+}
+
+/* Attribute groups: soft cards, no rules */
+html.blm-ui2-wp .attributes-group {
+  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: var(--g-radius);
+  padding: 4px 16px 12px; margin-bottom: 12px;
+}
+html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin-bottom: 4px; padding: 10px 0 2px; }
+html.blm-ui2-wp .attributes-group--header-text,
+html.blm-ui2-wp .attributes-group--header h3 {
+  font-family: var(--g-font); font-size: 13px !important; font-weight: 600 !important;
+  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text2);
+}
+html.blm-ui2-wp .attributes-key-value--key {
+  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-text2); text-transform: none;
+}
+html.blm-ui2-wp .attributes-key-value--value-container,
+html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field {
+  border-radius: 8px; transition: background-color .14s ease-out;
+}
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:hover { background: var(--g-hover); }
+html.blm-ui2-wp .attributes-key-value--value-container a { color: var(--g-accent); }
+
+/* Description and activity */
+html.blm-ui2-wp .work-packages--details .op-uc-container,
+html.blm-ui2-wp .work-packages--show-view .op-uc-container {
+  font-family: var(--g-font); font-size: 14px; line-height: 1.65; color: var(--g-text);
+}
+html.blm-ui2-wp .op-user-activity--user-name,
+html.blm-ui2-wp .user-comment--user { font-weight: 600; color: var(--g-text); }
+html.blm-ui2-wp .op-user-activity--date,
+html.blm-ui2-wp .user-comment--date { color: var(--g-text2); }
+
+/* Dark: text that OpenProject keeps grey nearly vanishes on dark glass */
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--details,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--show-view,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package--single-view,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container { color: var(--g-text); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container code,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container pre { background: var(--g-sunken); color: var(--g-text); border-color: var(--g-hairline); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container table td,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container table th { border-color: var(--g-hairline) !important; }
+html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activities"] li,
+html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activities"] li :not(a):not(a *):not(.op-avatar),
+html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activity-contents"] li,
+html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activity-contents"] li :not(a):not(a *):not(.op-avatar),
+html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li,
+html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li :not(a):not(a *) { color: var(--g-text) !important; }
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-avatar,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-principal--avatar { background-color: var(--g-raised); }
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ui2-wp .op-tab-row--link,
+  html.blm-ui2-wp .blm-g-status,
+  html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none; }
+}

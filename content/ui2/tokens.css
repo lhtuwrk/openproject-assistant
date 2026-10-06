@@ -1,0 +1,68 @@
+/* UI 2.0 (liquid glass) tokens. Scoped under html.blm-ui2 so nothing leaks into
+   OpenProject while the switch is off. Values derive from shared/tokens.css
+   (graphite + cobalt); content scripts can't import it, so they are repeated
+   here: keep in step. See design.md "Injected skin 2.0". */
+html.blm-ui2 {
+  --g-accent: #2f5fe0;
+  --g-text: #16181d;
+  --g-text2: #4a4f5a;
+  --g-canvas: linear-gradient(160deg, #eef1f8 0%, #f7f7f8 55%, #e9eefc 100%);
+  --g-surface: rgba(255, 255, 255, .62);
+  --g-surface-solid: #ffffff;
+  --g-border: rgba(255, 255, 255, .7);
+  --g-hairline: rgba(22, 24, 29, .08);
+  --g-shadow: 0 1px 2px rgba(22, 24, 29, .06), 0 8px 24px rgba(22, 24, 29, .08);
+  --g-blur: blur(20px) saturate(160%);
+  --g-raised: #ffffff;
+  --g-sunken: rgba(22, 24, 29, .035);
+  --g-hover: rgba(47, 95, 224, .06);
+  --g-selected: rgba(47, 95, 224, .12);
+  --g-btn: rgba(22, 24, 29, .06);
+  --g-btn-hover: rgba(22, 24, 29, .11);
+  --g-on-accent: #ffffff;
+  --g-focus: #2f5fe0;
+  --g-chip-todo-bg: rgba(22, 24, 29, .07);
+  --g-chip-todo-fg: #4a4f5a;
+  --g-chip-progress-bg: rgba(47, 95, 224, .12);
+  --g-chip-progress-fg: #2447b8;
+  --g-chip-done-bg: rgba(26, 127, 75, .13);
+  --g-chip-done-fg: #146a3c;
+  --g-radius: 14px;
+  --g-radius-lg: 16px;
+  --g-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html.blm-ui2[data-blm-ui2-theme="dark"] {
+  --g-accent: #4c7dff;
+  --g-text: #ececef;
+  --g-text2: #a4a8b3;
+  --g-canvas: linear-gradient(160deg, #15171c 0%, #111214 55%, #151a2b 100%);
+  --g-surface: rgba(30, 33, 40, .6);
+  --g-surface-solid: #1c1e24;
+  --g-border: rgba(255, 255, 255, .18);
+  --g-hairline: rgba(255, 255, 255, .08);
+  --g-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  --g-raised: #262932;
+  --g-sunken: rgba(255, 255, 255, .04);
+  --g-hover: rgba(255, 255, 255, .05);
+  --g-selected: rgba(76, 125, 255, .2);
+  --g-btn: rgba(255, 255, 255, .08);
+  --g-btn-hover: rgba(255, 255, 255, .14);
+  --g-on-accent: #0b0d12;
+  --g-focus: #4c7dff;
+  --g-chip-todo-bg: rgba(255, 255, 255, .09);
+  --g-chip-todo-fg: #b5b9c4;
+  --g-chip-progress-bg: rgba(76, 125, 255, .22);
+  --g-chip-progress-fg: #9ab6ff;
+  --g-chip-done-bg: rgba(61, 196, 120, .18);
+  --g-chip-done-fg: #6fdc9f;
+  color-scheme: dark;
+}
+
+/* No blur available or transparency not wanted: opaque panels. */
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
+}

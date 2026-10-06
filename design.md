@@ -144,3 +144,29 @@ style off.
 The Files tab shows attachments as cards (thumbnail or file-type tile, name,
 size · date · uploader) with a Grid | List toggle (`__blm_file_view`); own switch
 ("Attachment cards", `html.blm-files`), works with Jira style off. Backlogs versions become grey sprint containers of white rows.
+
+## Injected skin 2.0 (liquid glass)
+Planned replacement for the Jira skin on work packages, behind its own switch
+("UI 2.0", `__blm_ui2`, default off while it rolls out; mutually exclusive with Jira
+style). Covers the work-package list, split view and full page only; Backlogs,
+boards and Gantt stay native. Unlike the Jira skin it follows this system's
+graphite and cobalt: tokens `--g-*` in `content/ui2/tokens.css` derive from
+`tokens.css` (accent #4c7dff / #2f5fe0), scoped under `html.blm-ui2` so nothing
+leaks when the switch is off. Light and dark follow `html[data-blm-ui2-theme]`
+(its own copy of the theme: the Jira skin deletes `data-blm-theme` when it switches off).
+- Glass is for chrome and floating panels only: top bar, toolbar, the split-view
+  panel, pickers. Blur 20 px, saturate 160 %, a 1 px inner hairline
+  (`rgba(255,255,255,.18)`), a soft layered shadow, 14–16 px radii. Never on
+  table rows (OpenProject re-renders them constantly).
+- A calm gradient canvas sits behind; content floats on it. Fewer borders, more
+  whitespace, 44 px rows.
+- Status, type and priority are small tinted glass chips, sentence case, not
+  upper-case lozenges. One signal colour each, as in the rest of the system.
+- Type: system font stack (Geist is not exposed to the host page).
+- Motion: colour, background and transform only; `prefers-reduced-motion` drops
+  transitions to 0. `prefers-reduced-transparency` and browsers without
+  `backdrop-filter` get opaque `--surface` panels. Text on glass keeps 4.5:1
+  contrast over both canvases.
+- Selectors that depend on OpenProject internals are listed once per CSS file so
+  an OpenProject upgrade is a one-place fix; `!important` only to beat ng-select
+  and Angular specificity.

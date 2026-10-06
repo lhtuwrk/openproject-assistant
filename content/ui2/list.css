@@ -1,0 +1,151 @@
+/* UI 2.0 work-package list: toolbar and table. No blur on rows (Angular
+   re-renders them constantly); the table sits on one solid-ish card.
+   OpenProject-internal selectors: .toolbar-container, .toolbar-items .button,
+   .work-package-table (td.id/subject/status/type/priority/assignee,
+   tr.-group-header, tr.wp-table--row), .op-pagination. */
+
+/* Toolbar: title and buttons */
+html.blm-ui2-wp .toolbar-container,
+html.blm-ui2-wp #toolbar { font-family: var(--g-font); }
+html.blm-ui2-wp .toolbar-container .title-container,
+html.blm-ui2-wp .toolbar-container .title-container *,
+html.blm-ui2-wp .toolbar-container h2 {
+  font-family: var(--g-font); font-size: 24px; font-weight: 600; font-style: normal;
+  letter-spacing: -.02em; color: var(--g-text);
+}
+html.blm-ui2-wp .toolbar-items .button,
+html.blm-ui2-wp .toolbar-container .button {
+  font-family: var(--g-font); font-size: 14px; font-weight: 500;
+  height: 34px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: var(--g-btn); color: var(--g-text2); box-shadow: none; white-space: nowrap;
+  transition: background-color .14s ease-out, color .14s ease-out;
+}
+html.blm-ui2-wp .toolbar-items .button:hover,
+html.blm-ui2-wp .toolbar-container .button:hover { background: var(--g-btn-hover); color: var(--g-text); }
+html.blm-ui2-wp .toolbar-items .button.-active,
+html.blm-ui2-wp .toolbar-container .button.-active { background: var(--g-selected); color: var(--g-accent); }
+html.blm-ui2-wp .toolbar-items .button:disabled,
+html.blm-ui2-wp .toolbar-items .button.-disabled { opacity: .5; cursor: not-allowed; }
+html.blm-ui2-wp .toolbar-items .button .button--icon,
+html.blm-ui2-wp .toolbar-items .button .icon { color: inherit; }
+/* the single primary action (Create) */
+html.blm-ui2-wp .toolbar-items .button.-alt-highlight,
+html.blm-ui2-wp .toolbar-items .button.-highlight,
+html.blm-ui2-wp .toolbar-items .button.-primary { background: var(--g-accent); color: var(--g-on-accent); }
+html.blm-ui2-wp .toolbar-items .button.-alt-highlight:hover,
+html.blm-ui2-wp .toolbar-items .button.-highlight:hover,
+html.blm-ui2-wp .toolbar-items .button.-primary:hover { background: var(--g-accent); filter: brightness(1.1); color: var(--g-on-accent); }
+html.blm-ui2-wp .toolbar-items .button .badge {
+  background: var(--g-text2); color: var(--g-surface-solid);
+  border-radius: 8px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px;
+}
+html.blm-ui2-wp .toolbar-items .button:focus-visible,
+html.blm-ui2-wp .toolbar-container .button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* Table: one floating card, 44 px rows, hairlines only */
+html.blm-ui2-wp .work-package-table {
+  font-family: var(--g-font); font-size: 14px; color: var(--g-text);
+  background: var(--g-surface-solid); border-collapse: separate; border-spacing: 0;
+  box-shadow: var(--g-shadow); border-radius: var(--g-radius-lg);
+}
+html.blm-ui2-wp .work-package-table thead th:first-child { border-top-left-radius: var(--g-radius-lg); }
+html.blm-ui2-wp .work-package-table thead th:last-child { border-top-right-radius: var(--g-radius-lg); }
+html.blm-ui2-wp .work-package-table thead th {
+  background: var(--g-surface-solid); border: 0; border-bottom: 1px solid var(--g-hairline);
+  height: 40px; padding: 0 10px; vertical-align: middle;
+}
+html.blm-ui2-wp .work-package-table thead th *,
+html.blm-ui2-wp .work-package-table thead th *::before,
+html.blm-ui2-wp .work-package-table thead th *::after { border-bottom: 0; box-shadow: none; }
+html.blm-ui2-wp .work-package-table thead th,
+html.blm-ui2-wp .work-package-table thead th a,
+html.blm-ui2-wp .work-package-table thead th span {
+  font-family: var(--g-font); font-size: 12px; font-weight: 600;
+  text-transform: none; letter-spacing: 0; color: var(--g-text2);
+}
+html.blm-ui2-wp .work-package-table thead th a:hover { color: var(--g-text); text-decoration: none; }
+
+html.blm-ui2-wp .work-package-table tbody td {
+  height: 44px; padding: 0 10px; vertical-align: middle;
+  border: 0; border-bottom: 1px solid var(--g-hairline);
+  background: transparent; color: var(--g-text);
+}
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row:hover > td { background: var(--g-hover); }
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked > td,
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--g-selected); }
+
+html.blm-ui2-wp .work-package-table td.id a {
+  color: var(--g-accent); font-weight: 500; text-decoration: none; font-variant-numeric: tabular-nums;
+}
+html.blm-ui2-wp .work-package-table td.id a:hover { text-decoration: underline; }
+html.blm-ui2-wp .work-package-table td.subject,
+html.blm-ui2-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 450; }
+
+/* Quieter columns; type and priority keep OpenProject's own icon and dot */
+html.blm-ui2-wp .work-package-table td.priority *,
+html.blm-ui2-wp .work-package-table td.type *,
+html.blm-ui2-wp .work-package-table td.version *,
+html.blm-ui2-wp .work-package-table td[class*="customField"] * { color: var(--g-text2); }
+html.blm-ui2-wp .work-package-table td.type * { text-transform: none; font-weight: 400; letter-spacing: 0; }
+html.blm-ui2-wp .work-package-table td.storyPoints,
+html.blm-ui2-wp .work-package-table td.spentTime,
+html.blm-ui2-wp .work-package-table td.estimatedTime { font-variant-numeric: tabular-nums; }
+html.blm-ui2-wp .work-package-table [class*="__hl_inline_type"],
+html.blm-ui2-wp .work-package-table [class*="__hl_inline_priority"] {
+  color: var(--g-text2) !important; text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
+}
+
+/* Status chip (tagged by ui2.js) */
+html.blm-ui2-wp .work-package-table .blm-g-chip {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  padding: 2px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
+  font-family: var(--g-font); font-size: 12px; font-weight: 600; line-height: 16px;
+  text-transform: none; letter-spacing: 0;
+  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+}
+html.blm-ui2-wp .work-package-table .blm-g-chip[data-blm-tone="progress"] {
+  background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important;
+}
+html.blm-ui2-wp .work-package-table .blm-g-chip[data-blm-tone="done"] {
+  background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important;
+}
+
+/* Avatars */
+html.blm-ui2-wp .work-package-table td.assignee .op-principal--avatar,
+html.blm-ui2-wp .work-package-table td.assignee .op-avatar,
+html.blm-ui2-wp .work-package-table td.assignee img {
+  box-sizing: border-box; flex: none; width: 26px; height: 26px; min-width: 26px; max-width: 26px;
+  aspect-ratio: 1; border-radius: 50%; object-fit: cover; background-size: cover; background-position: center;
+}
+html.blm-ui2-wp .work-package-table td.assignee * { color: var(--g-text); }
+
+/* Group headers and sum rows */
+html.blm-ui2-wp .work-package-table tr.-group-header > td,
+html.blm-ui2-wp .work-package-table tr[class*="group-header"] > td {
+  height: 44px; background: var(--g-sunken); border-bottom: 1px solid var(--g-hairline); padding: 0 10px;
+}
+html.blm-ui2-wp .work-package-table tr.-group-header .group--value,
+html.blm-ui2-wp .work-package-table tr[class*="group-header"] .group--value {
+  font-family: var(--g-font); font-size: 14px; font-weight: 600; color: var(--g-text);
+}
+html.blm-ui2-wp .work-package-table tr.-group-header .count,
+html.blm-ui2-wp .work-package-table tr[class*="group-header"] .count {
+  display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
+  background: var(--g-chip-todo-bg); color: var(--g-text2);
+  font-size: 12px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+}
+html.blm-ui2-wp .work-package-table tr[class*="sums"] > td {
+  height: 36px; background: var(--g-surface-solid); color: var(--g-text2);
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table th,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table td { background-color: transparent; }
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tbody tr.wp-table--row:hover > td { background-color: var(--g-hover); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tbody tr.wp-table--row.-checked > td { background-color: var(--g-selected); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tr.-group-header > td,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-package-table tr[class*="group-header"] > td { background-color: var(--g-sunken); }
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ui2-wp .toolbar-container .button { transition: none; }
+}

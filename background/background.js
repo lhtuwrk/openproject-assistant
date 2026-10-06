@@ -577,12 +577,18 @@ async function registerHostScripts() {
       js: ['content/progress-hook-relay.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}hook`, matches: [all],
       js: ['content/progress-hook.js'], runAt: 'document_start', world: 'MAIN' },
+    { id: `${HOST_SCRIPT_PREFIX}ui2`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`],
+      css: ['content/ui2/tokens.css', 'content/ui2/base.css', 'content/ui2/list.css', 'content/ui2/detail.css'], js: ['content/ui2/ui2.js'], runAt: 'document_start' },
   ]);
   console.log('[BacklogMonitor] Content scripts registered for', host);
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && HOST_KEY in changes) registerHostScripts();
+  if (area !== 'local') return;
+  if (HOST_KEY in changes) registerHostScripts();
+  // UI 2.0 and Jira style are mutually exclusive: the one just turned on wins.
+  if (changes.__blm_ui2?.newValue === true) chrome.storage.local.set({ __blm_jira_skin: false });
+  else if (changes.__blm_jira_skin?.newValue === true) chrome.storage.local.set({ __blm_ui2: false });
 });
 chrome.permissions.onAdded.addListener(() => registerHostScripts());
 chrome.permissions.onRemoved.addListener(() => registerHostScripts());

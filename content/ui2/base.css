@@ -1,0 +1,204 @@
+/* UI 2.0 base: canvas, top bar, sidebar, and (dark) the surfaces OpenProject
+   hard-codes white. Glass (backdrop blur) only on the top bar and sidebar.
+   OpenProject-internal selectors: .op-app-header, #top-menu, #main-menu,
+   .top-menu-search--input, #content(-wrapper), the dark surface list at the end. */
+
+html.blm-ui2 {
+  /* OpenProject's own design variables, so its components follow the tokens */
+  --header-bg-color: transparent;
+  --header-item-font-color: var(--g-text2);
+  --header-item-font-hover-color: var(--g-text);
+  --header-item-bg-hover-color: var(--g-btn-hover);
+  --header-border-bottom-color: var(--g-hairline);
+  --header-border-bottom-width: 1px;
+  --header-search-field-bg-color: transparent;
+  --header-search-field-font-color: var(--g-text);
+  --header-search-field-border: none;
+  --main-menu-bg-color: transparent;
+  --main-menu-bg-selected-background: var(--g-selected);
+  --main-menu-bg-hover-background: var(--g-hover);
+  --main-menu-font-color: var(--g-text2);
+  --main-menu-selected-font-color: var(--g-accent);
+  --main-menu-hover-font-color: var(--g-text);
+  --main-menu-border-color: var(--g-hairline);
+  --main-menu-border-width: 1px;
+  --main-menu-sidebar-font-color: var(--g-text2);
+  --main-menu-sidebar-h3-color: var(--g-text2);
+  --main-menu-sidebar-link-color: var(--g-text2);
+}
+
+/* Canvas */
+html.blm-ui2,
+html.blm-ui2 body {
+  background: var(--g-canvas) fixed !important;
+  font-family: var(--g-font);
+}
+
+/* Top bar: glass */
+html.blm-ui2 .op-app-header,
+html.blm-ui2 #top-menu {
+  background: var(--g-surface) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border-bottom: 1px solid var(--g-hairline) !important;
+  box-shadow: var(--g-shadow) !important;
+  font-family: var(--g-font);
+}
+html.blm-ui2 .op-app-header a,
+html.blm-ui2 .op-app-header button,
+html.blm-ui2 .op-app-header [class*="icon"],
+html.blm-ui2 .op-app-header svg,
+html.blm-ui2 #top-menu a,
+html.blm-ui2 #top-menu button,
+html.blm-ui2 #top-menu [class*="icon"] {
+  color: var(--g-text2) !important; fill: currentColor; font-family: var(--g-font);
+}
+html.blm-ui2 .op-app-header .op-app-menu--item-action,
+html.blm-ui2 .op-app-header .op-app-header--primer-button,
+html.blm-ui2 #top-menu .op-app-menu--item-action {
+  border-radius: 10px; transition: background-color .14s ease-out;
+}
+html.blm-ui2 .op-app-header .op-app-menu--item-action:hover,
+html.blm-ui2 .op-app-header .op-app-header--primer-button:hover,
+html.blm-ui2 #top-menu .op-app-menu--item-action:hover {
+  background: var(--g-btn-hover) !important; color: var(--g-text) !important;
+}
+html.blm-ui2 .op-app-header a:focus-visible,
+html.blm-ui2 .op-app-header button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ui2 .op-app-header .op-quick-add-menu--icon,
+html.blm-ui2 .op-app-header .op-quick-add-menu [class*="icon"],
+html.blm-ui2 #top-menu .op-quick-add-menu--icon { color: var(--g-accent) !important; }
+
+/* Search: one rounded glass field */
+html.blm-ui2 .top-menu-search--input {
+  display: flex !important; align-items: center; gap: 4px;
+  box-sizing: border-box; height: 34px !important; min-width: 200px;
+  padding: 0 6px 0 12px !important;
+  background: var(--g-sunken) !important;
+  border: 1px solid var(--g-hairline) !important; border-radius: 999px !important;
+  box-shadow: none !important; font-family: var(--g-font);
+  transition: border-color .14s ease-out;
+}
+html.blm-ui2 .top-menu-search--input:focus-within { border-color: var(--g-focus) !important; }
+html.blm-ui2 .top-menu-search--input *,
+html.blm-ui2 .top-menu-search--input input {
+  border: 0 !important; box-shadow: none !important; outline: none !important;
+  background: transparent !important;
+}
+html.blm-ui2 .top-menu-search--input input {
+  flex: 1 1 auto; min-width: 0; height: 30px !important; padding: 0 !important; margin: 0 !important;
+  color: var(--g-text) !important; font-family: var(--g-font); font-size: 14px;
+}
+html.blm-ui2 .top-menu-search--input input::placeholder { color: var(--g-text2); }
+html.blm-ui2 .top-menu-search--input .ng-select,
+html.blm-ui2 .top-menu-search--input .ng-select-container {
+  flex: 1 1 auto; min-width: 0; min-height: 0 !important; height: 30px !important;
+}
+html.blm-ui2 .top-menu-search--input button {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0 !important; margin: 0 !important;
+  border-radius: 50% !important; color: var(--g-text2) !important; cursor: pointer;
+}
+html.blm-ui2 .top-menu-search--input button:hover { background: var(--g-btn-hover) !important; }
+
+/* Sidebar: glass, current page a rounded tint */
+html.blm-ui2 #main-menu {
+  background: var(--g-surface) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border-right: 1px solid var(--g-hairline) !important;
+  font-family: var(--g-font);
+}
+html.blm-ui2 #main-menu a,
+html.blm-ui2 #main-menu [class*="icon"],
+html.blm-ui2 #main-menu .menu-item--title { color: var(--g-text2) !important; }
+html.blm-ui2 #main-menu a {
+  font-size: 14px; font-weight: 500; border-radius: 10px;
+  transition: background-color .14s ease-out;
+}
+html.blm-ui2 #main-menu a:hover { background: var(--g-hover) !important; color: var(--g-text) !important; }
+html.blm-ui2 #main-menu a:hover [class*="icon"] { color: var(--g-text) !important; }
+html.blm-ui2 #main-menu a.selected,
+html.blm-ui2 #main-menu .selected > a,
+html.blm-ui2 #main-menu a.selected:hover { background: var(--g-selected) !important; color: var(--g-accent) !important; }
+html.blm-ui2 #main-menu a.selected [class*="icon"],
+html.blm-ui2 #main-menu .selected > a [class*="icon"] { color: var(--g-accent) !important; }
+html.blm-ui2 #main-menu a:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+html.blm-ui2 #main-menu input[type="text"],
+html.blm-ui2 #main-menu input[type="search"] {
+  background: var(--g-sunken) !important; color: var(--g-text) !important;
+  border: 1px solid var(--g-hairline) !important; border-radius: 10px !important; box-shadow: none !important;
+}
+html.blm-ui2 #main-menu h3,
+html.blm-ui2 #main-menu .op-sidemenu--title {
+  color: var(--g-text2) !important; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* Dark: the page's own surfaces hard-code white, so repaint them */
+html.blm-ui2[data-blm-ui2-theme="dark"] {
+  --body-background: transparent;
+  --body-font-color: var(--g-text);
+  --h1-font-color: var(--g-text);
+  --h2-font-color: var(--g-text);
+  --h3-font-color: var(--g-text);
+  --content-link-color: var(--g-accent);
+  --content-default-border-color: var(--g-hairline);
+  --content-form-bg-color: var(--g-sunken);
+  --header-drop-down-bg-color: var(--g-raised);
+  --header-drop-down-item-font-color: var(--g-text);
+  --drop-down-unselected-font-color: var(--g-text);
+  --drop-down-selected-bg-color: var(--g-selected);
+  --drop-down-hover-bg-color: var(--g-hover);
+  --action-menu-bg-color: var(--g-raised);
+  --toolbar-title-color: var(--g-text);
+  --table-row-border-color: var(--g-hairline);
+  --table-header-border-color: var(--g-hairline);
+  --button--font-color: var(--g-text);
+  --button--background-color: var(--g-btn);
+  --button--background-hover-color: var(--g-btn-hover);
+  --button--border-color: var(--g-hairline);
+}
+html.blm-ui2[data-blm-ui2-theme="dark"] body { color: var(--g-text); }
+html.blm-ui2[data-blm-ui2-theme="dark"] #content,
+html.blm-ui2[data-blm-ui2-theme="dark"] #content-wrapper,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages-page,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages-page--ui-view,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--list-container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .wp-table--container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .generic-table--container { background: transparent !important; color: var(--g-text); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--filters-optional-container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--filters-container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .advanced-filters--container { background: var(--g-sunken) !important; border-color: var(--g-hairline) !important; }
+html.blm-ui2[data-blm-ui2-theme="dark"] input:is([type="text"], [type="search"], [type="email"], [type="number"], [type="password"], [type="url"], [type="tel"], [type="date"], :not([type])),
+html.blm-ui2[data-blm-ui2-theme="dark"] select,
+html.blm-ui2[data-blm-ui2-theme="dark"] textarea,
+html.blm-ui2[data-blm-ui2-theme="dark"] .ng-select .ng-select-container {
+  background-color: var(--g-sunken) !important; color: var(--g-text) !important;
+  border-color: var(--g-hairline) !important;
+}
+html.blm-ui2[data-blm-ui2-theme="dark"] ::placeholder { color: var(--g-text2) !important; opacity: 1; }
+/* Floating panels: glass on dark, solid where blur is off (tokens handle that) */
+html.blm-ui2[data-blm-ui2-theme="dark"] .ng-dropdown-panel,
+html.blm-ui2[data-blm-ui2-theme="dark"] .dropdown-menu,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-modal,
+html.blm-ui2[data-blm-ui2-theme="dark"] .spot-modal,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-modal--modal-container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .contextMenu-container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .dropdown-menu--container,
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-hover-card,
+html.blm-ui2[data-blm-ui2-theme="dark"] .flatpickr-calendar {
+  background: var(--g-raised) !important; color: var(--g-text) !important;
+  border-color: var(--g-hairline) !important; border-radius: var(--g-radius);
+  box-shadow: var(--g-shadow) !important;
+}
+html.blm-ui2[data-blm-ui2-theme="dark"] .ng-dropdown-panel .ng-option,
+html.blm-ui2[data-blm-ui2-theme="dark"] .dropdown-menu a,
+html.blm-ui2[data-blm-ui2-theme="dark"] .contextMenu-container a { color: var(--g-text) !important; background: transparent; }
+html.blm-ui2[data-blm-ui2-theme="dark"] .ng-dropdown-panel .ng-option.ng-option-marked,
+html.blm-ui2[data-blm-ui2-theme="dark"] .ng-dropdown-panel .ng-option:hover,
+html.blm-ui2[data-blm-ui2-theme="dark"] .dropdown-menu a:hover,
+html.blm-ui2[data-blm-ui2-theme="dark"] .contextMenu-container a:hover { background: var(--g-hover) !important; color: var(--g-accent) !important; }
+html.blm-ui2[data-blm-ui2-theme="dark"] hr { border-color: var(--g-hairline); }
+html.blm-ui2[data-blm-ui2-theme="dark"] { scrollbar-color: rgba(255, 255, 255, .25) transparent; scrollbar-width: thin; }
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ui2 .op-app-header *, html.blm-ui2 #main-menu *, html.blm-ui2 .top-menu-search--input { transition: none !important; }
+}
