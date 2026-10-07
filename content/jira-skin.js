@@ -386,7 +386,7 @@ html.${ROOT_CLASS} .top-menu-search--input {
 }
 html.${ROOT_CLASS} .top-menu-search--input:hover { border-color: var(--jx-btn-press) !important; }
 html.${ROOT_CLASS} .top-menu-search--input:focus-within { border-color: var(--jx-focus) !important; }
-html.${ROOT_CLASS} .top-menu-search--input *,
+html.${ROOT_CLASS} .top-menu-search--input *:not(.ng-dropdown-panel):not(.ng-dropdown-panel *),
 html.${ROOT_CLASS} .top-menu-search--input input {
   border: 0 !important; box-shadow: none !important; outline: none !important;
   background: transparent !important;
@@ -395,6 +395,18 @@ html.${ROOT_CLASS} .top-menu-search--input input {
   flex: 1 1 auto; min-width: 0; height: 28px !important; padding: 0 !important; margin: 0 !important;
   color: var(--jx-text) !important; font-family: var(--jx-font); font-size: 14px;
 }
+/* The suggestions list lives inside the wrapper: it is a menu of its own, not part of the frame */
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel {
+  height: auto !important; min-width: 280px; margin-top: var(--jx-space-1); overflow: hidden; z-index: 1000;
+  background: var(--jx-surface) !important; color: var(--jx-text) !important;
+  border: 1px solid var(--jx-border) !important; border-radius: var(--jx-radius-panel) !important;
+  box-shadow: var(--jx-shadow-raised) !important; font-family: var(--jx-font);
+}
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel .ng-option {
+  height: auto !important; min-height: 0 !important; padding: 8px var(--jx-space-3) !important;
+  font-size: 14px; line-height: 20px; white-space: nowrap; color: var(--jx-text) !important;
+}
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--jx-hover) !important; color: var(--jx-link-hover) !important; }
 html.${ROOT_CLASS} .top-menu-search--input input::placeholder { color: var(--jx-text-subtlest); }
 html.${ROOT_CLASS} .top-menu-search--input .ng-select,
 html.${ROOT_CLASS} .top-menu-search--input .ng-select-container {
