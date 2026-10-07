@@ -3744,7 +3744,7 @@ function applyClasses() {
   root.classList.toggle(ROOT_CLASS, skinEnabled);
   if (skinEnabled && root.dataset.blmTheme !== theme) root.dataset.blmTheme = theme;
   root.classList.toggle('blm-no-anim', !animationEnabled);
-  root.classList.toggle(MOTION_CLASS, animationEnabled && !skinEnabled && !root.classList.contains('blm-ui2'));
+  root.classList.toggle(MOTION_CLASS, animationEnabled && !skinEnabled && !ui2Enabled);
   root.classList.toggle(WP_CLASS, skinEnabled && onWorkPackagePage());
   root.classList.toggle(BL_CLASS, skinEnabled && onBacklogsPage());
   root.classList.toggle(AS_CLASS, assignEnabled && onWorkPackagePage());

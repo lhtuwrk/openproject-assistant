@@ -2036,6 +2036,22 @@ if (EMBEDDED) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 }
 
+// Snapshots are only taken while Burndown sync is on (background.js burndownEnabled),
+// so with it off the drawer says why it is empty instead of asking for an import.
+const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';
+const NO_DATA_HTML = document.getElementById('no-data').innerHTML;
+function showEmbeddedEmpty(noData, all) {
+  noData.style.display = 'block';
+  if (all[CFG_SYNC_BURNDOWN] ?? true) { noData.innerHTML = NO_DATA_HTML; return; }
+  noData.innerHTML = `<strong>Burndown sync is off.</strong><br>
+    The chart is built from daily snapshots, which are only taken while sync is on.<br>
+    <a href="#" id="btn-enable-sync">Turn it on in Settings</a>`;
+  document.getElementById('btn-enable-sync').addEventListener('click', e => {
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#feat-burndown') });
+  });
+}
+
 /** Adds the current sprint's version of the user's project ("<project> <sprint>")
  *  to the tracked list when it's missing, so the chart opens on it. Returns the
  *  tracked list, unchanged when the project/version isn't found or the lookup fails. */
@@ -2128,7 +2144,11 @@ async function renderAll() {
   sectionUpdaters      = [];
   sectionCanvasGetters = [];
 
-  if (!snapshots.length) { noData.style.display='block'; return; }
+  if (!snapshots.length) {
+    if (EMBEDDED) showEmbeddedEmpty(noData, all);
+    else noData.style.display='block';
+    return;
+  }
   noData.style.display='none';
 
   const byVersion    = groupByVersion(snapshots);
@@ -2144,7 +2164,7 @@ async function renderAll() {
   // that version yet, we silently fall back to rendering everything so they aren't
   // left staring at a blank page.
   const mainVer      = currentMainViewVersion();
-  if (EMBEDDED && !byVersion.has(mainVer)) { noData.style.display = 'block'; return; }
+  if (EMBEDDED && !byVersion.has(mainVer)) { showEmbeddedEmpty(noData, all); return; }
   const applyMainOnly = mainViewOnly && byVersion.has(mainVer);
   for (const [version, dateMap] of byVersion) {
     if (applyMainOnly && version !== mainVer) continue;
@@ -2829,6 +2849,11 @@ document.addEventListener('click', e => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const [key, { oldValue, newValue }] of Object.entries(changes)) {
+    if (key === CFG_SYNC_BURNDOWN && EMBEDDED) {
+      // switched on in Settings while the drawer is open: fetch now, not at the next hourly sync
+      if (newValue ?? true) try { chrome.runtime.sendMessage({ type: 'sync-now' }); } catch { /* sw may be asleep */ }
+      renderAll();
+    }
     if (key === '__blm_fetch_progress' && isSyncing && newValue) {
       const { done, total, version } = newValue;
       setProgressFill(done, total, `${version}: fetching activities ${done} / ${total}`);
