@@ -22,6 +22,7 @@ const CFG_THEME     = '__blm_theme';   // 'dark' | 'light', mirrored from the Se
 const ROOT_CLASS    = 'blm-jira';
 const WP_CLASS      = 'blm-jira-wp';
 const BL_CLASS      = 'blm-jira-bl';
+const MOTION_CLASS  = 'blm-motion';   // animations on the stock UI (neither Jira style nor UI 2.0)
 
 let skinEnabled = true;
 
@@ -3354,52 +3355,54 @@ ${D} .blm-fix-btn:hover { background: var(--jx-primary-hover); }
 // Motion and feedback. Only opacity, translate, scale and colours animate (cheap, no
 // layout); everything sits behind prefers-reduced-motion. 'translate' and 'scale' are
 // the individual properties, so they never fight OpenProject's own 'transform'.
+const M = `html:is(.${ROOT_CLASS}, .${MOTION_CLASS})`;
 const MOTION = `
+html.${MOTION_CLASS} { --jx-dur: 120ms; --jx-ease-out: cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: no-preference) {
   @keyframes blm-pop-in   { from { opacity: 0; translate: 0 6px; scale: 0.985; } to { opacity: 1; translate: 0 0; scale: 1; } }
   @keyframes blm-fade-in  { from { opacity: 0; } to { opacity: 1; } }
   @keyframes blm-row-in   { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
 
   /* Menus, drop-downs, popovers and dialogs ease in instead of snapping */
-  html.${ROOT_CLASS} .spot-drop-modal--body,
-  html.${ROOT_CLASS} .spot-tooltip--body,
-  html.${ROOT_CLASS} .ng-dropdown-panel,
-  html.${ROOT_CLASS} .op-app-menu--dropdown,
-  html.${ROOT_CLASS} .contextMenu-container,
-  html.${ROOT_CLASS} .dropdown-menu,
-  html.${ROOT_CLASS} .flatpickr-calendar.open,
-  html.${ROOT_CLASS} .op-hover-card { animation: blm-pop-in 150ms var(--jx-ease-out) backwards; transform-origin: top center; }
-  html.${ROOT_CLASS} .spot-modal,
-  html.${ROOT_CLASS} .op-modal,
-  html.${ROOT_CLASS} .op-modal--modal-container { animation: blm-pop-in 180ms var(--jx-ease-out) backwards; }
-  html.${ROOT_CLASS} .op-modal-overlay,
-  html.${ROOT_CLASS} .spot-modal-overlay,
-  html.${ROOT_CLASS} .op-modal--overlay { animation: blm-fade-in 160ms ease-out backwards; }
+  ${M} .spot-drop-modal--body,
+  ${M} .spot-tooltip--body,
+  ${M} .ng-dropdown-panel,
+  ${M} .op-app-menu--dropdown,
+  ${M} .contextMenu-container,
+  ${M} .dropdown-menu,
+  ${M} .flatpickr-calendar.open,
+  ${M} .op-hover-card { animation: blm-pop-in 150ms var(--jx-ease-out) backwards; transform-origin: top center; }
+  ${M} .spot-modal,
+  ${M} .op-modal,
+  ${M} .op-modal--modal-container { animation: blm-pop-in 180ms var(--jx-ease-out) backwards; }
+  ${M} .op-modal-overlay,
+  ${M} .spot-modal-overlay,
+  ${M} .op-modal--overlay { animation: blm-fade-in 160ms ease-out backwards; }
 
 
   /* Hover and press feedback */
-  html.${ROOT_CLASS} .button,
-  html.${ROOT_CLASS} .op-app-menu--item-action,
-  html.${ROOT_CLASS} .op-tab-row--link,
-  html.${ROOT_CLASS} .op-pagination--item-link,
-  html.${ROOT_CLASS} .spot-list--item-action,
-  html.${ROOT_CLASS} .op-sidemenu--item-action,
-  html.${ROOT_CLASS} .wp-table-context-menu-icon,
-  html.${ROOT_CLASS} .wp-table--details-link {
+  ${M} .button,
+  ${M} .op-app-menu--item-action,
+  ${M} .op-tab-row--link,
+  ${M} .op-pagination--item-link,
+  ${M} .spot-list--item-action,
+  ${M} .op-sidemenu--item-action,
+  ${M} .wp-table-context-menu-icon,
+  ${M} .wp-table--details-link {
     transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out),
                 border-color var(--jx-dur) var(--jx-ease-out), box-shadow var(--jx-dur) var(--jx-ease-out),
                 scale 90ms var(--jx-ease-out);
   }
-  html.${ROOT_CLASS} .button:not(:disabled):not(.-disabled):active,
-  html.${ROOT_CLASS} .op-app-menu--item-action:active,
-  html.${ROOT_CLASS} .op-pagination--item-link:active { scale: 0.97; }
+  ${M} .button:not(:disabled):not(.-disabled):active,
+  ${M} .op-app-menu--item-action:active,
+  ${M} .op-pagination--item-link:active { scale: 0.97; }
   html.${ROOT_CLASS} .toolbar-items .button.-alt-highlight:hover,
   html.${ROOT_CLASS} .toolbar-items .button.-highlight:hover { box-shadow: 0 2px 10px color-mix(in srgb, var(--jx-primary) 35%, transparent); }
 
-  html.${ROOT_CLASS} .work-package-table tbody td { transition: background-color var(--jx-dur) var(--jx-ease-out); }
-  html.${ROOT_CLASS} .work-package-table td.assignee .op-avatar { transition: scale 140ms var(--jx-ease-out); }
-  html.${ROOT_CLASS} .work-package-table tr:hover td.assignee .op-avatar { scale: 1.08; }
-  html.${ROOT_CLASS} .work-package-table .blm-jx-lozenge { transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out); }
+  ${M} .work-package-table tbody td { transition: background-color var(--jx-dur) var(--jx-ease-out); }
+  ${M} .work-package-table td.assignee .op-avatar { transition: scale 140ms var(--jx-ease-out); }
+  ${M} .work-package-table tr:hover td.assignee .op-avatar { scale: 1.08; }
+  ${M} .work-package-table .blm-jx-lozenge { transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out); }
   html.${ROOT_CLASS} .op-tab-row--link { border-bottom: 2px solid transparent; }
   /* Selected tab: the underline draws itself in each time a tab becomes current */
   @keyframes blm-underline { from { background-size: 0 2px; } to { background-size: 100% 2px; } }
@@ -3415,20 +3418,20 @@ const MOTION = `
   @keyframes blm-rise        { from { opacity: 0; translate: 0 10px; }  to { opacity: 1; translate: 0 0; } }
 
   /* Side menu: runs each time the menu is revealed (the wrapper loses hidden-navigation) */
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu { animation: blm-slide-right 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li { animation: blm-slide-right 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(2) { animation-delay: 25ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(3) { animation-delay: 50ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(4) { animation-delay: 75ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(n+5) { animation-delay: 100ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu { animation: blm-slide-right 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li { animation: blm-slide-right 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(2) { animation-delay: 25ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(3) { animation-delay: 50ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(4) { animation-delay: 75ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(n+5) { animation-delay: 100ms; }
 
   /* Story detail: the split pane slides in from the right; its content fades when you
      switch story or tab, and the full page rises into place */
-  html.${ROOT_CLASS} .work-packages--details { animation: blm-slide-left 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} .work-packages--details-header { animation: blm-fade-in 200ms ease-out backwards; }
-  html.${ROOT_CLASS} .work-packages--show-view { animation: blm-rise 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} .op-user-activity,
-  html.${ROOT_CLASS} .wp-relations--children-table { animation: blm-fade-in 220ms ease-out backwards; }
+  ${M} .work-packages--details { animation: blm-slide-left 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} .work-packages--details-header { animation: blm-fade-in 200ms ease-out backwards; }
+  ${M} .work-packages--show-view { animation: blm-rise 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} .op-user-activity,
+  ${M} .wp-relations--children-table { animation: blm-fade-in 220ms ease-out backwards; }
 }
 
 /* Keyboard users get a clear, immediate ring on the editable cells too */
@@ -3481,12 +3484,13 @@ function applyClasses() {
   root.classList.toggle(ROOT_CLASS, skinEnabled);
   if (skinEnabled && root.dataset.blmTheme !== theme) root.dataset.blmTheme = theme;
   root.classList.toggle('blm-no-anim', !animationEnabled);
+  root.classList.toggle(MOTION_CLASS, animationEnabled && !skinEnabled && !root.classList.contains('blm-ui2'));
   root.classList.toggle(WP_CLASS, skinEnabled && onWorkPackagePage());
   root.classList.toggle(BL_CLASS, skinEnabled && onBacklogsPage());
   root.classList.toggle(AS_CLASS, assignEnabled && onWorkPackagePage());
   root.classList.toggle(ACT_CLASS, activityEnabled && onWorkPackagePage());
   root.classList.toggle(FILES_CLASS, filesEnabled && onWorkPackagePage());
-  if (anyEnabled()) ensureStyle();
+  if (anyEnabled() || animationEnabled) ensureStyle();
 }
 
 const anyEnabled = () => skinEnabled || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
@@ -3545,7 +3549,7 @@ function schedule() {
     frame = 0;
     applyClasses();
     if (!anyEnabled() || !document.body) { syncJump(); return; }
-    if (skinEnabled) animateTabSwitch();
+    if (skinEnabled || document.documentElement.classList.contains(MOTION_CLASS)) animateTabSwitch();
     if (!onWorkPackagePage() || !viewWpId()) childrenFor(null);   // left: drop cache, close picker
     const onWp = onWorkPackagePage();
     if (onWp && !wasOnWp) pickQuote();

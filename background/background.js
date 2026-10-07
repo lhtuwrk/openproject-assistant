@@ -558,7 +558,10 @@ async function cleanupExpiredSprints() {
 
 const HOST_SCRIPT_PREFIX = 'blm-host-';
 
-async function registerHostScripts() {
+let registering = Promise.resolve();   // calls overlap (startup, permission and storage events); run one at a time
+const registerHostScripts = () => (registering = registering.then(doRegisterHostScripts, doRegisterHostScripts));
+
+async function doRegisterHostScripts() {
   const old = await chrome.scripting.getRegisteredContentScripts();
   const ids = old.map(s => s.id).filter(id => id.startsWith(HOST_SCRIPT_PREFIX));
   if (ids.length) await chrome.scripting.unregisterContentScripts({ ids });
