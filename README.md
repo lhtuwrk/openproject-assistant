@@ -13,6 +13,9 @@ though OpenProject itself doesn't retain it.
   by replaying each tracked version's activity feed.
 - **Burndown viewer** — a standalone page (`viewer.html`) charts stored snapshots
   over time per tracked version.
+- **Burndown button** — "Show burndown chart" next to + Create on work-package
+  lists opens the current sprint's burndown in a drawer over the page and starts
+  tracking that sprint; on by default, switch in Settings.
 - **Time log** — `timelog.html` shows a Member × Day grid of hours logged in a
   project over a sprint (or custom range), flagging missing and under-8h days.
   Member groups are saved to `chrome.storage.sync`.

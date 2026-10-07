@@ -22,6 +22,7 @@ const CFG_THEME     = '__blm_theme';   // 'dark' | 'light', mirrored from the Se
 const ROOT_CLASS    = 'blm-jira';
 const WP_CLASS      = 'blm-jira-wp';
 const BL_CLASS      = 'blm-jira-bl';
+const MOTION_CLASS  = 'blm-motion';   // animations on the stock UI (neither Jira style nor UI 2.0)
 
 let skinEnabled = true;
 // UI 2.0 (content/ui2) reuses this file's DOM work (cells, children, full-page layout) with its own look.
@@ -69,7 +70,8 @@ function renderQuote() {
   const host = document.querySelector('.op-pagination');
   removeQuote();
   if (!quote || !host) return;
-  quoteEl = Object.assign(document.createElement('span'), { className: 'blm-quote', textContent: `“${quote.quote}” — ${quote.author}` });
+  const text = `“${quote.quote}” — ${quote.author}`;
+  quoteEl = Object.assign(document.createElement('span'), { className: 'blm-quote', textContent: text, title: text });
   host.append(quoteEl);
 }
 
@@ -392,7 +394,7 @@ html.${ROOT_CLASS} .top-menu-search--input {
 }
 html.${ROOT_CLASS} .top-menu-search--input:hover { border-color: var(--jx-btn-press) !important; }
 html.${ROOT_CLASS} .top-menu-search--input:focus-within { border-color: var(--jx-focus) !important; }
-html.${ROOT_CLASS} .top-menu-search--input *,
+html.${ROOT_CLASS} .top-menu-search--input *:not(.ng-dropdown-panel):not(.ng-dropdown-panel *),
 html.${ROOT_CLASS} .top-menu-search--input input {
   border: 0 !important; box-shadow: none !important; outline: none !important;
   background: transparent !important;
@@ -401,6 +403,18 @@ html.${ROOT_CLASS} .top-menu-search--input input {
   flex: 1 1 auto; min-width: 0; height: 28px !important; padding: 0 !important; margin: 0 !important;
   color: var(--jx-text) !important; font-family: var(--jx-font); font-size: 14px;
 }
+/* The suggestions list lives inside the wrapper: it is a menu of its own, not part of the frame */
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel {
+  height: auto !important; min-width: 280px; margin-top: var(--jx-space-1); overflow: hidden; z-index: 1000;
+  background: var(--jx-surface) !important; color: var(--jx-text) !important;
+  border: 1px solid var(--jx-border) !important; border-radius: var(--jx-radius-panel) !important;
+  box-shadow: var(--jx-shadow-raised) !important; font-family: var(--jx-font);
+}
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel .ng-option {
+  height: auto !important; min-height: 0 !important; padding: 8px var(--jx-space-3) !important;
+  font-size: 14px; line-height: 20px; white-space: nowrap; color: var(--jx-text) !important;
+}
+html.${ROOT_CLASS} .top-menu-search--input .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--jx-hover) !important; color: var(--jx-link-hover) !important; }
 html.${ROOT_CLASS} .top-menu-search--input input::placeholder { color: var(--jx-text-subtlest); }
 html.${ROOT_CLASS} .top-menu-search--input .ng-select,
 html.${ROOT_CLASS} .top-menu-search--input .ng-select-container {
@@ -2131,7 +2145,8 @@ document.addEventListener('mousedown', e => {
   if (!domOn()) return;
   const field = document.querySelector('.inline-edit--active-field');
   if (!field || field.closest('.inline-edit--container')?.contains(e.target)) return;
-  if (e.target.closest?.('.ng-dropdown-panel, .op-modal, .spot-modal, [role="dialog"]')) return;
+  if (e.target.closest?.('.ng-dropdown-panel, .op-modal, .spot-modal, [role="dialog"], .flatpickr-calendar, .op-datepicker-modal')) return;
+  if (document.querySelector('.op-modal, .spot-modal, .op-modal--modal-container')) return;   // a dialog is open: its popups live outside it
   const input = field.querySelector('input, select, textarea') ?? field;
   input.dispatchEvent(new KeyboardEvent('keydown',
     { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
@@ -2178,7 +2193,12 @@ function renderTableAssignees() {
 
   for (const table of tables) {
     const rows = [...table.querySelectorAll('tbody tr')].filter(r => tableRowId(r));
-    if (!rows.length || !rows.every(r => byId.has(tableRowId(r)))) continue;
+    if (!rows.length) continue;
+    // A child just added in OpenProject is not in the cached list until the refetch
+    // lands; inside the Children part its row gets an empty cell meanwhile, so the
+    // column (and the header) don't vanish.
+    const inChildren = !!table.closest('.wp-relations--children');
+    if (!rows.every(r => byId.has(tableRowId(r))) && !(inChildren && rows.some(r => byId.has(tableRowId(r))))) continue;
 
     const headRow = table.querySelector('thead tr');
     if (headRow && !headRow.querySelector('.blm-assign-th')) {
@@ -2194,6 +2214,14 @@ function renderTableAssignees() {
 
     for (const row of rows) {
       const k = byId.get(tableRowId(row));
+      if (!k) {
+        if (!row.querySelector(':scope > td.blm-assign-cell')) {
+          const blank = el('td', 'blm-assign-cell');
+          const status = row.querySelector(':scope > td.status');
+          status ? status.before(blank) : row.append(blank);
+        }
+        continue;
+      }
       const key = `${k.id}:assignee`;
       const sig = [k.assigneeHref, k.assignee, pendingWrites.has(key), writeErrors.get(key) ?? ''].join('|');
       const cell = row.querySelector(':scope > td.blm-assign-cell');
@@ -2899,6 +2927,178 @@ function restoreRelationsCount() {
   }
 }
 
+// ─── Log time dialog: "My time" card ────────────────────────────────────────────
+//  OpenProject's Log time dialog doesn't show what is already logged. With the skin
+//  on, a card under the dialog lists the signed-in user's hours per working day
+//  (last week and this one, all work items) so missing days are visible at a glance.
+
+const TIMELOG_DAILY_TARGET = 8;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+let timelogCard = null;
+let timelogData = null;   // Promise<Map<'YYYY-MM-DD', hours>>; dropped when the dialog closes
+
+const pad2 = n => String(n).padStart(2, '0');
+const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/** "PT1H30M" -> 1.5 */
+function isoHours(d) {
+  const m = /^P(?:(\d+)D)?T?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(d ?? '');
+  return m ? (+(m[1] ?? 0)) * 24 + (+(m[2] ?? 0)) + (+(m[3] ?? 0)) / 60 + (+(m[4] ?? 0)) / 3600 : 0;
+}
+
+/** Monday of last week through Friday of this one. */
+function timelogDays() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) - 7);
+  const days = [];
+  for (let w = 0; w < 2; w++) {
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + w * 7 + i);
+      days.push({ iso: isoDay(d), name: DAY_NAMES[d.getDay()], num: pad2(d.getDate()), future: d > today, today: +d === +today });
+    }
+  }
+  return days;
+}
+
+async function fetchMyHours(from, to) {
+  const filters = encodeURIComponent(JSON.stringify([
+    { spentOn: { operator: '<>d', values: [from, to] } },
+    { user: { operator: '=', values: ['me'] } },
+  ]));
+  const byDay = new Map();
+  for (let offset = 1; ; offset++) {
+    const data = await getJson(`/api/v3/time_entries?filters=${filters}&pageSize=200&offset=${offset}`);
+    const page = data._embedded?.elements ?? [];
+    for (const te of page) byDay.set(te.spentOn, (byDay.get(te.spentOn) ?? 0) + isoHours(te.hours));
+    if (page.length < 200) return byDay;
+  }
+}
+
+/** The open Log time dialog, or null. */
+function logTimeModal() {
+  let found = null;
+  for (const m of document.querySelectorAll('.spot-modal, .op-modal--modal-container, .op-modal, [role="dialog"]')) {
+    const text = m.textContent.replace(/\s+/g, ' ').trim();
+    if (text.length < 600 && /log\s*time/i.test(text.slice(0, 120)) && /hours/i.test(text)) found = m;   // last = innermost
+  }
+  return found;
+}
+
+let timelogByDay = null;   // Map from the last successful fetch
+
+/** The dialog's input for a label ("Date", "Hours"), or null. */
+function dialogField(modal, re, fallbackIndex) {
+  for (const label of modal.querySelectorAll('label')) {
+    if (!re.test(label.textContent.trim())) continue;
+    const input = (label.htmlFor && document.getElementById(label.htmlFor)) || label.control;
+    if (input) return input;
+  }
+  return modal.querySelectorAll('input:not([type="hidden"])')[fallbackIndex] ?? null;
+}
+
+/** "1", "1.5", "1,5", "1:30", "1h30", "45m" -> hours, or 0 */
+function parseDraftHours(text) {
+  const t = (text ?? '').trim().toLowerCase().replace(',', '.');
+  let m;
+  if ((m = /^(\d+(?:\.\d+)?)$/.exec(t))) return +m[1];
+  if ((m = /^(\d+):(\d{1,2})$/.exec(t))) return +m[1] + +m[2] / 60;
+  if ((m = /^(?:(\d+(?:\.\d+)?)\s*h)?\s*(?:(\d+(?:\.\d+)?)\s*m)?$/.exec(t)) && (m[1] || m[2])) return +(m[1] ?? 0) + +(m[2] ?? 0) / 60;
+  if ((m = /^(\d+)\s*h\s*(\d+)$/.exec(t))) return +m[1] + +m[2] / 60;
+  return 0;
+}
+
+/** What the user has typed so far: { iso, hours } with hours 0 when nothing usable. */
+function readDraft(modal) {
+  const iso = dialogField(modal, /^date/i, 0)?.value.trim() ?? '';
+  return { iso: /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : '', hours: parseDraftHours(dialogField(modal, /^hours/i, 1)?.value) };
+}
+
+function fillTimelog(card, byDay, draft) {
+  const days = timelogDays();
+  card.replaceChildren();
+  let logged = 0, expected = 0, missing = 0, pending = 0;
+  const grid = el('div', 'blm-jx-timelog-grid');
+  for (const d of days) {
+    const saved = byDay.get(d.iso) ?? 0;
+    const extra = draft.iso === d.iso ? draft.hours : 0;
+    const h = saved + extra;
+    const state = d.future && !h ? 'future' : h >= TIMELOG_DAILY_TARGET - 0.01 ? 'met' : h > 0 ? 'part' : 'miss';
+    if (!d.future || h) { logged += h; pending += extra; }
+    if (!d.future) { expected += TIMELOG_DAILY_TARGET; if (!h && !d.today) missing++; }
+    const tile = el('div', 'blm-jx-timelog-day');
+    tile.dataset.state = state;
+    if (d.today) tile.dataset.today = '';
+    if (extra) tile.dataset.draft = '';
+    tile.append(el('span', 'blm-jx-timelog-dname', `${d.name} ${d.num}`),
+      el('span', 'blm-jx-timelog-dhours', h ? h.toFixed(2) : d.future ? '·' : '—'));
+    if (extra) tile.append(el('span', 'blm-jx-timelog-dnew', `+${extra.toFixed(2)} new`));
+    grid.append(tile);
+  }
+  const head = el('div', 'blm-jx-timelog-head');
+  head.append(el('h3', 'blm-jx-timelog-title', 'My time'), el('span', 'blm-jx-timelog-range', `${days[0].iso.slice(5)} – ${days[9].iso.slice(5)}`));
+  const sum = el('p', 'blm-jx-timelog-sum');
+  sum.append(el('b', null, logged.toFixed(2)), ` h of ${expected.toFixed(2)} h to date`,
+    missing ? ` · ${missing} ${missing === 1 ? 'day' : 'days'} missing` : '',
+    pending ? ` · incl. ${pending.toFixed(2)} h not saved yet` : '');
+  card.append(head, grid, sum);
+}
+
+/** Repaints the card from the fetched data and the dialog's current inputs. */
+function paintTimelog(modal) {
+  if (!timelogCard || !timelogByDay) return;
+  const draft = readDraft(modal);
+  const sig = `${draft.iso}|${draft.hours}`;
+  if (timelogCard.dataset.sig === sig) return;   // the card is in <body>: repainting on every mutation would loop
+  timelogCard.dataset.sig = sig;
+  fillTimelog(timelogCard, timelogByDay, draft);
+}
+
+function placeTimelog(modal) {
+  const r = modal.getBoundingClientRect();
+  const h = timelogCard.offsetHeight;
+  timelogCard.style.left = `${r.left}px`;
+  timelogCard.style.width = `${r.width}px`;
+  timelogCard.style.top = `${Math.max(8, Math.min(r.bottom + 12, innerHeight - h - 8))}px`;
+}
+
+function removeTimelog() {
+  timelogCard?.remove();
+  timelogCard = null;
+}
+
+function renderTimeLog() {
+  const modal = logTimeModal();
+  if (!modal) { removeTimelog(); timelogData = null; timelogByDay = null; return; }
+  if (!timelogCard?.isConnected) {
+    timelogCard = el('aside', 'blm-jx-timelog');
+    timelogCard.setAttribute('aria-label', 'My time');
+    timelogCard.append(el('div', 'blm-jx-timelog-note', 'Loading your time…'));
+    for (const type of ['mousedown', 'click']) timelogCard.addEventListener(type, e => e.stopPropagation());
+    document.body.append(timelogCard);
+    const days = timelogDays();
+    timelogData ??= fetchMyHours(days[0].iso, days[9].iso);
+    const card = timelogCard;
+    timelogData.then(
+      byDay => { timelogByDay = byDay; if (card.isConnected) { paintTimelog(modal); placeTimelog(modal); } },
+      err => {
+        timelogData = null;
+        if (card.isConnected) card.replaceChildren(el('div', 'blm-jx-timelog-note -error', `Couldn't load your time (${err.message}).`));
+      });
+  }
+  paintTimelog(modal);
+  placeTimelog(modal);
+}
+// Typing a date or hours updates the card at once; picking a date from the calendar
+// sets the field without an event, which the DOM observer's next pass catches.
+for (const type of ['input', 'change', 'keyup']) {
+  document.addEventListener(type, e => {
+    const m = timelogCard && logTimeModal();
+    if (m?.contains(e.target)) { paintTimelog(m); placeTimelog(m); }
+  }, true);
+}
+addEventListener('resize', () => { const m = logTimeModal(); if (m && timelogCard) placeTimelog(m); });
+
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
 
 /** Lists, the split view and the full work-package page. */
@@ -3348,52 +3548,54 @@ ${D} .blm-fix-btn:hover { background: var(--jx-primary-hover); }
 // Motion and feedback. Only opacity, translate, scale and colours animate (cheap, no
 // layout); everything sits behind prefers-reduced-motion. 'translate' and 'scale' are
 // the individual properties, so they never fight OpenProject's own 'transform'.
+const M = `html:is(.${ROOT_CLASS}, .${MOTION_CLASS})`;
 const MOTION = `
+html.${MOTION_CLASS} { --jx-dur: 120ms; --jx-ease-out: cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: no-preference) {
   @keyframes blm-pop-in   { from { opacity: 0; translate: 0 6px; scale: 0.985; } to { opacity: 1; translate: 0 0; scale: 1; } }
   @keyframes blm-fade-in  { from { opacity: 0; } to { opacity: 1; } }
   @keyframes blm-row-in   { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
 
   /* Menus, drop-downs, popovers and dialogs ease in instead of snapping */
-  html.${ROOT_CLASS} .spot-drop-modal--body,
-  html.${ROOT_CLASS} .spot-tooltip--body,
-  html.${ROOT_CLASS} .ng-dropdown-panel,
-  html.${ROOT_CLASS} .op-app-menu--dropdown,
-  html.${ROOT_CLASS} .contextMenu-container,
-  html.${ROOT_CLASS} .dropdown-menu,
-  html.${ROOT_CLASS} .flatpickr-calendar.open,
-  html.${ROOT_CLASS} .op-hover-card { animation: blm-pop-in 150ms var(--jx-ease-out) backwards; transform-origin: top center; }
-  html.${ROOT_CLASS} .spot-modal,
-  html.${ROOT_CLASS} .op-modal,
-  html.${ROOT_CLASS} .op-modal--modal-container { animation: blm-pop-in 180ms var(--jx-ease-out) backwards; }
-  html.${ROOT_CLASS} .op-modal-overlay,
-  html.${ROOT_CLASS} .spot-modal-overlay,
-  html.${ROOT_CLASS} .op-modal--overlay { animation: blm-fade-in 160ms ease-out backwards; }
+  ${M} .spot-drop-modal--body,
+  ${M} .spot-tooltip--body,
+  ${M} .ng-dropdown-panel,
+  ${M} .op-app-menu--dropdown,
+  ${M} .contextMenu-container,
+  ${M} .dropdown-menu,
+  ${M} .flatpickr-calendar.open,
+  ${M} .op-hover-card { animation: blm-pop-in 150ms var(--jx-ease-out) backwards; transform-origin: top center; }
+  ${M} .spot-modal,
+  ${M} .op-modal,
+  ${M} .op-modal--modal-container { animation: blm-pop-in 180ms var(--jx-ease-out) backwards; }
+  ${M} .op-modal-overlay,
+  ${M} .spot-modal-overlay,
+  ${M} .op-modal--overlay { animation: blm-fade-in 160ms ease-out backwards; }
 
 
   /* Hover and press feedback */
-  html.${ROOT_CLASS} .button,
-  html.${ROOT_CLASS} .op-app-menu--item-action,
-  html.${ROOT_CLASS} .op-tab-row--link,
-  html.${ROOT_CLASS} .op-pagination--item-link,
-  html.${ROOT_CLASS} .spot-list--item-action,
-  html.${ROOT_CLASS} .op-sidemenu--item-action,
-  html.${ROOT_CLASS} .wp-table-context-menu-icon,
-  html.${ROOT_CLASS} .wp-table--details-link {
+  ${M} .button,
+  ${M} .op-app-menu--item-action,
+  ${M} .op-tab-row--link,
+  ${M} .op-pagination--item-link,
+  ${M} .spot-list--item-action,
+  ${M} .op-sidemenu--item-action,
+  ${M} .wp-table-context-menu-icon,
+  ${M} .wp-table--details-link {
     transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out),
                 border-color var(--jx-dur) var(--jx-ease-out), box-shadow var(--jx-dur) var(--jx-ease-out),
                 scale 90ms var(--jx-ease-out);
   }
-  html.${ROOT_CLASS} .button:not(:disabled):not(.-disabled):active,
-  html.${ROOT_CLASS} .op-app-menu--item-action:active,
-  html.${ROOT_CLASS} .op-pagination--item-link:active { scale: 0.97; }
+  ${M} .button:not(:disabled):not(.-disabled):active,
+  ${M} .op-app-menu--item-action:active,
+  ${M} .op-pagination--item-link:active { scale: 0.97; }
   html.${ROOT_CLASS} .toolbar-items .button.-alt-highlight:hover,
   html.${ROOT_CLASS} .toolbar-items .button.-highlight:hover { box-shadow: 0 2px 10px color-mix(in srgb, var(--jx-primary) 35%, transparent); }
 
-  html.${ROOT_CLASS} .work-package-table tbody td { transition: background-color var(--jx-dur) var(--jx-ease-out); }
-  html.${ROOT_CLASS} .work-package-table td.assignee .op-avatar { transition: scale 140ms var(--jx-ease-out); }
-  html.${ROOT_CLASS} .work-package-table tr:hover td.assignee .op-avatar { scale: 1.08; }
-  html.${ROOT_CLASS} .work-package-table .blm-jx-lozenge { transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out); }
+  ${M} .work-package-table tbody td { transition: background-color var(--jx-dur) var(--jx-ease-out); }
+  ${M} .work-package-table td.assignee .op-avatar { transition: scale 140ms var(--jx-ease-out); }
+  ${M} .work-package-table tr:hover td.assignee .op-avatar { scale: 1.08; }
+  ${M} .work-package-table .blm-jx-lozenge { transition: background-color var(--jx-dur) var(--jx-ease-out), color var(--jx-dur) var(--jx-ease-out); }
   html.${ROOT_CLASS} .op-tab-row--link { border-bottom: 2px solid transparent; }
   /* Selected tab: the underline draws itself in each time a tab becomes current */
   @keyframes blm-underline { from { background-size: 0 2px; } to { background-size: 100% 2px; } }
@@ -3409,20 +3611,20 @@ const MOTION = `
   @keyframes blm-rise        { from { opacity: 0; translate: 0 10px; }  to { opacity: 1; translate: 0 0; } }
 
   /* Side menu: runs each time the menu is revealed (the wrapper loses hidden-navigation) */
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu { animation: blm-slide-right 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li { animation: blm-slide-right 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(2) { animation-delay: 25ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(3) { animation-delay: 50ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(4) { animation-delay: 75ms; }
-  html.${ROOT_CLASS} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(n+5) { animation-delay: 100ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu { animation: blm-slide-right 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li { animation: blm-slide-right 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(2) { animation-delay: 25ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(3) { animation-delay: 50ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(4) { animation-delay: 75ms; }
+  ${M} #wrapper:not(.hidden-navigation) #main-menu .menu_root > li:nth-child(n+5) { animation-delay: 100ms; }
 
   /* Story detail: the split pane slides in from the right; its content fades when you
      switch story or tab, and the full page rises into place */
-  html.${ROOT_CLASS} .work-packages--details { animation: blm-slide-left 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} .work-packages--details-header { animation: blm-fade-in 200ms ease-out backwards; }
-  html.${ROOT_CLASS} .work-packages--show-view { animation: blm-rise 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-  html.${ROOT_CLASS} .op-user-activity,
-  html.${ROOT_CLASS} .wp-relations--children-table { animation: blm-fade-in 220ms ease-out backwards; }
+  ${M} .work-packages--details { animation: blm-slide-left 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} .work-packages--details-header { animation: blm-fade-in 200ms ease-out backwards; }
+  ${M} .work-packages--show-view { animation: blm-rise 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  ${M} .op-user-activity,
+  ${M} .wp-relations--children-table { animation: blm-fade-in 220ms ease-out backwards; }
 }
 
 /* Keyboard users get a clear, immediate ring on the editable cells too */
@@ -3453,12 +3655,79 @@ const EXTRAS = `
 .op-pagination:has(> .blm-quote) { position: relative; }
 .blm-quote {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  max-width: 45%; text-align: center; pointer-events: none;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  max-width: 45%; text-align: center; cursor: default;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   font: italic 500 16px/1.45 var(--jx-font, system-ui, sans-serif); color: var(--jx-text, #172b4d);
 }
 `;
-const STYLE = CSS + DARK + MOTION + DRAG + EXTRAS;
+// Log time dialog: a Jira-style panel (light and dark through the tokens) and the
+// "My time" card that sits under it.
+const MODAL_ROOT = `html.${ROOT_CLASS} :is(.spot-modal, .op-modal, .op-modal--modal-container)`;
+const MODAL = `
+html.${ROOT_CLASS} { --jx-miss: #c9372c; --jx-part: #a54800; }
+${D} { --jx-miss: #f38ba8; --jx-part: #f9e2af; }
+${MODAL_ROOT} {
+  background: var(--jx-surface) !important; color: var(--jx-text) !important;
+  border: 1px solid var(--jx-border) !important; border-radius: var(--jx-radius-panel) !important;
+  box-shadow: var(--jx-shadow-raised) !important; font-family: var(--jx-font); overflow: hidden;
+}
+${MODAL_ROOT} :is([class*="header"], [class*="body"], [class*="footer"], [class*="action-bar"], [class*="buttons"]) {
+  background: transparent !important; color: var(--jx-text); border-color: var(--jx-border) !important;
+}
+${MODAL_ROOT} [class*="header"] { font-size: 16px; font-weight: 600; }
+${MODAL_ROOT} :is([class*="footer"], [class*="action-bar"]) { background: var(--jx-surface-sunken) !important; }
+${MODAL_ROOT} :is(label, legend) { color: var(--jx-text-subtle); font-size: 13px; font-weight: 600; }
+${MODAL_ROOT} :is(label, legend) :is(.required, [class*="required"], abbr) { color: var(--jx-error); }
+${MODAL_ROOT} :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not(.ng-select *),
+${MODAL_ROOT} .ng-select .ng-select-container {
+  background: var(--jx-surface) !important; color: var(--jx-text) !important;
+  border: 2px solid var(--jx-border) !important; border-radius: var(--jx-radius) !important;
+  font-family: var(--jx-font); box-shadow: none !important;
+}
+${MODAL_ROOT} .ng-select input { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+${MODAL_ROOT} :is(input, select, textarea):not(.ng-select *):focus,
+${MODAL_ROOT} .ng-select.ng-select-focused .ng-select-container { border-color: var(--jx-focus) !important; outline: none; }
+${MODAL_ROOT} .button:not(.-highlight):not(.-primary):not(.-alt-highlight) {
+  background: var(--jx-btn) !important; color: var(--jx-text) !important; border: 0 !important; border-radius: var(--jx-radius) !important;
+}
+${MODAL_ROOT} .button:not(.-highlight):not(.-primary):not(.-alt-highlight):hover { background: var(--jx-btn-hover) !important; }
+${MODAL_ROOT} :is(.button.-highlight, .button.-primary, .button.-alt-highlight) {
+  background: var(--jx-primary) !important; color: var(--jx-on-primary) !important; border: 0 !important; border-radius: var(--jx-radius) !important;
+}
+${MODAL_ROOT} :is(.button.-highlight, .button.-primary, .button.-alt-highlight):hover { background: var(--jx-primary-hover) !important; }
+
+html.${ROOT_CLASS} .blm-jx-timelog {
+  position: fixed; z-index: 2147483000; box-sizing: border-box; padding: var(--jx-space-4);
+  background: var(--jx-surface); color: var(--jx-text); font-family: var(--jx-font);
+  border: 1px solid var(--jx-border); border-radius: var(--jx-radius-panel); box-shadow: var(--jx-shadow-raised);
+}
+html.${ROOT_CLASS} .blm-jx-timelog-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--jx-space-3); }
+html.${ROOT_CLASS} .blm-jx-timelog-title { margin: 0; font-size: 16px; font-weight: 600; font-style: normal; color: var(--jx-text); }
+html.${ROOT_CLASS} .blm-jx-timelog-range { font-size: 12px; color: var(--jx-text-subtlest); font-variant-numeric: tabular-nums; }
+html.${ROOT_CLASS} .blm-jx-timelog-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--jx-space-2); }
+html.${ROOT_CLASS} .blm-jx-timelog-day {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px;
+  border: 1px solid transparent; border-radius: var(--jx-radius); background: var(--jx-btn);
+  font-variant-numeric: tabular-nums;
+}
+html.${ROOT_CLASS} .blm-jx-timelog-dname { font-size: 12px; color: var(--jx-text-subtle); }
+html.${ROOT_CLASS} .blm-jx-timelog-dhours { font-size: 15px; font-weight: 600; }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="met"] { background: var(--jx-done-bg); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="met"] .blm-jx-timelog-dhours { color: var(--jx-done-fg); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="part"] { background: color-mix(in srgb, var(--jx-part) 14%, transparent); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="part"] .blm-jx-timelog-dhours { color: var(--jx-part); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="miss"] { background: color-mix(in srgb, var(--jx-miss) 12%, transparent); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="miss"] .blm-jx-timelog-dhours { color: var(--jx-miss); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-state="future"] { opacity: 0.55; }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-today] { border-color: var(--jx-focus); }
+html.${ROOT_CLASS} .blm-jx-timelog-day[data-draft] { border: 1px dashed var(--jx-primary); }
+html.${ROOT_CLASS} .blm-jx-timelog-dnew { font-size: 11px; color: var(--jx-link); }
+html.${ROOT_CLASS} .blm-jx-timelog-sum { margin: var(--jx-space-3) 0 0; font-size: 13px; color: var(--jx-text-subtle); font-variant-numeric: tabular-nums; }
+html.${ROOT_CLASS} .blm-jx-timelog-sum b { color: var(--jx-text); }
+html.${ROOT_CLASS} .blm-jx-timelog-note { font-size: 13px; color: var(--jx-text-subtlest); }
+html.${ROOT_CLASS} .blm-jx-timelog-note.-error { color: var(--jx-error); }
+`;
+const STYLE = CSS + DARK + MODAL + MOTION + DRAG + EXTRAS;
 
 function ensureStyle() {
   let s = document.getElementById('__blm-jira-style');
@@ -3475,12 +3744,13 @@ function applyClasses() {
   root.classList.toggle(ROOT_CLASS, skinEnabled);
   if (skinEnabled && root.dataset.blmTheme !== theme) root.dataset.blmTheme = theme;
   root.classList.toggle('blm-no-anim', !animationEnabled);
+  root.classList.toggle(MOTION_CLASS, animationEnabled && !skinEnabled && !root.classList.contains('blm-ui2'));
   root.classList.toggle(WP_CLASS, skinEnabled && onWorkPackagePage());
   root.classList.toggle(BL_CLASS, skinEnabled && onBacklogsPage());
   root.classList.toggle(AS_CLASS, assignEnabled && onWorkPackagePage());
   root.classList.toggle(ACT_CLASS, activityEnabled && onWorkPackagePage());
   root.classList.toggle(FILES_CLASS, filesEnabled && onWorkPackagePage());
-  if (anyEnabled()) ensureStyle();
+  if (anyEnabled() || animationEnabled) ensureStyle();
 }
 
 const anyEnabled = () => skinEnabled || ui2Enabled || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
@@ -3539,7 +3809,8 @@ function schedule() {
     frame = 0;
     applyClasses();
     if (!anyEnabled() || !document.body) { syncJump(); return; }
-    if (skinEnabled) animateTabSwitch();
+    if (skinEnabled || document.documentElement.classList.contains(MOTION_CLASS)) animateTabSwitch();
+    if (skinEnabled) renderTimeLog();
     if (!onWorkPackagePage() || !viewWpId()) childrenFor(null);   // left: drop cache, close picker
     const onWp = onWorkPackagePage();
     if (onWp && !wasOnWp) pickQuote();
@@ -3563,6 +3834,7 @@ function disable() {
   delete document.documentElement.dataset.blmTheme;
   welcomeEl?.remove();
   welcomeEl = null;
+  removeTimelog();
   if (!domOn()) undoDom();
 }
 

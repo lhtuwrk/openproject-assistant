@@ -4,7 +4,7 @@ const TASK_KEY          = '__blm_logtime_task';      // written by reminder.js
 const DATE_KEY_PATTERN  = /^\d{4}-\d{2}-\d{2}__.+$/;
 const META_KEY          = '__blm_sync_meta';
 const TRACKED_KEY       = '__blm_tracked';
-const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';     // default: false
+const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';     // default: true
 import { requireHost } from '../shared/config.js';
 const BACKLOG_URL       = await requireHost();
 
@@ -108,7 +108,7 @@ function renderSyncStatus(meta) {
 async function loadBurndown() {
   const all  = await chrome.storage.local.get(null);
   const card = document.getElementById('burndown-card');
-  card.hidden = !(all[CFG_SYNC_BURNDOWN] ?? false);
+  card.hidden = !(all[CFG_SYNC_BURNDOWN] ?? true);
   document.querySelector('.nav [data-open="viewer.html"]').hidden = card.hidden;
   if (card.hidden) return;
 

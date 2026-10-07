@@ -132,7 +132,7 @@ async function refreshProfile(rail, cached) {
 // ── Burndown status ──────────────────────────────────────────────────────────
 
 function renderSync(rail, s) {
-  const on = s[CFG_SYNC_BURNDOWN] ?? false;
+  const on = s[CFG_SYNC_BURNDOWN] ?? true;
   const line = rail.querySelector('.sync-line');
   const navLink = rail.querySelector('[data-nav="burndown"]');
 
