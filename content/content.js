@@ -161,6 +161,42 @@ chrome.storage.onChanged.addListener((changes, area) => {
   else                   tearDownBars();
 });
 
+// ─── "Show burndown chart" toolbar button ─────────────────────────────────────
+// Sits left of + Create on list pages and opens the Burndown page in the drawer
+// from quick-settings-host.js (same isolated world, so its global is reachable).
+const CFG_BURNDOWN_BUTTON = '__blm_burndown_button';
+let burndownButtonEnabled = true;
+
+function ensureBurndownButton() {
+  const existing = document.querySelector('.blm-burndown-item');
+  if (!burndownButtonEnabled || !/\/work_packages\/?$/.test(location.pathname)) { existing?.remove(); return; }
+  const create = document.querySelector('.toolbar-items wp-create-button, .toolbar-items .add-work-package');
+  const anchor = create?.closest('.toolbar-items > li') ?? create;
+  if (!anchor) return;
+  if (existing?.nextElementSibling === anchor) return;
+  existing?.remove();
+  const item = document.createElement(anchor.tagName === 'LI' ? 'li' : 'span');
+  item.className = 'toolbar-item blm-burndown-item';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'button';
+  btn.textContent = 'Show burndown chart';
+  btn.addEventListener('click', () => globalThis.blmOpenDrawer?.(
+    chrome.runtime.getURL('pages/viewer.html') + '?embedded=1', 'Burndown chart', '1100px'));
+  item.append(btn);
+  anchor.before(item);
+}
+
+chrome.storage.local.get(CFG_BURNDOWN_BUTTON).then(s => {
+  burndownButtonEnabled = s[CFG_BURNDOWN_BUTTON] ?? true;
+  ensureBurndownButton();
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !(CFG_BURNDOWN_BUTTON in changes)) return;
+  burndownButtonEnabled = changes[CFG_BURNDOWN_BUTTON].newValue ?? true;
+  ensureBurndownButton();
+});
+
 /** Extracts the trailing numeric id from a HAL href ("/api/v3/work_packages/20469"). */
 function idFromHref(href) {
   const m = /(\d+)\s*$/.exec(href ?? '');
@@ -918,7 +954,7 @@ function ensureRowObserver() {
 let bodyFrame = 0;
 new MutationObserver(() => {
   if (bodyFrame) return;
-  bodyFrame = requestAnimationFrame(() => { bodyFrame = 0; ensureRowObserver(); scheduleDetail(); });
+  bodyFrame = requestAnimationFrame(() => { bodyFrame = 0; ensureRowObserver(); scheduleDetail(); ensureBurndownButton(); });
 }).observe(document.body, { childList: true, subtree: true });
 ensureRowObserver();
 

@@ -40,7 +40,7 @@ const FLOW_PREFIX       = '__blm_flow__';
 const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';
 async function burndownEnabled() {
   const s = await chrome.storage.local.get(CFG_SYNC_BURNDOWN);
-  return s[CFG_SYNC_BURNDOWN] ?? false;
+  return s[CFG_SYNC_BURNDOWN] ?? true;
 }
 
 // ─── Date helpers ────────────────────────────────────────────────────────────

@@ -808,6 +808,14 @@
     :root[data-theme="light"] #btn-copy-select-go:disabled { background: var(--surface2); color: var(--muted); }
     :root[data-theme="light"] #copy-preview-hint { color: var(--muted); }
     :root[data-theme="light"] #copy-preview-img-wrap { border-color: var(--border2); }
+
+    /* Drawer on OpenProject (?embedded=1): chart only */
+    html.embedded .rail,
+    html.embedded #filter-project,
+    html.embedded .tb-toggle,
+    html.embedded #btn-configure-versions,
+    html.embedded #more-details { display: none; }
+    html.embedded body { padding-inline-start: 0; }
   </style>
 </head>
 <body data-page="burndown">
@@ -854,6 +862,7 @@
         </div>
       </details>
       <span id="toast"></span>
+      <button id="btn-close-embedded" hidden title="Close" aria-label="Close">×</button>
     </div>
   </div>
 

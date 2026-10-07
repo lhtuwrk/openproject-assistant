@@ -119,6 +119,12 @@
           <div class="control"><input type="checkbox" class="switch" id="f-subtask" /></div>
           <div class="meta"><span class="scope">Work-package lists</span></div>
         </li>
+        <li class="feature" data-key="__blm_burndown_button" data-default="true">
+          <label class="name" for="f-burndown-btn">Burndown button</label>
+          <p class="desc">Adds "Show burndown chart" next to Create; it opens the current sprint's burndown in a drawer and starts tracking that sprint.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-burndown-btn" /></div>
+          <div class="meta"><span class="scope">Work-package lists</span></div>
+        </li>
         <li class="feature" data-key="__blm_children_assign" data-default="true">
           <label class="name" for="f-childassign">Assign from the Children table</label>
           <p class="desc">Adds an Assignee column to the Children table in a work package's Relations tab. Click a name to reassign that child. Works with or without Jira style.</p>
@@ -162,7 +168,7 @@
       <h2 class="group-title" id="g-bg">In the background</h2>
       <p class="group-lede">Runs while Chrome is open, even with no backlog tab.</p>
       <ul class="features">
-        <li class="feature" data-key="__blm_sync_burndown" data-default="false" id="feat-burndown">
+        <li class="feature" data-key="__blm_sync_burndown" data-default="true" id="feat-burndown">
           <label class="name" for="f-burndown">Burndown sync</label>
           <p class="desc">Saves one snapshot a day of every tracked version, syncs hourly, and rebuilds missed days from the activity feed at midnight.</p>
           <div class="control"><input type="checkbox" class="switch" id="f-burndown" /></div>

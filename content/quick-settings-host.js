@@ -1,16 +1,17 @@
-// quick-settings-host.js — the right-hand Quick settings drawer.
+// quick-settings-host.js — the right-hand drawer for extension pages.
 //
 // Runs on: every http(s) page (top frame only). Does nothing until the popup's
 // settings button sends { type: 'blm-quick-settings' } — page scripts can't send
-// extension messages, so a site can't open it. The drawer is an iframe of
-// pages/sidepanel.html inside a closed shadow root; it closes on ×, Escape, or a
+// extension messages, so a site can't open it. The drawer is an iframe of an
+// extension page inside a closed shadow root; it closes on ×, Escape, or a
 // click on the dimmed page behind it. Chrome's own side panel can't be placed on
 // the right by an extension (that's a browser setting), hence this drawer.
+// content.js opens the Burndown chart through globalThis.blmOpenDrawer, which lives
+// in the extension's isolated world and is invisible to page scripts.
 
 (() => {
   'use strict';
 
-  const WIDTH = 380;
   let host = null;
 
   function close() {
@@ -21,8 +22,8 @@
     setTimeout(() => h.remove(), 200);
   }
 
-  function open() {
-    if (host) { close(); return; }                       // the gear toggles
+  function openDrawer(src, label, width) {
+    if (host) { close(); return; }                       // the opener toggles
     host = document.createElement('div');
     host.style.cssText = 'all: initial; position: fixed; inset: 0; z-index: 2147483647;';
     const root = host.attachShadow({ mode: 'closed' });
@@ -30,7 +31,7 @@
       <style>
         .scrim { position: fixed; inset: 0; background: rgba(9, 30, 66, 0.25); opacity: 0;
           transition: opacity 180ms cubic-bezier(0.2, 0, 0, 1); }
-        .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(${WIDTH}px, 100vw);
+        .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(${width}, 100vw);
           box-shadow: -8px 0 24px rgba(9, 30, 66, 0.18); transform: translateX(100%);
           transition: transform 200ms cubic-bezier(0.2, 0, 0, 1); background: transparent; }
         iframe { border: 0; width: 100%; height: 100%; display: block; color-scheme: normal; }
@@ -39,11 +40,13 @@
         @media (prefers-reduced-motion: reduce) { .scrim, .drawer { transition: none; } }
       </style>
       <div class="scrim"></div>
-      <div class="drawer" role="dialog" aria-label="Quick settings"></div>`;
+      <div class="drawer" role="dialog"></div>`;
+    const drawer = root.querySelector('.drawer');
+    drawer.setAttribute('aria-label', label);
     const frame = document.createElement('iframe');
-    frame.title = 'Quick settings';
-    frame.src = chrome.runtime.getURL('pages/sidepanel.html') + '?embedded=1';
-    root.querySelector('.drawer').append(frame);
+    frame.title = label;
+    frame.src = src;
+    drawer.append(frame);
     root.querySelector('.scrim').addEventListener('click', close);
     document.documentElement.append(host);
     requestAnimationFrame(() => requestAnimationFrame(() => { if (host) host.dataset.open = 'true'; }));
@@ -54,18 +57,20 @@
     const panelOrigin = new URL(frame.src).origin;
     const onMessage = e => {
       if (!frame.contentWindow || e.source !== frame.contentWindow || e.origin !== panelOrigin) return;
-      if (e.data?.type !== 'blm-quick-settings-close') return;
+      if (e.data?.type !== 'blm-drawer-close') return;
       window.removeEventListener('message', onMessage);
       close();
     };
     window.addEventListener('message', onMessage);
   }
 
+  globalThis.blmOpenDrawer = openDrawer;
+
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && host) close(); });
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type !== 'blm-quick-settings') return;
-    open();
+    openDrawer(chrome.runtime.getURL('pages/sidepanel.html') + '?embedded=1', 'Quick settings', '380px');
     reply({ ok: true });
   });
 })();

@@ -129,7 +129,7 @@ document.getElementById('all-settings').addEventListener('click', async e => {
 if (new URLSearchParams(location.search).has('embedded')) {
   const btn = document.getElementById('close-panel');
   btn.hidden = false;
-  const closeDrawer = () => window.parent.postMessage({ type: 'blm-quick-settings-close' }, '*');
+  const closeDrawer = () => window.parent.postMessage({ type: 'blm-drawer-close' }, '*');
   btn.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 }

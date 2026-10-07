@@ -2024,26 +2024,40 @@ let dateListenersSet = false;
 
 let autoTrackTried = false;
 
-/** With nothing tracked yet, starts tracking the current sprint's version of the
- *  user's project ("<project> <sprint>") so the chart opens on it. Returns the new
- *  tracked list, or [] when the project/version isn't found or the lookup fails. */
-async function autoTrackCurrentVersion() {
+// Opened in the drawer next to OpenProject's Create button (quick-settings-host.js):
+// current sprint only, no rail; × and Escape ask the drawer to close.
+const EMBEDDED = new URLSearchParams(location.search).has('embedded');
+if (EMBEDDED) {
+  document.documentElement.classList.add('embedded');
+  const closeDrawer = () => window.parent.postMessage({ type: 'blm-drawer-close' }, '*');
+  const btn = document.getElementById('btn-close-embedded');
+  btn.hidden = false;
+  btn.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+}
+
+/** Adds the current sprint's version of the user's project ("<project> <sprint>")
+ *  to the tracked list when it's missing, so the chart opens on it. Returns the
+ *  tracked list, unchanged when the project/version isn't found or the lookup fails. */
+async function autoTrackCurrentVersion(tracked) {
   const name = currentMainViewVersion();
-  if (!name) return [];
+  if (!name || tracked.some(t => t.versionName === name)) return tracked;
   try {
     const project = (await fetchActiveProjects()).find(p => p.name === mainViewProject);
-    if (!project) return [];
+    if (!project) return tracked;
     const v = (await fetchAllVersions(project.id)).find(v => v.name === name);
-    if (!v) return [];
-    const tracked = [{
+    if (!v) return tracked;
+    // First in the list: the background syncs tracked versions in order, so the
+    // sprint the user is waiting on gets its snapshots before the others.
+    const next = [{
       projectId: project.id, projectName: project.name,
       versionId: v.id,      versionName: v.name,
       startDate: v.startDate ?? null, endDate: v.endDate ?? null,
-    }];
-    await chrome.storage.local.set({ [TRACKED_KEY]: tracked });
+    }, ...tracked];
+    await chrome.storage.local.set({ [TRACKED_KEY]: next });
     try { chrome.runtime.sendMessage({ type: 'sync-now' }); } catch { /* sw may be asleep */ }
-    return tracked;
-  } catch { return []; }
+    return next;
+  } catch { return tracked; }
 }
 
 async function renderAll() {
@@ -2052,9 +2066,9 @@ async function renderAll() {
 
   // ── No versions tracked ───────────────────────────────────────────────────
   let tracked = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
-  if (!tracked.length && !autoTrackTried) {
+  if ((!tracked.length || EMBEDDED) && !autoTrackTried) {
     autoTrackTried = true;
-    tracked = await autoTrackCurrentVersion();
+    tracked = await autoTrackCurrentVersion(tracked);
   }
   if (!tracked.length) {
     output.innerHTML = '';
@@ -2130,6 +2144,7 @@ async function renderAll() {
   // that version yet, we silently fall back to rendering everything so they aren't
   // left staring at a blank page.
   const mainVer      = currentMainViewVersion();
+  if (EMBEDDED && !byVersion.has(mainVer)) { noData.style.display = 'block'; return; }
   const applyMainOnly = mainViewOnly && byVersion.has(mainVer);
   for (const [version, dateMap] of byVersion) {
     if (applyMainOnly && version !== mainVer) continue;
@@ -2907,25 +2922,37 @@ document.getElementById('btn-clear').addEventListener('click', clearAll);
 // Main-view toggle: focus the dashboard on "<project> <CurrentSprint>" only. The
 // project defaults to one of the signed-in user's projects (the saved choice, else
 // the first with a snapshot for the current sprint) and can be switched.
-const mainViewReady = (async () => {
+// The chart renders at once with the saved or last-resolved project; the project
+// lookups run after that and re-render only if they pick a different project.
+const MAIN_VIEW_LAST_KEY = '__blm_main_view_project_last';
+let markMainViewReady;
+const mainViewReady = new Promise(r => { markMainViewReady = r; });
+(async () => {
   const chk = document.getElementById('filter-main-view');
   const projSel = document.getElementById('filter-project');
-  if (!chk) return;
-  const stored = await chrome.storage.local.get([MAIN_VIEW_STATE_KEY, MAIN_VIEW_PROJECT_KEY]);
-  mainViewOnly = stored[MAIN_VIEW_STATE_KEY] ?? true;      // default ON
+  if (!chk) { markMainViewReady(); return; }
+  const stored = await chrome.storage.local.get([MAIN_VIEW_STATE_KEY, MAIN_VIEW_PROJECT_KEY, MAIN_VIEW_LAST_KEY]);
+  mainViewOnly = EMBEDDED || (stored[MAIN_VIEW_STATE_KEY] ?? true);  // default ON; drawer always
   chk.checked = mainViewOnly;
+  const saved = stored[MAIN_VIEW_PROJECT_KEY];
+  const guess = saved ?? stored[MAIN_VIEW_LAST_KEY] ?? null;
+  if (guess) { mainViewProject = guess; markMainViewReady(); }
 
   // Projects the user is assigned work in come first (the default), then the rest
   // of their memberships for the dropdown.
   const s = sprintInfo(sprintIndexForDate(todayStr()));
-  let assigned = [], projects = [];
-  try { assigned = await fetchAssignedProjectNames(s.name); } catch { /* signed out / offline */ }
-  try { projects = [...new Set([...assigned, ...await fetchMyProjectNames()])]; } catch { projects = assigned; }
+  const [assignedRes, memberRes] = await Promise.allSettled([fetchAssignedProjectNames(s.name), fetchMyProjectNames()]);
+  const assigned = assignedRes.value ?? [];                  // rejected: signed out / offline
+  const projects = [...new Set([...assigned, ...(memberRes.value ?? [])])];
   const all = await chrome.storage.local.get(null);
   const versions = new Set(Object.keys(all).map(k => /^\d{4}-\d\d-\d\d__(.+)$/.exec(k)?.[1]).filter(Boolean));
-  const saved = stored[MAIN_VIEW_PROJECT_KEY];
-  mainViewProject = projects.includes(saved) ? saved
-    : [...assigned, ...projects].find(p => versions.has(`${p} ${s.name}`)) ?? assigned[0] ?? projects[0] ?? null;
+  const picked = projects.includes(saved) ? saved
+    : [...assigned, ...projects].find(p => versions.has(`${p} ${s.name}`)) ?? assigned[0] ?? projects[0] ?? guess;
+  if (picked) chrome.storage.local.set({ [MAIN_VIEW_LAST_KEY]: picked });
+  const changed = picked !== mainViewProject;
+  mainViewProject = picked;
+  if (guess && changed) { autoTrackTried = false; renderAll(); }   // track the right project's sprint
+  markMainViewReady();
 
   const refreshTitle = () => { chk.title = mainViewProject ? `Show only ${currentMainViewVersion()}` : 'Show only the current sprint'; };
   refreshTitle();
