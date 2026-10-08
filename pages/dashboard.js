@@ -66,7 +66,22 @@ async function renderStatuses() {
   if (next) setStatus(remEl, `Next: ${next.name}, ${dayLabel(next.date)}`);
 }
 
+const DEV_KEY = '__blm_dev_unlocked';
+const lab = document.getElementById('group-lab');
+
+async function initLab() {
+  lab.hidden = !(await chrome.storage.local.get(DEV_KEY))[DEV_KEY];
+  document.getElementById('lab-hide').addEventListener('click', async e => {
+    e.preventDefault();
+    await chrome.storage.local.set({ [DEV_KEY]: false, __blm_smart_log: false });   // hiding them also turns them off
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && DEV_KEY in changes) lab.hidden = !changes[DEV_KEY].newValue;
+  });
+}
+
 async function init() {
+  initLab();
   const stored = await chrome.storage.local.get(features.map(f => f.dataset.key));
   for (const f of features) {
     const input = f.querySelector('.switch');

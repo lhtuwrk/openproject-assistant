@@ -98,6 +98,7 @@
     @media (prefers-reduced-motion: reduce) {
       .segmented label { transition-duration: 0s; }
     }
+    .group[hidden] { display: none; }
   </style>
 </head>
 <body data-page="settings">
@@ -226,6 +227,18 @@
           <p class="desc">Shows a random motivational quote in the bottom bar of the work-package list, a new one each time you open the list. Long quotes are shortened to two lines.</p>
           <div class="control"><input type="checkbox" class="switch" id="f-quote" /></div>
           <div class="meta"><span class="scope">Work-package list</span></div>
+        </li>
+      </ul>
+    </section>
+    <section class="group group-lab" id="group-lab" aria-labelledby="g-lab" hidden>
+      <h2 class="group-title" id="g-lab">Experimental</h2>
+      <p class="group-lede">Unlocked by tapping your avatar seven times. These may change or disappear. <a class="go" href="#" id="lab-hide">Hide experimental options</a></p>
+      <ul class="features">
+        <li class="feature" data-key="__blm_smart_log" data-default="false">
+          <label class="name" for="f-smartlog">Smart log time</label>
+          <p class="desc">On the Time log page, log on several tickets at once: tick tickets in the picker and the hours of every selected day are shared between them in proportion to story points, within the time left on each story. The Hours per day table lets you change a day's total.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-smartlog" /></div>
+          <div class="meta"><span class="scope">Time log</span></div>
         </li>
       </ul>
     </section>
