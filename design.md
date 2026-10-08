@@ -66,6 +66,44 @@ Their filters, data views (charts, ledger grid) and page-specific signal tokens
 (`--miss`, `--wk-bg` in Time log; `--lvl-goal` · `--lvl-big3` · `--lvl-break` ·
 `--lvl-fire` · `--lvl-high` in Planning, all aliases of palette tokens).
 
+## Time log: logging time
+The ledger is also where you log your own time. Your row's cells are buttons (a
+dash turns cobalt on hover); the single primary action in the page bar, Log time,
+covers days you can't click. Both open one panel docked to the right edge (the grid is pushed aside and stays
+clickable, so more days can be picked with cells while it is open): Date,
+Work package (search; Recent and Assigned to me when empty), Hours (1.5 · 1h30 ·
+90m), Activity, Comment. It opens with the work package list showing (the last
+one used leads Recent) and the hours left of the 8 h day filled in. Nothing is
+chosen for the user: a ticket is only set by a click or by arrow keys plus Enter,
+so a hurried Enter can't log on the wrong ticket. No confirm dialog:
+the grid updates and a toast offers Undo. Existing entries of the day are listed in
+a left column of the popover (Edit changes an entry's hours or moves it to another
+day, Delete asks once, inline); the right column adds time. Without entries the
+popover is one column. The chosen work package shows as a chip with Change, so the
+search list reopens with Change; a meter shows the day against 8 h and
+quick-hour buttons (Rest, 0.5, 1, 2, 4) sit under Hours. A Days row of chips (one
+per day you can log on; amber = under 8 h) turns the form into a range form when
+more than one is on; All missing ticks every day under 8 h. Shift+click a second
+cell does the same from the grid. Only your own row is writable.
+
+Several tickets in one go: Add another ticket (Shift+Enter) puts the ticket and its hours on a
+To log list and opens a fresh form; Enter then logs the whole list, on every selected day.
+The save button counts them (Log 3 tickets), one toast and one Undo cover all entries, and
+a failed run keeps the panel open and skips what was already created when you retry.
+Several tickets can also be ticked in the picker (a box before each row) and added to the list
+together; "+ Add another ticket" sits under Hours so it is not missed.
+Smart log time is a hidden, experimental feature: tapping your avatar in the rail seven
+times (like Android's developer mode) reveals Settings → Experimental, whose switch turns
+it on. Off, tickets are logged with the hours typed for each. On, with two or more tickets
+the hours of each selected day are topped up to 8 h and shared between them in
+proportion to story points, within the time left on each story, in quarter-hours; the
+Hours per day table shows what every ticket gets on every day (and its Day total row is
+editable), and the picker gets tick boxes to add several tickets together.
+Work packages in the picker read like Jira work items: a type icon (bug red, story green,
+task cobalt, other amber), the key, the title, an upper-case status lozenge (grey to do,
+cobalt in progress, green done) and the assignee's avatar (ringed when it is you, dashed
+when unassigned), with project · sprint underneath.
+
 ## Planning (sprint planning game)
 One facilitator shares the page; the team plays the backlog level by level in
 priority order (label goal → pilot/chiron/VAB → coffee break → Immediate → High →

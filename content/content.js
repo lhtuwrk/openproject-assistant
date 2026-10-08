@@ -167,6 +167,24 @@ chrome.storage.onChanged.addListener((changes, area) => {
 const CFG_BURNDOWN_BUTTON = '__blm_burndown_button';
 let burndownButtonEnabled = true;
 
+/** Query string for the drawer: which version's burndown this list is about. The page
+ *  gives up to three hints (viewer.js picks the version from them): the project's
+ *  identifier in the path, the version ids of the list's own filter, and the list's title. */
+function burndownDrawerParams() {
+  const params = new URLSearchParams({ embedded: '1' });
+  const project = /\/projects\/([^/]+)\/work_packages/.exec(location.pathname)?.[1];
+  if (project) params.set('project', decodeURIComponent(project));
+  try {
+    const filters = JSON.parse(new URLSearchParams(location.search).get('query_props') ?? '{}').f ?? [];
+    const ids = filters.filter(f => /^(version|fixedVersion|version_id)$/i.test(f.n)).flatMap(f => f.v ?? []);
+    if (ids.length) params.set('versions', ids.join(','));
+  } catch { /* no usable filter in the URL */ }
+  const title = document.querySelector('.toolbar-container input.editable-toolbar-title--input')?.value
+    ?? document.querySelector('.toolbar-container .title-container h2, .toolbar-container .editable-toolbar-title')?.textContent;
+  if (title?.trim()) params.set('title', title.trim());
+  return params.toString();
+}
+
 function ensureBurndownButton() {
   const existing = document.querySelector('.blm-burndown-item');
   if (!burndownButtonEnabled || !/\/work_packages\/?$/.test(location.pathname)) { existing?.remove(); return; }
@@ -182,7 +200,7 @@ function ensureBurndownButton() {
   btn.className = 'button';
   btn.textContent = 'Show burndown chart';
   btn.addEventListener('click', () => globalThis.blmOpenDrawer?.(
-    chrome.runtime.getURL('pages/viewer.html') + '?embedded=1', 'Burndown chart', '1100px'));
+    chrome.runtime.getURL('pages/viewer.html') + '?' + burndownDrawerParams(), 'Burndown chart', '1100px'));
   item.append(btn);
   anchor.before(item);
 }

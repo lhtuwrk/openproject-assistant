@@ -168,6 +168,37 @@ if (state[STATS_KEY]?.sprint === currentSprint()?.key) paintStats(rail, state[ST
 renderSync(rail, state);
 document.body.prepend(rail);
 
+// ── Experimental options: tap your avatar seven times, like Android's developer mode ──
+const DEV_KEY = '__blm_dev_unlocked';
+let railToastEl = null, railToastT = null;
+
+function railToast(msg) {
+  railToastEl ??= Object.assign(document.createElement('div'), { className: 'rail-toast', role: 'status' });
+  if (!railToastEl.isConnected) document.body.append(railToastEl);
+  railToastEl.textContent = msg;
+  railToastEl.classList.add('show');
+  clearTimeout(railToastT);
+  railToastT = setTimeout(() => railToastEl.classList.remove('show'), 2200);
+}
+
+{
+  let taps = 0, last = 0;
+  rail.querySelector('.profile').addEventListener('click', async e => {   // delegated: the card is rebuilt when signed out
+    if (!e.target.closest('.avatar')) return;
+    const now = Date.now();
+    taps = now - last > 2000 ? 1 : taps + 1;
+    last = now;
+    if (taps < 7) {
+      if (taps >= 3) railToast(`${7 - taps} more tap${7 - taps === 1 ? '' : 's'} to unlock experimental options`);
+      return;
+    }
+    taps = 0;
+    if ((await chrome.storage.local.get(DEV_KEY))[DEV_KEY]) { railToast('Experimental options are already unlocked. Find them in Settings.'); return; }
+    await chrome.storage.local.set({ [DEV_KEY]: true });
+    railToast('Experimental options unlocked. Find them in Settings.');
+  });
+}
+
 refreshProfile(rail, cached);
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area === 'local' && SYNC_KEYS.some(k => k in changes)) renderSync(rail, await chrome.storage.local.get(SYNC_KEYS));

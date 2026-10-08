@@ -1430,9 +1430,19 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
   if (!burned.length && !reopened.length && !movedOut.length) {
     // isStale + isToday means reconstruction ran but skipped today (daily cutoff
     // hasn't passed yet — only stories completed before 09:30 AM ICT count).
+    let cutoffNote = '';
+    if (isStale && isToday) {
+      // Same rule as the background job: sprint start/end days lock at the planning cutoff, other days at the daily one.
+      const kept = await chrome.storage.local.get([TRACKED_KEY, SETTINGS_KEY]);
+      const cfg = kept[SETTINGS_KEY] ?? {};
+      const planning = (kept[TRACKED_KEY] ?? []).some(t => t.startDate === hit.date || t.endDate === hit.date);
+      cutoffNote = planning
+        ? `Today is a sprint start/end day, so its burn detail locks at the planning cutoff (${cfg.planningCutoff ?? '21:00'} ICT)`
+        : `Today's burn detail locks at the daily cutoff (${cfg.dailyCutoff ?? '09:30'} ICT)`;
+    }
     html += `<p class="dp-empty">${
       isStale && isToday
-        ? '⏳ Today\'s burn detail locks in at the daily cutoff (09:30 AM ICT). Stories completed after that will count toward tomorrow — check back after standup.'
+        ? `⏳ ${cutoffNote}. The chart shows live numbers until then; stories completed after the cutoff count toward the next day.`
         : isStale
           ? '⚠ No burn detail available — click ↻ Refresh to re-reconstruct.'
           : 'No items burned or reopened this day.'
@@ -2036,6 +2046,131 @@ if (EMBEDDED) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 }
 
+// ── Drawer: the version of the list it was opened from ───────────────────────
+// content.js passes what it can read off the work-package list (project identifier,
+// the list's version filter, its title). The first time a version is opened the user
+// gives the sprint's planned dates (prefilled from the version); the chart then runs
+// from the planned start to the planned end. Plans live in their own key and the full
+// page never reads them, so the old Burndown page is unaffected. When no version can
+// be resolved the drawer falls back to the current sprint, as before.
+const EMBED_PARAMS = new URLSearchParams(location.search);
+const PLAN_KEY = '__blm_burndown_plan';   // { [versionId]: { start, end } }
+let embeddedTarget = null;                // { project, version } once resolved
+let embeddedPlan = null;
+let embeddedResolved = false;
+
+async function fetchVersionById(id) {
+  const res = await fetch(`${BACKLOG_URL}/api/v3/versions/${encodeURIComponent(id)}`,
+    { credentials: 'include', headers: { Accept: 'application/hal+json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function resolveEmbeddedTarget() {
+  if (embeddedResolved) return embeddedTarget;
+  embeddedResolved = true;
+  const ident = EMBED_PARAMS.get('project');
+  const title = (EMBED_PARAMS.get('title') ?? '').trim().toLowerCase();
+  const ids   = (EMBED_PARAMS.get('versions') ?? '').split(',').filter(Boolean);
+  if (!ident && !ids.length) return null;
+  try {
+    const projects = await fetchActiveProjects();
+    let project = ident ? projects.find(p => p.identifier === ident) : null;
+    if (!project && ids.length) {   // a cross-project list: the filtered version knows its project
+      const owner = /(\d+)\s*$/.exec((await fetchVersionById(ids[0]))._links?.definingProject?.href ?? '')?.[1];
+      project = projects.find(p => String(p.id) === owner);
+    }
+    if (!project) return null;
+    const versions = await fetchAllVersions(project.id);
+    const version = versions.find(v => ids.includes(String(v.id)))
+      ?? versions.find(v => v.name.toLowerCase() === title)
+      ?? versions.filter(v => title.includes(v.name.toLowerCase())).sort((a, b) => b.name.length - a.name.length)[0];
+    if (!version) return null;
+    embeddedTarget = { project, version };
+    embeddedPlan = ((await chrome.storage.local.get(PLAN_KEY))[PLAN_KEY] ?? {})[version.id] ?? null;
+  } catch { embeddedTarget = null; }
+  return embeddedTarget;
+}
+
+async function saveEmbeddedPlan(start, end) {
+  embeddedPlan = { start, end };
+  const plans = (await chrome.storage.local.get(PLAN_KEY))[PLAN_KEY] ?? {};
+  plans[embeddedTarget.version.id] = embeddedPlan;
+  await chrome.storage.local.set({ [PLAN_KEY]: plans });
+}
+
+function mondayOnOrAfter(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+let embeddedSyncTried = false;
+/** Drawer: what the empty chart means while the version's history is still being fetched. */
+async function embeddedEmptyNote(noData) {
+  const syncOn = (await chrome.storage.local.get('__blm_sync_burndown')).__blm_sync_burndown ?? true;
+  if (syncOn) {
+    noData.replaceChildren(document.createTextNode(`No data for ${embeddedTarget.version.name} yet — fetching it from OpenProject. The chart appears here when it's ready.`));
+    return;
+  }
+  // The background fetches nothing while "Burndown sync" is off, so the chart can never fill
+  const turnOn = document.createElement('button');
+  turnOn.type = 'button';
+  turnOn.textContent = 'Turn on Burndown sync';
+  turnOn.addEventListener('click', async () => {
+    turnOn.disabled = true;
+    await chrome.storage.local.set({ __blm_sync_burndown: true });
+    embeddedSyncTried = true;
+    triggerSync();
+    embeddedEmptyNote(noData);
+  });
+  noData.replaceChildren(`Burndown sync is switched off, so nothing is collected for ${embeddedTarget.version.name}.`, document.createElement('br'), turnOn);
+}
+
+/** First open of a version: ask for the planned dates instead of drawing a chart. */
+function showPlanSetup(output, noData) {
+  const { version } = embeddedTarget;
+  const fallback = sprintInfo(sprintIndexForDate(todayStr()));
+  noData.style.display = 'none';
+  output.replaceChildren();
+  const box = document.createElement('div');
+  box.className = 'panel plan-setup';
+  box.style.cssText = 'display:block;max-width:520px;margin:32px auto;padding:20px;';
+  const title = document.createElement('div');
+  title.className = 'panel-heading';
+  title.textContent = `Plan ${version.name}`;
+  const hint = document.createElement('p');
+  hint.style.cssText = 'color:var(--muted);font-size:13px;margin:12px 0;';
+  hint.textContent = 'Which days is this sprint planned for? The burndown runs from the first day to the last.';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;';
+  const field = (label, id, value) => {
+    const wrap = document.createElement('label');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);';
+    const input = document.createElement('input');
+    input.type = 'date'; input.id = id; input.className = 'ctrl-date'; input.value = value;
+    wrap.append(label, input);
+    return [wrap, input];
+  };
+  // Sprints are planned on a Friday; the work (and the burndown) starts on the Monday after
+  const [startWrap, start] = field('Sprint start', 'plan-start', mondayOnOrAfter(version.startDate ?? fallback.start));
+  const [endWrap, end]     = field('Sprint end', 'plan-end', version.endDate ?? fallback.end);
+  const go = document.createElement('button');
+  go.type = 'button'; go.textContent = 'Show burndown';
+  const msg = document.createElement('span');
+  msg.style.cssText = 'font-size:12px;color:var(--muted);';
+  go.addEventListener('click', async () => {
+    if (!start.value || !end.value || start.value > end.value) { msg.textContent = 'Pick a start date on or before the end date.'; return; }
+    go.disabled = true;
+    await saveEmbeddedPlan(start.value, end.value);
+    autoTrackTried = false;
+    renderAll();
+  });
+  row.append(startWrap, endWrap, go);
+  box.append(title, hint, row, msg);
+  output.append(box);
+}
+
 // Snapshots are only taken while Burndown sync is on (background.js burndownEnabled),
 // so with it off the drawer says why it is empty instead of asking for an import.
 const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';
@@ -2057,18 +2192,28 @@ function showEmbeddedEmpty(noData, all) {
  *  tracked list, unchanged when the project/version isn't found or the lookup fails. */
 async function autoTrackCurrentVersion(tracked) {
   const name = currentMainViewVersion();
-  if (!name || tracked.some(t => t.versionName === name)) return tracked;
+  if (!name) return tracked;
+  const have = tracked.find(t => t.versionName === name);
+  if (have) {
+    // Tracked before the sprint dates were known: history is only rebuilt from a start date
+    if (embeddedPlan && !have.startDate) {
+      const next = tracked.map(t => t === have ? { ...t, startDate: embeddedPlan.start, endDate: t.endDate ?? embeddedPlan.end } : t);
+      await chrome.storage.local.set({ [TRACKED_KEY]: next });
+      return next;
+    }
+    return tracked;
+  }
   try {
-    const project = (await fetchActiveProjects()).find(p => p.name === mainViewProject);
+    const project = embeddedTarget?.project ?? (await fetchActiveProjects()).find(p => p.name === mainViewProject);
     if (!project) return tracked;
-    const v = (await fetchAllVersions(project.id)).find(v => v.name === name);
+    const v = embeddedTarget?.version ?? (await fetchAllVersions(project.id)).find(v => v.name === name);
     if (!v) return tracked;
     // First in the list: the background syncs tracked versions in order, so the
     // sprint the user is waiting on gets its snapshots before the others.
     const next = [{
       projectId: project.id, projectName: project.name,
       versionId: v.id,      versionName: v.name,
-      startDate: v.startDate ?? null, endDate: v.endDate ?? null,
+      startDate: embeddedPlan?.start ?? v.startDate ?? null, endDate: embeddedPlan?.end ?? v.endDate ?? null,
     }, ...tracked];
     await chrome.storage.local.set({ [TRACKED_KEY]: next });
     try { chrome.runtime.sendMessage({ type: 'sync-now' }); } catch { /* sw may be asleep */ }
@@ -2079,6 +2224,8 @@ async function autoTrackCurrentVersion(tracked) {
 async function renderAll() {
   const output  = document.getElementById('output');
   const noData  = document.getElementById('no-data');
+
+  if (EMBEDDED && await resolveEmbeddedTarget() && !embeddedPlan) { showPlanSetup(output, noData); return; }
 
   // ── No versions tracked ───────────────────────────────────────────────────
   let tracked = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
@@ -2126,6 +2273,7 @@ async function renderAll() {
     startInput.value = currentSprint.start;
     endInput.value   = currentSprint.end;
   }
+  if (embeddedPlan) { startInput.value = embeddedPlan.start; endInput.value = embeddedPlan.end; }
 
   if (!dateListenersSet && startInput) {
     const onChange = () => {
@@ -2133,6 +2281,7 @@ async function renderAll() {
       const fs = document.getElementById('filter-sprint');
       if (fs) fs.value = '';
       sectionUpdaters.forEach(u=>u(startInput.value, endInput.value));
+      if (embeddedTarget && startInput.value && endInput.value) saveEmbeddedPlan(startInput.value, endInput.value);
     };
     startInput.addEventListener('change', onChange);
     endInput.addEventListener('change',   onChange);
@@ -2144,6 +2293,16 @@ async function renderAll() {
   sectionUpdaters      = [];
   sectionCanvasGetters = [];
 
+  if (EMBEDDED && embeddedTarget) {
+    // Nothing stored for this version yet: fetch its history now (rebuilt from the planned start)
+    const hasData = snapshots.some(s => s.backlogVersion === embeddedTarget.version.name);
+    if (!hasData) {
+      embeddedEmptyNote(noData);
+      const syncOn = (all.__blm_sync_burndown ?? true);
+      if (!embeddedSyncTried && syncOn) { embeddedSyncTried = true; triggerSync(); }
+    }
+  }
+  if (!snapshots.length) { noData.style.display='block'; return; }
   if (!snapshots.length) {
     if (EMBEDDED) showEmbeddedEmpty(noData, all);
     else noData.style.display='block';
@@ -2164,7 +2323,11 @@ async function renderAll() {
   // that version yet, we silently fall back to rendering everything so they aren't
   // left staring at a blank page.
   const mainVer      = currentMainViewVersion();
-  if (EMBEDDED && !byVersion.has(mainVer)) { showEmbeddedEmpty(noData, all); return; }
+  if (EMBEDDED && !byVersion.has(mainVer)) {
+    if (embeddedTarget) embeddedEmptyNote(noData);
+    noData.style.display = 'block';
+    return;
+  }
   const applyMainOnly = mainViewOnly && byVersion.has(mainVer);
   for (const [version, dateMap] of byVersion) {
     if (applyMainOnly && version !== mainVer) continue;
@@ -2195,6 +2358,7 @@ let mainViewProject = null; // one of the signed-in user's projects; null = unkn
  *  using the same sprint math as the sprint selector, e.g. "Credit Utility 26.07.C".
  *  Null until the user's project is known. */
 function currentMainViewVersion() {
+  if (embeddedTarget) return embeddedTarget.version.name;   // the drawer was opened for this version
   if (!mainViewProject) return null;
   const s = sprintInfo(sprintIndexForDate(todayStr()));
   return `${mainViewProject} ${s.name}`;
