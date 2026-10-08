@@ -1430,9 +1430,19 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
   if (!burned.length && !reopened.length && !movedOut.length) {
     // isStale + isToday means reconstruction ran but skipped today (daily cutoff
     // hasn't passed yet — only stories completed before 09:30 AM ICT count).
+    let cutoffNote = '';
+    if (isStale && isToday) {
+      // Same rule as the background job: sprint start/end days lock at the planning cutoff, other days at the daily one.
+      const kept = await chrome.storage.local.get([TRACKED_KEY, SETTINGS_KEY]);
+      const cfg = kept[SETTINGS_KEY] ?? {};
+      const planning = (kept[TRACKED_KEY] ?? []).some(t => t.startDate === hit.date || t.endDate === hit.date);
+      cutoffNote = planning
+        ? `Today is a sprint start/end day, so its burn detail locks at the planning cutoff (${cfg.planningCutoff ?? '21:00'} ICT)`
+        : `Today's burn detail locks at the daily cutoff (${cfg.dailyCutoff ?? '09:30'} ICT)`;
+    }
     html += `<p class="dp-empty">${
       isStale && isToday
-        ? '⏳ Today\'s burn detail locks in at the daily cutoff (09:30 AM ICT). Stories completed after that will count toward tomorrow — check back after standup.'
+        ? `⏳ ${cutoffNote}. The chart shows live numbers until then; stories completed after the cutoff count toward the next day.`
         : isStale
           ? '⚠ No burn detail available — click ↻ Refresh to re-reconstruct.'
           : 'No items burned or reopened this day.'
