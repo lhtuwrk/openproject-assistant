@@ -46,27 +46,74 @@ const ICON = {
   file:  '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
 };
 
-const hasLabel = (card, re) => card.labels.some(l => re.test(l));
 const isImmediate = card => /immediate/i.test(card.priority);
 
-// The team's priority rules, in precedence order: a card belongs to the first
-// level it matches, whatever order the levels are played in.
-const LEVEL_DEFS = [
+const LEVELS_KEY = '__blm_planning_levels';
+const NONE = '__none';
+const EXTRA = ['type', 'status', 'assignee'];   // criteria matched against the card's own value
+const PRIORITIES = ['Immediate', 'High', 'Normal', 'Low'];
+const escRe = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The team's grouping rules, in precedence order: a card belongs to the first
+// level whose rule it matches (labels: any of them; priority: this one; both set
+// means both), whatever order the levels are played in. `catchAll` takes the rest.
+// Editable in the lobby and saved under LEVELS_KEY; these are the defaults.
+const DEFAULT_DEFS = [
   { key: 'goal',  name: 'Boss: the sprint goal', short: 'Goal',         sub: 'Label goal',
-    min: 55, match: c => hasLabel(c, /\bgoal\b/i) },
+    min: 55, labels: ['goal'], priority: '' },
   { key: 'big3',  name: 'The big three',         short: 'Big three',    sub: 'Pilot · Chiron · VAB',
-    min: 45, match: c => hasLabel(c, /\b(pilot|chiron|vab)\b/i) },
+    min: 45, labels: ['pilot', 'chiron', 'vab'], priority: '' },
   { key: 'break', name: 'Coffee respawn',        short: 'Coffee',       sub: 'Ten minutes, no tickets',
     min: 10, isBreak: true },
   { key: 'fire',  name: 'Fire drill',            short: 'Fire drill',   sub: 'Immediate priority',
-    min: 40, match: isImmediate },
+    min: 40, labels: [], priority: 'Immediate' },
   { key: 'high',  name: 'High voltage',          short: 'High voltage', sub: 'High priority',
-    min: 30, match: c => /\bhigh\b/i.test(c.priority) && !isImmediate(c) },
+    min: 30, labels: [], priority: 'High' },
   { key: 'rest',  name: 'Side quests',           short: 'Side quests',  sub: 'Every other story, by priority',
-    min: 15, match: () => true },
+    min: 15, catchAll: true },
 ];
-const DEFAULT_ORDER = LEVEL_DEFS.map(l => l.key);
-const DEF = Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l]));
+
+const ruleSub = d => d.isBreak ? d.sub : d.catchAll ? 'Every other story, by priority'
+  : [d.labels?.length ? `Label ${d.labels.join(' · ')}` : '', d.priority ? `${d.priority} priority` : '', d.type ? `Type ${d.type}` : '',
+     d.status ? `Status ${d.status}` : '', d.assignee ? (d.assignee === NONE ? 'Unassigned' : `Assignee ${d.assignee}`) : ''].filter(Boolean).join(' · ') || 'No rule yet';
+
+function compile(d) {
+  const re = d.labels?.length ? new RegExp(`\\b(${d.labels.map(escRe).join('|')})\\b`, 'i') : null;
+  const pri = d.priority ? new RegExp(`\\b${escRe(d.priority)}\\b`, 'i') : null;
+  const same = (want, have) => !want || String(have ?? '').trim().toLowerCase() === want.toLowerCase();
+  const extra = EXTRA.filter(k => d[k]);
+  return { ...d, short: d.short ?? d.name, sub: ruleSub(d),
+    match: d.isBreak ? undefined : d.catchAll ? () => true
+      : c => (re || pri || extra.length) && (!re || c.labels.some(l => re.test(l))) && (!pri || pri.test(c.priority))
+        && same(d.type, c.type) && same(d.status, c.status)
+        && (!d.assignee || (d.assignee === NONE ? !c.assigneeName : same(d.assignee, c.assigneeName))) };
+}
+
+/** Saved rules over the defaults: built-ins keep their key, custom levels come first in precedence. */
+function mergeDefs(saved) {
+  const byKey = new Map((Array.isArray(saved) ? saved : []).filter(d => d?.key).map(d => [d.key, d]));
+  const builtIn = DEFAULT_DEFS.map(d => {
+    const o = byKey.get(d.key);
+    return o ? { ...d, name: String(o.name || d.name).slice(0, 40), short: undefined,
+      labels: d.isBreak || d.catchAll ? d.labels : (o.labels ?? []).map(String), priority: d.isBreak || d.catchAll ? d.priority : (o.priority ?? ''),
+      ...(d.isBreak || d.catchAll ? {} : Object.fromEntries(EXTRA.map(k => [k, String(o[k] ?? '')]))) } : d;
+  });
+  const custom = [...byKey.values()].filter(d => d.custom && !DEFAULT_DEFS.some(b => b.key === d.key))
+    .map(d => ({ key: String(d.key), custom: true, name: String(d.name || 'New level').slice(0, 40),
+      min: 15, labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
+      ...Object.fromEntries(EXTRA.map(k => [k, String(d[k] ?? '')])) }));
+  return [...custom, ...builtIn];
+}
+
+let LEVEL_DEFS, DEFAULT_ORDER, DEF;
+function setDefs(raw) {
+  LEVEL_DEFS = raw.map(compile);
+  DEFAULT_ORDER = LEVEL_DEFS.filter(l => l.custom).map(l => l.key)
+    .concat(DEFAULT_DEFS.map(d => d.key));
+  DEF = Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l]));
+}
+let ruleDefs = mergeDefs(null);
+setDefs(ruleDefs);
 
 /** Known keys in the saved order, then any level the saved order doesn't know yet. */
 function normalizeOrder(order) {
@@ -94,7 +141,7 @@ const RELATION_LABEL = {
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const icon = (name, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+const icon = (name, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name] ?? ICON.rest}</svg>`;
 const pts = n => (Math.round(n * 10) / 10).toString();
 const idOf = href => /\/(\d+)$/.exec(href ?? '')?.[1] ?? null;
 
@@ -199,6 +246,7 @@ function safeHtml(html) {
 function freshSession(prev) {
   return {
     v: 1,
+    sortBy: prev?.sortBy ?? 'priority',   // priority · points · id: how stories are ordered inside a level
     phase: 'lobby',            // lobby · play · loot
     projectId:   prev?.projectId ?? null,
     projectName: prev?.projectName ?? '',
@@ -233,6 +281,7 @@ const rt = {
   view: null,                  // 'all' while the story overview is open
   allFilter: 'all',            // all · open · done
   selected: null,              // wpId shown in the overview's detail
+  moreOpen: new Set(),         // levels whose "More filters" is open
   tab: 'desc',                 // desc · sub · rel · files
   saving: new Set(),           // `${wpId}:${field}` writes in flight
   writeErr: new Map(),         // `${wpId}:${field}` -> message
@@ -292,9 +341,13 @@ const cardById = id => rt.cards.get(id) ?? s.decisions[id]?.card ?? null;
 
 /** Keeps a level's play order: known cards keep their place, new ones join at the end. */
 function syncOrder(key) {
+  const wanted = (DEF[key]?.labels ?? []).map(l => new RegExp(`\\b${escRe(l)}\\b`, 'i'));
+  // Where the card's first rule label sits in the level's label list: the list is the label order.
+  const labelRank = c => { const i = wanted.findIndex(re => c.labels.some(l => re.test(l))); return i < 0 ? wanted.length : i; };
+  const byPriority = (a, b) => PRIORITY_RANK(a.priority) - PRIORITY_RANK(b.priority) || labelRank(a) - labelRank(b);
   const fresh = [...rt.cards.values()]
     .filter(c => levelOf(c) === key)
-    .sort((a, b) => PRIORITY_RANK(a.priority) - PRIORITY_RANK(b.priority) || Number(a.id) - Number(b.id))
+    .sort((a, b) => (s.sortBy === 'points' ? (b.points ?? -1) - (a.points ?? -1) : s.sortBy === 'id' ? 0 : byPriority(a, b)) || Number(a.id) - Number(b.id))
     .map(c => c.id);
   const kept = (s.order[key] ?? []).filter(id => rt.cards.has(id) || s.decisions[id]);
   s.order[key] = [...kept, ...fresh.filter(id => !kept.includes(id))];
@@ -587,6 +640,37 @@ function setOrder(order) {
   applyOrder(); save(); render();
 }
 
+// ─── Grouping rules (lobby only) ──────────────────────────────────────────────
+
+const splitLabels = text => [...new Set(String(text).split(/[,;\n]/).map(x => x.trim()).filter(Boolean))];
+
+/** Stores the rules and re-deals the sprint's stories into the levels they now describe. */
+function applyRules(next) {
+  if (s.phase !== 'lobby') return;
+  ruleDefs = next;
+  setDefs(ruleDefs);
+  chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom }) => ({ key, name, labels, priority, type, status, assignee, custom })) });
+  s.order = {};
+  applyOrder();
+  for (const l of PLAY_LEVELS) syncOrder(l.key);
+  save(); render();
+}
+
+function editRule(key, field, value) {
+  applyRules(ruleDefs.map(d => d.key !== key ? d
+    : field === 'name' ? { ...d, name: value.trim().slice(0, 40) || d.name, short: undefined }
+    : field === 'labels' ? { ...d, labels: splitLabels(value) }
+    : field === 'priority' ? { ...d, priority: PRIORITIES.includes(value) ? value : '' }
+    : EXTRA.includes(field) ? { ...d, [field]: value }
+    : d));
+}
+
+function addRule() {
+  const key = `c${Date.now().toString(36)}`;
+  applyRules([{ key, custom: true, name: 'New level', min: 15, labels: [], priority: '' }, ...ruleDefs]);
+  document.querySelector(`[data-rule="name"][data-key="${key}"]`)?.focus();
+}
+
 function moveLevel(key, by) {
   const order = [...s.levelOrder];
   const i = order.indexOf(key), j = i + by;
@@ -739,7 +823,7 @@ async function undo() {
     catch (err) { toast(`Couldn't undo #${id}: ${err.message}`); return; }
   }
   const dec = reopen(id);
-  if (dec && dec.level !== curLevel()?.key) toast(`#${id} is back in ${DEF[dec.level].short}, a level you've already played.`);
+  if (dec && dec.level !== curLevel()?.key) toast(`#${id} is back in ${DEF[dec.level]?.short ?? 'an earlier level'}, a level you've already played.`);
 }
 
 /** Brings a story of the current level to the table now. */
@@ -939,6 +1023,26 @@ function renderBanner() {
 
 // ─── Render: lobby ────────────────────────────────────────────────────────────
 
+function ruleEditor(l) {
+  const field = (cap, inner) => `<label class="rf"><span>${cap}</span>${inner}</label>`;
+  const more = [['type', 'Type', 'type'], ['status', 'Status', 'status'], ['assignee', 'Assignee', 'assigneeName']].map(([k, cap, f]) => {
+    const vals = [...new Set([...rt.cards.values()].map(c => c[f]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    if (l[k] && l[k] !== NONE && !vals.includes(l[k])) vals.unshift(l[k]);
+    return field(cap, `<select class="ctrl" data-rule="${k}" data-key="${l.key}"><option value="">Any</option>
+      ${k === 'assignee' ? `<option value="${NONE}"${l[k] === NONE ? ' selected' : ''}>Unassigned</option>` : ''}
+      ${vals.map(v => `<option value="${esc(v)}"${l[k] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`);
+  }).join('');
+  const open = EXTRA.some(k => l[k]) || rt.moreOpen.has(l.key);
+  return `<div class="rule-edit">
+    ${field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(l.name)}" maxlength="40" />`)}
+    ${field('Labels', `<input class="ctrl" data-rule="labels" data-key="${l.key}" value="${esc((l.labels ?? []).join(', '))}" placeholder="goal, pilot" />`)}
+    ${field('Priority', `<select class="ctrl" data-rule="priority" data-key="${l.key}"><option value="">Any</option>
+      ${PRIORITIES.map(p => `<option value="${p}"${l.priority === p ? ' selected' : ''}>${p}</option>`).join('')}</select>`)}
+    <details class="rule-more" data-key="${l.key}"${open ? ' open' : ''}><summary>More filters (type, status, assignee)</summary><div class="rule-more-grid">${more}</div></details>
+    ${l.custom ? `<button class="ghost" data-act="rule-remove" data-key="${l.key}" aria-label="Remove ${esc(l.name)}">Remove level</button>` : ''}
+  </div>`;
+}
+
 function lobbyHtml() {
   const counts = Object.fromEntries(PLAY_LEVELS.map(l => {
     const ids = levelIds(l.key).filter(id => rt.cards.has(id));
@@ -964,7 +1068,7 @@ function lobbyHtml() {
     <div class="lvl-row lvl-${l.key}" data-level="${l.key}">
       <span class="grip" title="Drag to reorder" aria-hidden="true">${icon('grip')}</span>
       <span class="lvl-mark">${icon(l.key)}</span>
-      <div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>
+      ${rt.editRules && !l.catchAll && !l.isBreak ? ruleEditor(l) : `<div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>`}
       <span class="count num">${l.isBreak ? '' : rt.loading ? '…' : `${counts[l.key].n} stories · ${pts(counts[l.key].p)} pts`}</span>
       ${l.isBreak
         ? `<label class="mins"><input class="ctrl num" type="number" min="0" max="60" step="5" value="${esc(s.budgets.break)}" data-budget="break" aria-label="Break minutes" /> <span class="muted">min</span></label>`
@@ -975,6 +1079,9 @@ function lobbyHtml() {
       </span>
     </div>`).join('');
   const custom = s.levelOrder.join() !== DEFAULT_ORDER.join();
+  const sprintLabels = [...new Set([...rt.cards.values()].flatMap(c => c.labels))].sort((a, b) => a.localeCompare(b));
+  const rulesChanged = JSON.stringify(ruleDefs.map(({ key, name, labels, priority, type, status, assignee }) => [key, name, labels, priority, type, status, assignee]))
+    !== JSON.stringify(mergeDefs(null).map(({ key, name, labels, priority, type, status, assignee }) => [key, name, labels, priority, type, status, assignee]));
 
   return `
     <div class="lobby">
@@ -983,7 +1090,12 @@ function lobbyHtml() {
         <p class="text2" style="margin-bottom:var(--space-sm)">The sprint's open stories are dealt in priority order, one level at a time. Each story opens with its description, subtasks, relations and attachments.</p>
         ${emptyNote ? `<p class="panel empty" style="margin-bottom:var(--space-sm)">${esc(emptyNote)}</p>` : ''}
         <div class="panel lvl-list" data-role="levels">${rows}</div>
-        <p class="muted order-note">Drag a level (or use ↑ ↓) to change when it's played. A story still belongs to the first rule it matches: goal, then pilot / Chiron / VAB, Immediate, High, everything else.${custom ? ' <button class="ghost" data-act="order-reset">Default order</button>' : ''}</p>
+        <p class="muted order-note">Drag a level (or use ↑ ↓) to change when it's played. A story belongs to the first level whose rule it matches (new levels first, then goal, big three, Immediate, High); everything else lands in the last one.
+          <button class="ghost" data-act="rules-edit" aria-pressed="${!!rt.editRules}">${rt.editRules ? 'Done editing' : 'Edit grouping'}</button>
+          ${rt.editRules ? '<button class="ghost" data-act="rule-add">+ Add level</button>' : ''}
+          ${rt.editRules && rulesChanged ? '<button class="ghost" data-act="rules-reset">Default grouping</button>' : ''}
+          ${custom ? '<button class="ghost" data-act="order-reset">Default order</button>' : ''}</p>
+        ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
         <div class="lvl-foot">
           <span class="text2">Starts ${START_AT} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${late ? ` <span class="warn-text">(past ${END_AT})</span>` : ''}</span>
           ${plan.scale < 1 ? `<span class="warn-text">${Math.round(plan.sum)} min of stories don't fit ${plan.avail} min, so every story gets ${Math.round(plan.scale * 100)}% of its time</span>` : ''}
@@ -996,6 +1108,8 @@ function lobbyHtml() {
           <select class="ctrl" data-set="project"><option value="">Choose a project</option>${projOpts}</select></label>
         <label class="field"><span>Sprint to plan</span>
           <select class="ctrl" data-set="version"${s.projectId ? '' : ' disabled'}><option value="">Choose a version</option>${verOpts}</select></label>
+        <label class="field"><span>Sort stories in a level by</span>
+          <select class="ctrl" data-set="sort"${s.phase === 'lobby' ? '' : ' disabled'}>${[['priority', 'Priority, then label order'], ['points', 'Story points (biggest first)'], ['id', 'Ticket number']].map(([k, n]) => `<option value="${k}"${s.sortBy === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
         <p class="muted" style="font-size:var(--text-xs)">Only the sprint's open stories are dealt (their subtasks come with them). Labels come from the Label field; priorities from Priority.</p>
         <fieldset class="per-story">
           <legend>Minutes per story</legend>
@@ -1544,6 +1658,10 @@ async function onAction(act, el) {
     case 'up':       return moveLevel(el.dataset.key, -1);
     case 'down':     return moveLevel(el.dataset.key, +1);
     case 'order-reset': s.levelOrder = [...DEFAULT_ORDER]; applyOrder(); save(); return render();
+    case 'rules-edit': rt.editRules = !rt.editRules; return render();
+    case 'rule-add': return addRule();
+    case 'rule-remove': return applyRules(ruleDefs.filter(d => d.key !== el.dataset.key));
+    case 'rules-reset': return applyRules(mergeDefs(null));
     case 'go':       return startLevel();
     case 'next':     return nextLevel();
     case 'pause':    return togglePause();
@@ -1590,6 +1708,11 @@ document.addEventListener('click', e => {
   if (a && !a.disabled) onAction(a.dataset.act, a);
 });
 
+document.addEventListener('toggle', e => {
+  const d = e.target.closest?.('.rule-more');
+  if (d) d.open ? rt.moreOpen.add(d.dataset.key) : rt.moreOpen.delete(d.dataset.key);
+}, true);
+
 document.addEventListener('input', e => {
   if (e.target.dataset.role === 'sub-subject') rt.sub.draft = e.target.value;
 });
@@ -1616,6 +1739,7 @@ document.addEventListener('change', async e => {
   }
   if (t.dataset.field === 'sub-assignee') { rt.sub.assigneeHref = t.value || null; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
+  if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
     s.budgets[t.dataset.budget] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
     save(); render();
@@ -1623,6 +1747,12 @@ document.addEventListener('change', async e => {
   }
   if (t.dataset.per) {
     s.perStory[t.dataset.per] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
+    save(); render();
+    return;
+  }
+  if (t.dataset.set === 'sort') {
+    s.sortBy = t.value; s.order = {};
+    for (const l of PLAY_LEVELS) syncOrder(l.key);
     save(); render();
     return;
   }
@@ -1707,7 +1837,10 @@ setInterval(() => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  const stored = (await chrome.storage.local.get(SESSION_KEY))[SESSION_KEY];
+  const got = await chrome.storage.local.get([SESSION_KEY, LEVELS_KEY]);
+  ruleDefs = mergeDefs(got[LEVELS_KEY]);
+  setDefs(ruleDefs);
+  const stored = got[SESSION_KEY];
   if (stored?.v === 1) {
     const base = freshSession(stored);
     s = { ...base, ...stored, budgets: base.budgets, perStory: base.perStory };

@@ -81,6 +81,14 @@
     #banner.ok { border-color: var(--green); background: var(--met-bg); }
     #banner-msg { flex: 1; min-width: 200px; font-weight: 600; }
 
+    .lvl-row, .all-group, .wrap-row, .card { --lvl: var(--accent); }   /* custom levels have no colour of their own */
+    .rule-edit { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--space-xs); align-items: end; }
+    .rule-edit .rf { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--muted); }
+    .rule-edit .ctrl { width: 100%; text-align: left; }
+    .rule-more, .rule-edit > button { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--muted); justify-self: start; }
+    .rule-more summary { cursor: pointer; }
+    .rule-more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); margin-top: var(--space-xs); }
+    @media (max-width: 760px) { .rule-edit, .rule-more-grid { grid-template-columns: 1fr 1fr; } }
     .lvl-goal  { --lvl: var(--lvl-goal); }
     .lvl-big3  { --lvl: var(--lvl-big3); }
     .lvl-break { --lvl: var(--lvl-break); }

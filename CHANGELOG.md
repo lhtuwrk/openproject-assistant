@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.5.5]
 
+### Added
+- Planning: the facilitator can edit how stories are grouped into levels (labels, priority, type, status, assignee), add or remove levels, and choose how stories are sorted inside a level (priority then label order, story points, or ticket number).
+
 ## [1.5.4] - 2026-10-06
 
 ### Added
