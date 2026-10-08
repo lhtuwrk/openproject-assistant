@@ -282,12 +282,46 @@
     #lp-days-wrap h3 { margin-bottom: 6px; }
     #lp-queue .q { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto auto; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
     #lp-queue .q + .q { margin-top: 6px; }
+    #lp-queue .q .qm { min-width: 0; }
+    #lp-queue .q .why { display: block; margin: 2px 0 0 24px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    #lp-queue .q .calc { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+    #lp-queue .q .calc.over { color: var(--over); }
+    #lp-preview[hidden] { display: none; }
+    #lp-preview h3 { margin-bottom: 6px; }
+    #lp-preview .pv-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+    .pv { border-collapse: collapse; width: 100%; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .pv th, .pv td { padding: 5px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+    .pv th:first-child { text-align: left; position: sticky; left: 0; background: var(--bg); color: var(--accent); font-weight: 600; }
+    .pv thead th { color: var(--muted); font-weight: 600; background: var(--surface2); }
+    .pv thead th:first-child { background: var(--surface2); }
+    .pv td.t { font-weight: 600; color: var(--text); }
+    .pv td.none { color: var(--subtle); }
+    .pv tr.have th, .pv tr.have td { color: var(--muted); }
+    .pv tr.after th, .pv tr.after td { font-weight: 700; color: var(--text); border-top: 1px solid var(--border2); border-bottom: none; }
+    .pv tr.after th { color: var(--text2); }
+    .pv td.in { padding: 2px 4px; }
+    .pv td.in .ctrl { width: 60px; height: 24px; padding: 1px 6px; text-align: right; font-size: 11px; font-weight: 700; }
+    .pv-note { margin-top: 6px; font-size: 11px; color: var(--muted); }
+    .pv td.ok { color: var(--green); }
+    .pv td.low { color: var(--warn); }
+    #lp-split-note[hidden] { display: none; }
+    #lp-split-note { margin-top: 8px; font-size: 11px; color: var(--muted); line-height: 1.45; }
+    #log-pop.split .lp-hrs { display: none; }
     #lp-queue .q.editing { border-color: var(--accent); background: var(--accent-bg); }
     #lp-editbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--accent-border); border-radius: 6px; background: var(--accent-bg); color: var(--text); font-weight: 600; }
     #lp-editbar[hidden] { display: none; }
     #lp-editbar #lp-editbar-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #lp-queue .q .ctrl { width: 64px; height: 28px; padding: 2px 8px; text-align: right; font-variant-numeric: tabular-nums; }
     #lp-queue .q button { padding: 2px 8px; font-size: 11px; }
+    .lp-addrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; font-size: 11px; color: var(--muted); }
+    .lp-addrow button { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
+    #lp-wp-list .chk { flex: none; width: 16px; height: 16px; border: 1.5px solid var(--border2); border-radius: 4px; background: var(--bg); display: inline-grid; place-items: center; cursor: pointer; }
+    #lp-wp-list .chk:hover { border-color: var(--accent); }
+    #lp-wp-list .chk.on { background: var(--accent); border-color: var(--accent); }
+    #lp-wp-list .chk.on::after { content: ''; width: 8px; height: 4px; border-left: 2px solid var(--on-accent); border-bottom: 2px solid var(--on-accent); transform: rotate(-45deg) translate(1px, -1px); }
+    #lp-wp-list .chk.in { opacity: .5; cursor: default; }
+    #lp-wp-list .pickbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface2); font-size: 12px; font-weight: 600; }
+    #lp-wp-list .pickbar span { flex: 1; }
     .lp-hrs { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
     .lp-hrs label.fld { width: 120px; }
     #lp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 4px; }
@@ -514,7 +548,9 @@
         <div id="lp-queue-wrap" hidden>
           <h3>To log</h3>
           <div id="lp-queue"></div>
+          <p id="lp-split-note" hidden></p>
         </div>
+        <div id="lp-preview" hidden></div>
         <div id="lp-editbar" hidden>
           <span id="lp-editbar-t"></span>
           <button type="button" class="primary" id="lp-edit-done">Done</button>
@@ -533,6 +569,10 @@
           <div id="lp-chips"></div>
         </div>
         <div id="lp-hint"></div>
+        <div class="lp-addrow">
+          <button type="button" id="lp-again" title="Shift+Enter">+ Add another ticket</button>
+          <span id="lp-addrow-note">Logging on several tickets? Add this one to the list, then pick the next.</span>
+        </div>
         <details id="lp-more">
           <summary>Details <span id="lp-more-sum"></span></summary>
           <div class="row2">
@@ -547,7 +587,6 @@
     <div class="lp-actions">
       <span class="keys">Enter logs · Shift+Enter adds another</span>
       <button type="button" class="ghost" id="lp-cancel">Cancel</button>
-      <button type="button" id="lp-again" title="Add this ticket to the list and pick the next one (Shift+Enter)">Add another ticket</button>
       <button type="submit" class="primary" id="lp-save">Log time</button>
     </div>
   </form>

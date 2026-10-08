@@ -14,6 +14,8 @@ import { requireHost } from '../shared/config.js';
 const BACKLOG_URL   = await requireHost();
 const GROUPS_KEY    = '__blm_timelog_groups';   // sync:  [{ id, name, userIds:[] }]
 const LAST_KEY      = '__blm_timelog_last';     // local: { projectIds, sprintKey, groupId }
+const SMART_KEY      = '__blm_smart_log';        // local: hidden feature, switched on in Settings → Experimental
+let smartLog        = false;
 const DEFAULT_PROJECT = 'creditutility';        // compared with spaces stripped, lower-cased
 const DAILY_TARGET  = 8;
 const OVER_TARGET   = 9;
@@ -489,7 +491,7 @@ $('grid-wrap').addEventListener('keydown', e => {
 // dialog; the toast offers Undo.
 
 const logPop = $('log-pop');
-const lp = { editIdx: null, queue: [], created: new Set(), left: null, groups: [], tab: 0, tabPinned: false, preselect: true, editing: null, days: null, open: false, anchor: null, wp: null, form: null, formReq: null, seq: 0, busy: false, hoursTouched: false, sel: -1, items: [] };
+const lp = { dayTarget: new Map(), picked: new Map(), createdByDay: new Map(), editIdx: null, queue: [], created: new Set(), left: null, groups: [], tab: 0, tabPinned: false, preselect: true, editing: null, days: null, open: false, anchor: null, wp: null, form: null, formReq: null, seq: 0, busy: false, hoursTouched: false, sel: -1, items: [] };
 let myWps = null;      // Promise of my open work packages, fetched once
 let mineLoaded = null; // the same list once it has arrived, so reopening the picker needs no placeholder
 let wpSearchT = null, wpSearchSeq = 0;
@@ -587,7 +589,7 @@ function refreshLogDay() {
   $('lp-left').hidden = !mine.length;
   logPop.classList.toggle('has-day', mine.length > 0);
   $('lp-day').innerHTML = mine.map(e => {
-    const title = `<span class="t">${e.wpId ? `<span class="id">#${esc(e.wpId)}</span>` : ''}${esc(e.wpTitle || 'No work package')}</span>`;
+    const title = `<span class="t" title="${e.wpId ? `#${esc(e.wpId)} ` : ''}${esc(e.wpTitle || '')}">${e.wpId ? `<span class="id">#${esc(e.wpId)}</span>` : ''}${esc(e.wpTitle || 'No work package')}</span>`;
     if (e.id === lp.editing) return `<div class="lp-entry editing">${title}
       <div class="ef">
         <label class="fld">Hours<input class="ctrl" data-f="hours" value="${fmtIn(e.hours)}" inputmode="decimal" /></label>
@@ -613,7 +615,12 @@ function refreshLogDay() {
     + presets.map(h => `<button type="button" data-h="${h}">${h} h</button>`).join('');
   $('lp-hint').textContent = !valid ? '' : left > EPS ? `${fmtH(left)} h left to reach ${DAILY_TARGET} h`
     : total > 0 ? `Already ${fmtH(total)} h — this adds on top` : '';
+  if (splitActive()) {
+    const { plan, error } = buildPlan(true);
+    $('lp-hint').textContent = error ?? (plan.length ? `Logs ${plan.length} entr${plan.length === 1 ? 'y' : 'ies'} · ${fmtH(plan.reduce((t, p) => t + p.hours, 0))} h in total` : `Nothing to log: the day already has ${DAILY_TARGET} h.`);
+  }
   renderDayChips();
+  renderPreview();
   placeLogPop();
 }
 
@@ -647,11 +654,125 @@ function buildPlan(preview = false) {
   const cur = readLine(preview);
   if (cur.error) return { plan: [], error: cur.error, skipped: 0, lines: [] };
   const lines = cur.line ? [...lp.queue, cur.line] : [...lp.queue];
-  if (lines.length > 1 && lines.some(l => l.hours == null)) return { plan: [], error: 'Enter hours for each ticket.', skipped: 0, lines };
   const days = lp.days ?? [$('lp-date').value];
-  const all = days.flatMap(day => lines.map(line => ({ day, line, hours: line.hours ?? DAILY_TARGET - dayTotal(day) })));
+  // what a day still needs: 8 h minus what was there before this panel logged anything
+  const need = day => (lp.dayTarget.get(day) ?? DAILY_TARGET) - (dayTotal(day) - (lp.createdByDay.get(day) ?? 0));
+  const totalNeed = days.reduce((t, d) => t + Math.max(need(d), 0), 0);
+  let all;
+  if (smartLog && lines.length > 1) {
+    const w = splitWeights(lines, totalNeed);
+    if (w.error) return { plan: [], error: w.error, skipped: 0, lines };
+    all = days.flatMap(day => {
+      const n = need(day);
+      const hrs = n > EPS ? allocate(n, w.weights) : lines.map(() => 0);
+      return lines.map((line, i) => ({ day, line, hours: hrs[i] }));
+    });
+  } else {
+    if (lines.length > 1 && lines.some(l => l.hours == null)) return { plan: [], error: 'Enter hours for each ticket.', skipped: 0, lines };
+    all = days.flatMap(day => lines.map(line => ({ day, line, hours: line.hours ?? need(day) })));
+  }
   const plan = all.filter(p => p.hours > EPS && !lp.created.has(`${p.day}|${p.line.wp.id}|${fmtIn(p.hours)}`));
   return { plan, error: null, skipped: all.length - plan.length, lines };
+}
+
+/** Weights for sharing a day between tickets: equal, by story points, or by estimate minus time logged. */
+/** Weights for sharing a day between tickets: see smartWeights. */
+function splitWeights(lines, totalNeed) {
+  return smartWeights(lines.map(l => ({ ...l.wp, ...wpInfo.get(l.wp.id) })), totalNeed);
+}
+
+/**
+ * Smart share: the hours the selected days still need (`total`) go to the tickets in proportion to their
+ * story points (to the time left when points are missing), but never beyond the time left on a story
+ * (estimate minus logged); what a full story cannot take moves to the others. If every story is full,
+ * the rest is shared by the same proportions and shows as over the estimate.
+ */
+function smartWeights(tickets, total) {
+  const spentOf = x => wpTime.get(x.id)?.total ?? x.spent ?? 0;
+  const left = tickets.map(x => (x.estimate > 0 ? Math.max(x.estimate - spentOf(x), 0) : Infinity));
+  let base = tickets.map(x => (x.points > 0 ? x.points : null));
+  let basis = 'story points';
+  if (base.some(b => b == null)) {
+    const known = base.filter(b => b != null);
+    if (!known.length && left.every(Number.isFinite)) { base = left.slice(); basis = 'the time left on each story'; }
+    else {
+      const avg = known.length ? known.reduce((t, b) => t + b, 0) / known.length : 1;
+      base = base.map(b => b ?? avg);
+      basis = known.length ? 'story points (the average for stories without)' : 'equal parts (no story points or estimates)';
+    }
+  }
+  const t = base.map(() => 0);
+  const free = new Set(base.keys());
+  let rest = total;
+  while (free.size && rest > EPS) {
+    const sum = [...free].reduce((n, i) => n + base[i], 0) || free.size;
+    const wt = i => (sum === free.size && !base[i] ? 1 : base[i]) / sum;
+    const full = [...free].filter(i => rest * wt(i) > left[i] - t[i] + EPS);
+    if (!full.length) { for (const i of free) t[i] += rest * wt(i); rest = 0; break; }
+    for (const i of full) { rest -= left[i] - t[i]; t[i] = left[i]; free.delete(i); }
+  }
+  if (rest > EPS) {
+    const sum = base.reduce((n, b) => n + b, 0);
+    base.forEach((b, i) => { t[i] += (rest * b) / sum; });
+  }
+  lp.splitBasis = basis;
+  return { weights: t.some(x => x > 0) ? t : base };
+}
+
+/** Splits `total` hours by weight in quarter-hours, so the parts add up exactly. */
+function allocate(total, weights) {
+  const sum = weights.reduce((t, x) => t + x, 0);
+  const units = Math.round(total / 0.25);
+  const raw = weights.map(x => (units * x) / sum);
+  const base = raw.map(Math.floor);
+  let left = units - base.reduce((t, x) => t + x, 0);
+  for (const [, i] of raw.map((r, i) => [r - base[i], i]).sort((x, y) => y[0] - x[0])) {
+    if (left <= 0) break;
+    base[i]++; left--;
+  }
+  return base.map(u => u * 0.25);
+}
+
+// with two or more tickets the hours are always shared (smart); one ticket takes the hours typed, or fills the day
+const splitActive = () => smartLog && lp.queue.length + (lp.wp && lp.editIdx == null ? 1 : 0) > 1;
+
+const splitNote = () => `Each day is topped up to 8 h. Hours are shared in proportion to ${lp.splitBasis ?? 'story points'}, never beyond the time left on a story.`;
+
+/** Hours per day: one row per ticket, one column per selected day, so nothing is a surprise before logging. */
+function renderPreview() {
+  const box = $('lp-preview');
+  const { plan, error, lines } = buildPlan(true);
+  const days = lp.days ?? [$('lp-date').value];
+  if (error || !plan.length || (days.length < 2 && lines.length < 2) || lines.some(l => l.wp.id === '…')) { box.hidden = true; return; }
+  const cell = new Map();
+  for (const p of plan) cell.set(`${p.day}|${lines.indexOf(p.line)}`, p.hours);
+  const have = d => dayTotal(d) - (lp.createdByDay.get(d) ?? 0);
+  const added = d => lines.reduce((t, _, i) => t + (cell.get(`${d}|${i}`) ?? 0), 0);
+  const h2 = n => (n > EPS ? fmtH(n) : '—');
+  const editable = smartLog && (splitActive() || lines.every(l => l.hours == null));   // hours typed per ticket are fixed
+  box.hidden = false;
+  box.innerHTML = `<h3>Hours per day</h3><div class="pv-scroll"><table class="pv">
+    <thead><tr><th></th>${days.map(d => `<th>${DOW[dayOfWeek(d)]} ${d.slice(8)}</th>`).join('')}<th>Total</th></tr></thead>
+    <tbody>
+      ${lines.map((l, i) => `<tr><th title="${esc(l.wp.title)}">#${esc(l.wp.id)}</th>${days.map(d => {
+        const v = cell.get(`${d}|${i}`);
+        return `<td class="${v ? '' : 'none'}">${v ? fmtH(v) : '—'}</td>`;
+      }).join('')}<td class="t">${fmtH(days.reduce((t, d) => t + (cell.get(`${d}|${i}`) ?? 0), 0))}</td></tr>`).join('')}
+      <tr class="have"><th>Already</th>${days.map(d => `<td>${h2(have(d))}</td>`).join('')}<td>${h2(days.reduce((t, d) => t + have(d), 0))}</td></tr>
+      <tr class="after"><th>Day total</th>${days.map(d => {
+        const t = have(d) + added(d);
+        if (!editable) return `<td class="${t >= DAILY_TARGET - EPS ? 'ok' : 'low'}">${fmtH(t)}</td>`;
+        return `<td class="in"><input class="ctrl" data-dt="${d}" value="${fmtIn(lp.dayTarget.get(d) ?? DAILY_TARGET)}" inputmode="decimal" aria-label="Day total for ${d}" /></td>`;
+      }).join('')}<td>${fmtH(days.reduce((t, d) => t + have(d) + added(d), 0))}</td></tr>
+    </tbody></table></div>${editable ? '<p class="pv-note">Type a day total to change what that day gets; the tickets share it again.</p>' : ''}`;
+}
+
+function updateSplitUi() {
+  const on = splitActive();
+  logPop.classList.toggle('split', on);
+  const note = $('lp-split-note');
+  note.hidden = !on;
+  note.textContent = on ? (buildPlan(true).error ?? splitNote()) : '';
 }
 
 function refreshLogMulti() {
@@ -665,6 +786,7 @@ function refreshLogMulti() {
     : plan.length ? `Logs ${plan.length} entr${plan.length === 1 ? 'y' : 'ies'} · ${fmtH(total)} h in total` + (skipped ? ` · ${skipped} already at ${DAILY_TARGET} h skipped` : '')
     : `Nothing to log: every selected day already has ${DAILY_TARGET} h.`;
   renderDayChips();
+  renderPreview();
   placeLogPop();
 }
 
@@ -675,17 +797,36 @@ function updateSaveLabel() {
 
 function renderQueue() {
   const off = lp.editIdx != null ? ' disabled' : '';
+  const shared = splitActive();
+  const totals = new Map();
+  if (shared) for (const p of buildPlan(true).plan) totals.set(p.line, (totals.get(p.line) ?? 0) + p.hours);
+  const sumT = [...totals.values()].reduce((a, b) => a + b, 0);
   $('lp-queue-wrap').hidden = !lp.queue.length;
-  $('lp-queue').innerHTML = lp.queue.map((l, i) => `<div class="q${lp.editIdx === i ? ' editing' : ''}">
-      <span class="r1">${typeIcon(l.wp.type)}<span class="id">#${esc(l.wp.id)}</span><span class="ttl">${esc(l.wp.title)}</span></span>
-      <input class="ctrl" data-qh="${i}" value="${l.hours == null ? '' : fmtIn(l.hours)}" inputmode="decimal" aria-label="Hours for #${esc(l.wp.id)}" placeholder="8"${off} />
+  $('lp-queue').innerHTML = lp.queue.map((l, i) => {
+    let hoursCell, why = '';
+    if (shared) {
+      const t = totals.get(l);
+      const f = { ...l.wp, ...wpInfo.get(l.wp.id) };
+      const over = t != null && f.estimate > 0 && (wpTime.get(f.id)?.total ?? f.spent ?? 0) + t > f.estimate + EPS;
+      const left = f.estimate > 0 ? Math.max(f.estimate - (wpTime.get(f.id)?.total ?? f.spent ?? 0), 0) : null;
+      why = `<span class="why">${[f.points > 0 ? `${f.points} pts` : 'no points', left != null ? `${fmtH(left)} h left` : 'no estimate', t != null && sumT ? `${Math.round((t / sumT) * 100)}%` : ''].filter(Boolean).join(' · ')}</span>`;
+      hoursCell = `<span class="calc${over ? ' over' : ''}" title="${over ? 'More than the estimate. ' : ''}Total over the selected days">${t == null ? '—' : `≈ ${fmtH(t)}`}</span>`;
+    } else {
+      hoursCell = `<input class="ctrl" data-qh="${i}" value="${l.hours == null ? '' : fmtIn(l.hours)}" inputmode="decimal" aria-label="Hours for #${esc(l.wp.id)}" placeholder="8"${off} />`;
+    }
+    return `<div class="q${lp.editIdx === i ? ' editing' : ''}">
+      <div class="qm" title="#${esc(l.wp.id)} ${esc(l.wp.title)}"><span class="r1">${typeIcon(l.wp.type)}<span class="id">#${esc(l.wp.id)}</span><span class="ttl">${esc(l.wp.title)}</span></span>${why}</div>
+      ${hoursCell}
       <button type="button" class="ghost" data-qedit="${i}" title="Change the ticket, hours or comment"${off}>Edit</button>
       <button type="button" class="ghost" data-q="${i}" aria-label="Remove from the list" title="Remove"${off}>✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const editing = lp.editIdx != null ? lp.queue[lp.editIdx] : null;
   $('lp-editbar').hidden = !editing;
   if (editing) $('lp-editbar-t').textContent = `Editing #${editing.wp.id}`;
   updateSaveLabel();
+  updateSplitUi();
+  renderPreview();
   placeLogPop();
 }
 
@@ -707,7 +848,7 @@ async function completeLine() {
   const cur = readLine(false, true);
   if (cur.error)  { setLogMsg(cur.error); (lp.wp ? $('lp-hours') : $('lp-wp')).focus(); return null; }
   if (!cur.line)  { setLogMsg('Pick a work package.'); $('lp-wp').focus(); return null; }
-  if (cur.line.hours == null) { setLogMsg('Enter the hours for this ticket.'); $('lp-hours').focus(); return null; }
+  if (cur.line.hours == null && !smartLog) { setLogMsg('Enter the hours for this ticket.'); $('lp-hours').focus(); return null; }
   const line = cur.line;
   line.form = lp.form ?? await lp.formReq;
   line.activityName = line.form.activities.find(a => a.href === line.activityHref)?.name;
@@ -872,6 +1013,31 @@ const wpPlace = w => [w.project, w.version].filter(Boolean).join(' · ');
 const HIDDEN_TYPES = ['task'];
 const isHiddenType = w => HIDDEN_TYPES.includes((w.type ?? '').toLowerCase());
 
+const inList = id => lp.queue.some(l => l.wp.id === id);
+
+function pickBox(w) {
+  if (!smartLog) return '';
+  const taken = inList(w.id), on = taken || lp.picked.has(w.id);
+  return `<span class="chk${on ? ' on' : ''}${taken ? ' in' : ''}" role="checkbox" aria-checked="${on}" data-pick="${esc(w.id)}" title="${taken ? 'Already in the list' : 'Tick several tickets, then add them together'}"></span>`;
+}
+
+function pickBar() {
+  const n = lp.picked.size;
+  return n ? `<div class="pickbar"><span>${n} ticket${n === 1 ? '' : 's'} selected</span><button type="button" class="primary" data-addpicked>Add to the list</button><button type="button" class="ghost" data-clearpicked>Clear</button></div>` : '';
+}
+
+/** Puts every ticked ticket on the To log list; their hours come from "Share each day's hours" (or are typed in the list). */
+function addPicked() {
+  if (!lp.picked.size) return;
+  if (lp.editIdx != null) { setLogMsg('Finish editing the ticket first.'); return; }
+  for (const wp of lp.picked.values()) lp.queue.push({ wp, hours: null, comment: '', activityHref: null });
+  lp.picked.clear();
+  setLogMsg('');
+  renderQueue();
+  if (lp.days) refreshLogMulti(); else { lp.hoursTouched = false; refreshLogDay(); }
+  renderWpList();
+}
+
 function renderWpList() {
   const keepScroll = $('lp-wp-list').querySelector('.wp-sec-body')?.scrollTop ?? 0;
   const groups = lp.groups.map(g => ({ ...g, items: g.items.filter(w => !isHiddenType(w)) }));
@@ -883,10 +1049,10 @@ function renderWpList() {
   $('lp-wp-list').innerHTML = `<div class="tabs" role="tablist">${groups.map((x, i) =>
       `<button type="button" class="tab" role="tab" data-tab="${i}" aria-selected="${i === tab}">${esc(x.label)}<span class="n">${x.items.length || ''}</span></button>`).join('')}</div>
     <div class="wp-sec-body">${g.items.map((w, i) => `
-      <button type="button" class="opt" role="option" data-i="${i}" aria-selected="${i === lp.sel}">
-        <span class="r1">${typeIcon(w.type)}<span class="id">#${esc(w.id)}</span><span class="ttl">${esc(w.title)}</span>${statusLozenge(w.status)}${assigneeDot(w)}</span>
+      <button type="button" class="opt" role="option" data-i="${i}" aria-selected="${i === lp.sel}" title="#${esc(w.id)} ${esc(w.title)}">
+        <span class="r1">${pickBox(w)}${typeIcon(w.type)}<span class="id">#${esc(w.id)}</span><span class="ttl">${esc(w.title)}</span>${statusLozenge(w.status)}${assigneeDot(w)}</span>
         <span class="proj"><span class="pl">${esc(wpPlace(w))}</span>${spentChip(w)}</span>
-      </button>`).join('') || `<div class="empty">${esc(g.note ?? 'No matching work package.')}</div>`}</div>`;
+      </button>`).join('') || `<div class="empty">${esc(g.note ?? 'No matching work package.')}</div>`}</div>${pickBar()}`;
   const body = $('lp-wp-list').querySelector('.wp-sec-body');
   if (body) body.scrollTop = keepScroll;
   hydrateAvatars($('lp-wp-list'));
@@ -946,9 +1112,11 @@ async function suggestWps() {
 function showWpSel() {
   const w = lp.wp;
   logPop.classList.toggle('has-wp', !!w);
+  $('lp-wp-chip').title = w ? `#${w.id} ${w.title}` : '';
   $('lp-chip-t').innerHTML = w ? `${typeIcon(w.type)}<span class="id">#${esc(w.id)}</span><span class="ttl">${esc(w.title)}</span>` : '';
   const who = !w?.type ? '' : w.assigneeId === state.meId ? '<b class="mine">Assigned to you</b>' : esc(w.assignee || 'Unassigned');
   updateSaveLabel();
+  updateSplitUi();
   renderWpTime();
   $('lp-wp-sel').innerHTML = w?.type ? `${statusLozenge(w.status)}<span class="sub">${[esc(wpPlace(w)), who].filter(Boolean).join(' · ')}</span>` : '';
 }
@@ -981,7 +1149,7 @@ function pickWp(wp) {
 function openLog(day, anchor) {
   clearTimeout(popShowT); pop.hidden = true; popKey = null;
   lp.tabPinned = false; lp.left = null;
-  lp.queue = []; lp.created = new Set(); lp.editIdx = null; renderQueue();
+  lp.picked = new Map(); lp.dayTarget = new Map(); lp.queue = []; lp.created = new Set(); lp.createdByDay = new Map(); lp.editIdx = null; renderQueue();
   lp.days = null; logPop.classList.remove('multi'); $('lp-hours').placeholder = '1.5 · 1h30 · 90m';
   lp.open = true; lp.anchor = anchor; lp.wp = null; lp.form = null; lp.seq++; lp.hoursTouched = false;
   $('lp-date').value = day;
@@ -1003,7 +1171,7 @@ function openLog(day, anchor) {
 function closeLog({ refocus = true } = {}) {
   if (!lp.open) return;
   lp.open = false;
-  lp.queue = []; lp.created = new Set(); lp.editIdx = null;
+  lp.picked = new Map(); lp.dayTarget = new Map(); lp.queue = []; lp.created = new Set(); lp.createdByDay = new Map(); lp.editIdx = null;
   const day = $('lp-date').value;
   logPop.hidden = true;
   document.body.classList.remove('log-docked');
@@ -1032,7 +1200,16 @@ async function submitAll() {
   const made = [];
   let failure = null;
   try {
-    for (const l of lines) l.form ??= await (lp.form ?? lp.formReq);
+    const day0 = lp.days?.[0] ?? $('lp-date').value;
+    for (const l of lines) {
+      if (l.form) continue;
+      if (lp.queue.includes(l)) {
+        l.form = await fetchTimeEntryForm(l.wp.id, day0).catch(() => ({ linkKey: 'workPackage', activities: [], defaultHref: null }));
+        l.activityHref ??= l.form.activities.find(a => a.name === state.last.lastActivity)?.href ?? l.form.defaultHref ?? null;
+      } else {
+        l.form = await (lp.form ?? lp.formReq);
+      }
+    }
     for (const [i, p] of plan.entries()) {
       $('lp-save').textContent = `Logging ${i + 1}/${plan.length}…`;
       try {
@@ -1044,6 +1221,7 @@ async function submitAll() {
         made.push({ entry, wp: p.line.wp });
         touchWp(p.line.wp.id, p.hours);
         lp.created.add(`${p.day}|${p.line.wp.id}|${fmtIn(p.hours)}`);
+        lp.createdByDay.set(p.day, (lp.createdByDay.get(p.day) ?? 0) + p.hours);
         if (!p.line.wp.projectId || state.projectIds.includes(p.line.wp.projectId)) state.entries.push(entry);
       } catch (err) {
         failure = { p, err };
@@ -1074,7 +1252,7 @@ async function submitAll() {
   }
 
   const firstDay = made[0].entry.spentOn;
-  lp.created.clear(); lp.queue = [];
+  lp.created.clear(); lp.createdByDay.clear(); lp.dayTarget.clear(); lp.queue = [];
   closeLog({ refocus: false });
   $('grid-wrap').querySelector(`td.can-log[data-day="${firstDay}"]`)?.focus();
   const total = made.reduce((t, m) => t + m.entry.hours, 0);
@@ -1127,6 +1305,7 @@ $('grid-wrap').addEventListener('keydown', e => {
 });
 $('btn-log').addEventListener('click', () => (lp.open ? closeLog() : openLog(localDateStr(), $('btn-log'))));
 
+logPop.addEventListener('input', () => { if ($('lp-msg').textContent) setLogMsg(''); });
 logPop.addEventListener('submit', e => { e.preventDefault(); submitAll(); });
 $('lp-cancel').addEventListener('click', () => closeLog());
 $('lp-again').addEventListener('click', stageLine);
@@ -1165,6 +1344,23 @@ async function editQueued(i) {
   if (lp.days) refreshLogMulti(); else refreshLogDay();
   $('lp-hours').focus(); $('lp-hours').select();
 }
+// a day total typed in the table: the tickets share that total again
+$('lp-preview').addEventListener('change', e => {
+  const input = e.target.closest('[data-dt]');
+  if (!input) return;
+  const v = parseHours(input.value);
+  if (!(v >= 0 && v <= 24)) { setLogMsg('Enter a day total like 6, 7.5 or 6h30.'); renderPreview(); return; }
+  if (Math.abs(v - DAILY_TARGET) < EPS) lp.dayTarget.delete(input.dataset.dt); else lp.dayTarget.set(input.dataset.dt, v);
+  setLogMsg('');
+  renderQueue();
+  if (lp.days) refreshLogMulti(); else refreshLogDay();
+});
+$('lp-preview').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.matches('[data-dt]')) return;
+  e.preventDefault(); e.stopPropagation();
+  e.target.blur();
+});
+
 $('lp-edit-done').addEventListener('click', doneEdit);
 $('lp-edit-cancel').addEventListener('click', cancelEdit);
 
@@ -1201,7 +1397,7 @@ $('lp-queue').addEventListener('keydown', e => {
 addEventListener('resize', () => { lp.left = null; placeLogPop(); });
 
 $('lp-date').addEventListener('change', () => { refreshLogDay(); markLogCell(); });
-$('lp-hours').addEventListener('input', () => { lp.hoursTouched = true; if (lp.days) refreshLogMulti(); });
+$('lp-hours').addEventListener('input', () => { lp.hoursTouched = true; if (lp.days) refreshLogMulti(); else renderPreview(); });
 
 $('lp-wp').addEventListener('focus', () => { $('lp-wp').select(); suggestWps(); });
 // The field can already have focus when the list was closed by a click elsewhere in the form: no focus event then.
@@ -1233,6 +1429,19 @@ $('lp-wp').addEventListener('keydown', e => {
   }
 });
 $('lp-wp-list').addEventListener('click', e => {
+  const box = e.target.closest('[data-pick]');
+  if (box) {   // the box sits inside the row: it ticks, it does not choose the ticket
+    e.stopPropagation();
+    const id = box.dataset.pick;
+    if (!inList(id)) {
+      if (lp.picked.has(id)) lp.picked.delete(id);
+      else { const w = lp.items.find(x => x.id === id); if (w) lp.picked.set(id, w); }
+      renderWpList(); placeLogPop();
+    }
+    return;
+  }
+  if (e.target.closest('[data-addpicked]')) { addPicked(); return; }
+  if (e.target.closest('[data-clearpicked]')) { lp.picked.clear(); renderWpList(); placeLogPop(); return; }
   const tab = e.target.closest('.tab');
   if (tab) { lp.tab = Number(tab.dataset.tab); lp.tabPinned = true; renderWpList(); placeLogPop(); return; }
   const opt = e.target.closest('.opt');
@@ -1561,15 +1770,34 @@ helpEl.addEventListener('toggle', () => {
   try { localStorage.setItem('blm-timelog-help', helpEl.open ? 'open' : 'closed'); } catch { /* private window */ }
 });
 
+function syncSmartUi() {
+  $('lp-addrow-note').textContent = smartLog
+    ? 'Logging on several tickets? Add this one to the list, then pick the next. Or tick several in the list.'
+    : 'Logging on several tickets? Add this one to the list, then pick the next.';
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !(SMART_KEY in changes)) return;
+  smartLog = !!changes[SMART_KEY].newValue;
+  syncSmartUi();
+  if (!lp.open) return;
+  if (!smartLog) lp.picked.clear();
+  renderQueue();
+  if (lp.days) refreshLogMulti(); else refreshLogDay();
+  if (!$('lp-wp-list').hidden) renderWpList();
+});
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
   const [sync, local] = await Promise.all([
     chrome.storage.sync.get(GROUPS_KEY),
-    chrome.storage.local.get(LAST_KEY),
+    chrome.storage.local.get([LAST_KEY, SMART_KEY]),
   ]);
   state.groups = sync[GROUPS_KEY] ?? [];
   state.last   = local[LAST_KEY] ?? {};
+  smartLog     = !!local[SMART_KEY];
+  syncSmartUi();
   renderGroupSelect();
   loadSprints();
   fetchMyUserId().then(id => { state.meId = id; if (id && state.entries.length) renderGrid(); });

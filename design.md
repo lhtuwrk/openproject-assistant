@@ -90,6 +90,15 @@ Several tickets in one go: Add another ticket (Shift+Enter) puts the ticket and 
 To log list and opens a fresh form; Enter then logs the whole list, on every selected day.
 The save button counts them (Log 3 tickets), one toast and one Undo cover all entries, and
 a failed run keeps the panel open and skips what was already created when you retry.
+Several tickets can also be ticked in the picker (a box before each row) and added to the list
+together; "+ Add another ticket" sits under Hours so it is not missed.
+Smart log time is a hidden, experimental feature: tapping your avatar in the rail seven
+times (like Android's developer mode) reveals Settings → Experimental, whose switch turns
+it on. Off, tickets are logged with the hours typed for each. On, with two or more tickets
+the hours of each selected day are topped up to 8 h and shared between them in
+proportion to story points, within the time left on each story, in quarter-hours; the
+Hours per day table shows what every ticket gets on every day (and its Day total row is
+editable), and the picker gets tick boxes to add several tickets together.
 Work packages in the picker read like Jira work items: a type icon (bug red, story green,
 task cobalt, other amber), the key, the title, an upper-case status lozenge (grey to do,
 cobalt in progress, green done) and the assignee's avatar (ringed when it is you, dashed

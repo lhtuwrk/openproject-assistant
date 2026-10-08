@@ -393,6 +393,7 @@ const wpRow = wp => ({
   type: wp._links?.type?.title ?? '', status: wp._links?.status?.title ?? '', version: wp._links?.version?.title ?? '',
   spent: wp.spentTime != null ? parseIsoHours(wp.spentTime) : null,
   estimate: parseIsoHours(wp.estimatedTime ?? wp.derivedEstimatedTime),
+  points: typeof wp.storyPoints === 'number' ? wp.storyPoints : null,
   assigneeId: idFromHref(wp._links?.assignee?.href), assignee: wp._links?.assignee?.title ?? '',
 });
 
