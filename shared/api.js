@@ -367,19 +367,125 @@ export async function fetchTimeEntries(projectIds, from, to, { user } = {}) {
     for (const d of rest) items.push(...(d._embedded?.elements ?? []));
   }
 
-  return items.map(te => {
-    const wp = te._links?.workPackage ?? te._links?.entity;   // newer OpenProject renamed it to `entity`
-    return {
-      userId:   idFromHref(te._links?.user?.href),
-      userName: te._links?.user?.title ?? '',
-      spentOn:  te.spentOn,
-      hours:    parseIsoHours(te.hours),
-      wpId:     wp?.href ? idFromHref(wp.href) : '',
-      wpTitle:  wp?.title ?? '',
-      activity: te._links?.activity?.title ?? '',
-      comment:  te.comment?.raw ?? '',
-    };
+  return items.map(timeEntryRow);
+}
+
+function timeEntryRow(te) {
+  const wp = te._links?.workPackage ?? te._links?.entity;   // newer OpenProject renamed it to `entity`
+  return {
+    id:       String(te.id),
+    userId:   idFromHref(te._links?.user?.href),
+    userName: te._links?.user?.title ?? '',
+    spentOn:  te.spentOn,
+    hours:    parseIsoHours(te.hours),
+    wpId:     wp?.href ? idFromHref(wp.href) : '',
+    wpTitle:  wp?.title ?? '',
+    activity: te._links?.activity?.title ?? '',
+    comment:  te.comment?.raw ?? '',
+  };
+}
+
+// ─── Logging time ────────────────────────────────────────────────────────────
+
+const wpRow = wp => ({
+  id: String(wp.id), title: wp.subject ?? '',
+  project: wp._links?.project?.title ?? '', projectId: idFromHref(wp._links?.project?.href),
+  type: wp._links?.type?.title ?? '', status: wp._links?.status?.title ?? '', version: wp._links?.version?.title ?? '',
+  spent: wp.spentTime != null ? parseIsoHours(wp.spentTime) : null,
+  estimate: parseIsoHours(wp.estimatedTime ?? wp.derivedEstimatedTime),
+  assigneeId: idFromHref(wp._links?.assignee?.href), assignee: wp._links?.assignee?.title ?? '',
+});
+
+/** Open work packages assigned to the signed-in user, latest touched first. */
+export async function fetchMyOpenWorkPackages() {
+  const filters = encodeURIComponent(JSON.stringify([
+    { assignee: { operator: '=', values: ['me'] } },
+    { status:   { operator: 'o', values: [] } },
+  ]));
+  const sort = encodeURIComponent('[["updatedAt","desc"]]');
+  const data = await apiFetch(`/api/v3/work_packages?pageSize=50&filters=${filters}&sortBy=${sort}`);
+  return (data._embedded?.elements ?? []).map(wpRow);
+}
+
+/** Full rows (project, type, status, sprint) for known work package ids. */
+export async function fetchWorkPackagesByIds(ids) {
+  if (!ids.length) return [];
+  const filters = encodeURIComponent(JSON.stringify([{ id: { operator: '=', values: ids.map(String) } }]));
+  const data = await apiFetch(`/api/v3/work_packages?pageSize=${ids.length}&filters=${filters}`);
+  return (data._embedded?.elements ?? []).map(wpRow);
+}
+
+/** Every time entry logged on one work package (all users), for its running total. */
+export async function fetchWpTime(wpId) {
+  const run = async filters => {
+    const f = encodeURIComponent(JSON.stringify(filters));
+    const out = [];
+    for (let offset = 1; offset <= 10; offset++) {
+      const d = await apiFetch(`/api/v3/time_entries?filters=${f}&pageSize=200&offset=${offset}`);
+      const els = d._embedded?.elements ?? [];
+      out.push(...els);
+      if (out.length >= (d.total ?? 0) || els.length < 200) break;
+    }
+    return out;
+  };
+  let rows;
+  try { rows = await run([{ work_package: { operator: '=', values: [String(wpId)] } }]); }
+  catch { rows = await run([{ entity_id: { operator: '=', values: [String(wpId)] } }, { entity_type: { operator: '=', values: ['WorkPackage'] } }]); }
+  return rows.map(timeEntryRow);
+}
+
+/** Work packages whose id or subject matches `query`. */
+export async function searchWorkPackages(query) {
+  const filters = encodeURIComponent(JSON.stringify([{ subjectOrId: { operator: '**', values: [query] } }]));
+  const sort = encodeURIComponent('[["updatedAt","desc"]]');
+  const data = await apiFetch(`/api/v3/work_packages?pageSize=30&filters=${filters}&sortBy=${sort}`);
+  return (data._embedded?.elements ?? []).map(wpRow);
+}
+
+/**
+ * What a time entry on this work package may use: the link name OpenProject expects
+ * for the work package (`workPackage`, or `entity` on newer versions), the allowed
+ * activities and the default one. A form POST validates only; it saves nothing.
+ * @returns {Promise<{linkKey:string, activities:Array<{href:string,name:string}>, defaultHref:string|null}>}
+ */
+export async function fetchTimeEntryForm(wpId, spentOn) {
+  const href = `/api/v3/work_packages/${wpId}`;
+  let linkKey = 'workPackage';
+  let form = await apiWrite('POST', '/api/v3/time_entries/form', { spentOn, _links: { workPackage: { href } } });
+  if (form?._embedded?.schema?.entity && !form._embedded.schema.workPackage) {
+    linkKey = 'entity';
+    form = await apiWrite('POST', '/api/v3/time_entries/form', { spentOn, _links: { entity: { href } } });
+  }
+  const act = form?._embedded?.schema?.activity;
+  const allowed = act?._embedded?.allowedValues ?? [];
+  return {
+    linkKey,
+    activities: allowed.map(v => ({ href: v._links?.self?.href ?? v.href, name: v.name ?? v.title ?? '' })).filter(v => v.href),
+    defaultHref: form?._embedded?.payload?._links?.activity?.href ?? null,
+  };
+}
+
+/** Logs `hours` on a work package for the signed-in user. Returns the saved entry. */
+export async function createTimeEntry({ wpId, spentOn, hours, linkKey, activityHref, comment }) {
+  const mins = Math.round(hours * 60);
+  const links = { [linkKey]: { href: `/api/v3/work_packages/${wpId}` } };
+  if (activityHref) links.activity = { href: activityHref };
+  const te = await apiWrite('POST', '/api/v3/time_entries', {
+    spentOn, hours: `PT${Math.floor(mins / 60)}H${mins % 60}M`, comment: { raw: comment ?? '' }, _links: links,
   });
+  return timeEntryRow(te);
+}
+
+/** Changes the hours and/or the day of a time entry. Returns the saved entry. */
+export async function updateTimeEntry(id, { hours, spentOn }) {
+  const body = {};
+  if (hours != null) { const mins = Math.round(hours * 60); body.hours = `PT${Math.floor(mins / 60)}H${mins % 60}M`; }
+  if (spentOn) body.spentOn = spentOn;
+  return timeEntryRow(await apiWrite('PATCH', `/api/v3/time_entries/${id}`, body));
+}
+
+export function deleteTimeEntry(id) {
+  return apiWrite('DELETE', `/api/v3/time_entries/${id}`);
 }
 
 /**

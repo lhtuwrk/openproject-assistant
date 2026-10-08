@@ -161,22 +161,170 @@
     /* cell detail popover */
     .ledger td.has-log { cursor: default; }
     #cell-pop {
-      position: fixed; z-index: 250; width: 340px; max-width: calc(100vw - 16px); box-sizing: border-box;
+      position: fixed; z-index: 250; width: 460px; max-width: calc(100vw - 16px); box-sizing: border-box;
       background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 10px 12px; font-size: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 14px 16px; font-size: 14px;
     }
     #cell-pop[hidden] { display: none; }
     .pop-head { display: flex; justify-content: space-between; gap: 8px; color: var(--text2); font-weight: 600;
-      padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+      padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
     .pop-head b { color: var(--text); font-variant-numeric: tabular-nums; }
-    .pop-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; padding: 5px 0; }
+    .pop-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 8px 0; }
     .pop-row + .pop-row { border-top: 1px solid var(--border); }
     .pop-wp { overflow-wrap: anywhere; }
     .pop-wp a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .pop-wp a:hover { text-decoration: underline; }
     .pop-row > b { font-variant-numeric: tabular-nums; }
-    .pop-note { grid-column: 1 / -1; color: var(--muted); font-size: 11px; margin-top: 1px; overflow-wrap: anywhere; }
+    .pop-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
 
+
+    /* log-time popover: opens on a cell of your own row, or from the Log time button */
+    .ledger td.can-log { cursor: pointer; user-select: none; }
+    .ledger td.can-log:not(.has-log):hover { color: var(--accent); }
+    .ledger td.can-log:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+    .ledger td.log-open { box-shadow: inset 0 0 0 2px var(--accent); }
+    .ledger td.log-open.miss { background-color: var(--hover-bg); }
+    .ledger td.saving { opacity: .5; }
+    /* the log form is a panel docked to the right edge: the grid stays visible and clickable beside it */
+    #log-pop {
+      position: fixed; z-index: 260; top: 60px; right: 0; bottom: 0; width: 440px; max-width: 100vw;
+      display: flex; flex-direction: column;
+      background: var(--surface); color: var(--text); border-left: 1px solid var(--border2);
+      box-shadow: -8px 0 24px rgba(0,0,0,.18); font-size: 13px;
+    }
+    #log-pop[hidden] { display: none; }
+    #log-pop .lp-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+    #log-pop .lp-head #lp-title { flex: 1; }
+    #log-pop .lp-head b { font-size: 13px; font-weight: 600; color: var(--text2); font-variant-numeric: tabular-nums; }
+    #log-pop .lp-head .btn-close { padding: 2px 6px; }
+    .lp-meter { height: 4px; border-radius: 2px; background: var(--overlay); overflow: hidden; margin: 0 18px 16px; flex: none; }
+    .lp-meter i { display: block; height: 100%; width: 0; background: var(--warn); transition: width var(--dur-med) var(--ease-out), background-color var(--dur-med) var(--ease-out); }
+    .lp-meter.met i { background: var(--green); }
+    .lp-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding: 0 18px 16px; }
+    .lp-left { padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+    .lp-left[hidden] { display: none; }
+    .lp-left h3, .lp-right h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; font-style: normal; }
+    .lp-right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    #log-pop label.fld { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-weight: 600; font-size: 11px; }
+    #log-pop .ctrl { width: 100%; height: 34px; font-size: 13px; }
+    #log-pop .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    #log-pop.multi .lp-left, #log-pop.multi .lp-meter, #log-pop.multi #lp-chips, #log-pop.multi #lp-date-fld { display: none; }
+
+    /* entries already logged on the day */
+    .lp-day { display: flex; flex-direction: column; }
+    .lp-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t h" "a a"; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--border); color: var(--text2); }
+    .lp-entry:first-child { border-top: none; padding-top: 0; }
+    .lp-entry .t { grid-area: t; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .lp-entry .t .id { color: var(--accent); font-weight: 600; margin-right: 4px; }
+    .lp-entry > b { grid-area: h; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); }
+    .lp-entry .acts { grid-area: a; display: flex; gap: 4px; }
+    .lp-entry .acts button { padding: 2px 8px; font-size: 11px; }
+    .lp-entry.editing { grid-template-areas: "t t" "f f" "a a"; gap: 10px; }
+    .lp-entry .ef { grid-area: f; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .lp-entry.editing .acts { gap: 8px; }
+
+    /* chosen work package, and the list that opens when there is none */
+    #lp-wp-chip { display: none; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border2); border-radius: 6px; background: var(--overlay); }
+    #log-pop.has-wp #lp-wp-chip { display: flex; }
+    #log-pop.has-wp #lp-wp-field { display: none; }
+    #lp-wp-chip .c { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    #lp-wp-chip .t { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); font-weight: 600; }
+    #lp-wp-chip .m { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; min-width: 0; }
+    #lp-wp-chip .tl { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 11px; }
+    #lp-wp-chip .tl:empty { display: none; }
+    #lp-wp-chip .tl b { color: var(--text); font-variant-numeric: tabular-nums; }
+    .tl-bar { flex: 0 0 72px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+    .tl-bar i { display: block; height: 100%; background: var(--accent); }
+    .tl-bar.over i { background: var(--over); }
+    #lp-wp-chip .m span.sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #lp-wp-chip .m:empty { display: none; }
+    #lp-wp-chip .m .mine, #lp-wp-list .mine { color: var(--accent); font-weight: 600; }
+    #lp-wp-chip button { padding: 3px 10px; }
+    #lp-wp-list { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
+    #lp-wp-list[hidden] { display: none; }
+    #lp-wp-list .tabs { display: flex; background: var(--surface2); border-bottom: 1px solid var(--border); }
+    #lp-wp-list button.tab { flex: 1; border: none; border-radius: 0; background: none; padding: 8px 10px; font-size: 11px; font-weight: 650; color: var(--muted); }
+    #lp-wp-list button.tab:hover { color: var(--text); background: none; }
+    #lp-wp-list button.tab[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+    #lp-wp-list .tab .n { margin-left: 6px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+    #lp-wp-list .wp-sec-body { max-height: 236px; overflow-y: auto; }
+    #lp-wp-list button.opt { display: block; width: 100%; text-align: left; font-weight: 500; border: none; border-radius: 0; background: none; padding: 8px 12px; }
+    #lp-wp-list button.opt + button.opt { border-top: 1px solid var(--border); }
+    #lp-wp-list button.opt:hover, #lp-wp-list button.opt[aria-selected="true"] { background: var(--surface2); }
+    /* Jira-style work item: type icon, key, title, status lozenge, assignee */
+    .r1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .r1 .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .r1 .id { flex: none; color: var(--accent); font-weight: 600; font-size: 12px; }
+    .ti { flex: none; width: 16px; height: 16px; border-radius: 3px; display: inline-grid; place-items: center; color: var(--on-accent); }
+    .ti svg { width: 14px; height: 14px; }
+    .ti-bug { background: var(--red); }
+    .ti-story { background: var(--green); }
+    .ti-task { background: var(--accent); }
+    .ti-epic { background: var(--over); }
+    .lz { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 0 6px; border-radius: 3px; line-height: 16px; white-space: nowrap; }
+    .lz-todo { background: var(--overlay); color: var(--text2); }
+    .lz-prog { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+    .lz-done { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+    #lp-wp-list .avatar { width: 20px; height: 20px; font-size: 8px; }
+    .avatar.none { border: 1px dashed var(--border2); background: none; }
+    .avatar.me { box-shadow: 0 0 0 2px var(--accent); }
+    #lp-wp-list .opt .proj { display: flex; align-items: center; gap: 8px; margin: 2px 0 0 24px; color: var(--muted); font-weight: 400; font-size: 11px; }
+    #lp-wp-list .opt .proj .pl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .spent { flex: none; font-variant-numeric: tabular-nums; color: var(--text2); }
+    .spent.over { color: var(--over); font-weight: 600; }
+    #lp-wp-list .empty { padding: 14px 12px; color: var(--muted); }
+
+    #lp-days { display: flex; flex-wrap: wrap; gap: 5px; }
+    #lp-days button { padding: 3px 9px; font-size: 11px; font-variant-numeric: tabular-nums; }
+    #lp-days button.gap { color: var(--warn); }
+    #lp-days button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    #lp-days button.all { color: var(--accent); border-color: var(--accent); background: none; margin-left: 4px; }
+    #lp-days-wrap h3 { margin-bottom: 6px; }
+    #lp-queue .q { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto auto; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+    #lp-queue .q + .q { margin-top: 6px; }
+    #lp-queue .q.editing { border-color: var(--accent); background: var(--accent-bg); }
+    #lp-editbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--accent-border); border-radius: 6px; background: var(--accent-bg); color: var(--text); font-weight: 600; }
+    #lp-editbar[hidden] { display: none; }
+    #lp-editbar #lp-editbar-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #lp-queue .q .ctrl { width: 64px; height: 28px; padding: 2px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+    #lp-queue .q button { padding: 2px 8px; font-size: 11px; }
+    .lp-hrs { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+    .lp-hrs label.fld { width: 120px; }
+    #lp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 4px; }
+    #lp-chips:empty { display: none; }
+    #lp-chips button { padding: 3px 10px; font-size: 11px; font-variant-numeric: tabular-nums; }
+    #lp-chips button.rest { color: var(--accent); border-color: var(--accent); }
+    #lp-hint { color: var(--muted); margin-top: -6px; }
+    #lp-hint:empty { display: none; }
+    #lp-more > summary { cursor: pointer; color: var(--text2); font-weight: 600; font-size: 12px; user-select: none; }
+    #lp-more > summary:hover { color: var(--text); }
+    #lp-more[open] > summary { margin-bottom: 10px; }
+    #lp-more .row2 { margin-bottom: 10px; }
+    #lp-more-sum { color: var(--muted); font-weight: 400; }
+    #lp-msg { color: var(--miss); padding: 0 18px 10px; }
+    #lp-msg:empty { display: none; }
+    .lp-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface2); flex: none; }
+    .lp-actions .keys { display: none; margin-right: auto; color: var(--subtle); font-size: 11px; }
+    .lp-actions { justify-content: flex-end; }
+    .lp-actions button { white-space: nowrap; }
+    .lp-actions button { height: 32px; }
+    @media (min-width: 760px) {
+      body.log-docked #page { margin: 0; max-width: none; margin-right: 456px; }
+    }
+
+    #log-help { margin-top: 14px; max-width: 760px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text2); font-size: 12px; }
+    #log-help > summary { padding: 9px 14px; cursor: pointer; font-weight: 650; color: var(--text); user-select: none; }
+    #log-help[open] > summary { border-bottom: 1px solid var(--border); }
+    #log-help ul { list-style: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+    #log-help li { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; align-items: baseline; line-height: 1.5; }
+    #log-help .lh-k { white-space: nowrap; }
+    #log-help b { color: var(--text); font-weight: 600; }
+    kbd {
+      display: inline-block; min-width: 20px; padding: 1px 6px; text-align: center; font-family: var(--font-mono);
+      font-size: 11px; font-weight: 600; color: var(--text); background: var(--surface2);
+      border: 1px solid var(--border2); border-bottom-width: 2px; border-radius: 4px;
+    }
+    @media (max-width: 767px) { #log-help li { grid-template-columns: minmax(0, 1fr); gap: 3px; } }
     #legend { margin-top: 10px; color: var(--muted); font-size: 12px; display: flex; gap: 18px; flex-wrap: wrap; }
     #legend b { font-weight: 600; font-variant-numeric: tabular-nums; margin-right: 4px; }
     #legend .l-miss b { color: var(--miss); }
@@ -289,6 +437,7 @@
       <select id="sel-group" class="ctrl" aria-label="Member group"></select>
     </div>
     <div class="tb-actions">
+      <button id="btn-log" class="primary">Log time</button>
       <button id="btn-groups">Groups</button>
       <button id="btn-refresh">↻ Refresh</button>
     </div>
@@ -307,6 +456,16 @@
       <span class="l-met"><b>8.00</b>8–9 h</span>
       <span class="l-over"><b>9.50</b>9 h or more</span>
     </div>
+    <details id="log-help">
+      <summary>How to log time</summary>
+      <ul>
+        <li><span class="lh-k"><kbd>Click</kbd></span><span class="lh-d">a cell in your row (marked <b>You</b>). Pick a work package from the list (yours first), check the hours, then press <kbd>Enter</kbd> to log. Nothing is chosen for you.</span></li>
+        <li><span class="lh-k"><kbd>Shift</kbd> + <kbd>Click</kbd></span><span class="lh-d">a second cell in your row to fill a range of days; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + click adds or removes a single day. Or tick days under <b>Days</b> in the form: <b>All missing</b> picks every day under 8 h. Leave Hours empty to top each day up to 8 h.</span></li>
+        <li><span class="lh-k"><kbd>Shift</kbd> + <kbd>Enter</kbd></span><span class="lh-d">adds the ticket to the <b>To log</b> list and opens the next one, so one go logs several tickets (on one day or on several). Enter then logs them all.</span></li>
+        <li><span class="lh-k"><kbd>Edit</kbd></span><span class="lh-d">on an entry in the form changes its hours or moves it to another day. Logged the wrong day? Change the date and Save.</span></li>
+        <li><span class="lh-k"><kbd>Esc</kbd></span><span class="lh-d">closes the form. Every log shows a toast with <b>Undo</b>. No cell to click? Use <b>Log time</b> at the top.</span></li>
+      </ul>
+    </details>
   </main>
 
   <div id="drawer-backdrop"></div>
@@ -338,6 +497,60 @@
       </div>
     </div>
   </aside>
+
+  <form id="log-pop" role="dialog" aria-label="Log time" hidden autocomplete="off">
+    <div class="lp-head"><span id="lp-title">Log time</span><b id="lp-total"></b><button type="button" class="btn-close" id="lp-close" aria-label="Close">✕</button></div>
+    <div class="lp-meter" aria-hidden="true"><i id="lp-meter-fill"></i></div>
+    <div class="lp-body">
+      <section class="lp-left" id="lp-left" hidden>
+        <h3>Logged this day</h3>
+        <div class="lp-day" id="lp-day"></div>
+      </section>
+      <section class="lp-right">
+        <div id="lp-days-wrap" hidden>
+          <h3>Days</h3>
+          <div id="lp-days"></div>
+        </div>
+        <div id="lp-queue-wrap" hidden>
+          <h3>To log</h3>
+          <div id="lp-queue"></div>
+        </div>
+        <div id="lp-editbar" hidden>
+          <span id="lp-editbar-t"></span>
+          <button type="button" class="primary" id="lp-edit-done">Done</button>
+          <button type="button" class="ghost" id="lp-edit-cancel">Cancel</button>
+        </div>
+        <div id="lp-wp-chip">
+          <div class="c"><span class="t" id="lp-chip-t"></span><span class="m" id="lp-wp-sel"></span><span class="tl" id="lp-wp-time"></span></div>
+          <button type="button" class="ghost" id="lp-wp-change">Change</button>
+        </div>
+        <label class="fld" id="lp-wp-field">Work package
+          <input type="text" id="lp-wp" class="ctrl" placeholder="Search by id or title…" role="combobox" aria-expanded="false" aria-controls="lp-wp-list" />
+        </label>
+        <div id="lp-wp-list" role="listbox" hidden></div>
+        <div class="lp-hrs">
+          <label class="fld">Hours <input type="text" id="lp-hours" class="ctrl" inputmode="decimal" placeholder="1.5 · 1h30" /></label>
+          <div id="lp-chips"></div>
+        </div>
+        <div id="lp-hint"></div>
+        <details id="lp-more">
+          <summary>Details <span id="lp-more-sum"></span></summary>
+          <div class="row2">
+            <label class="fld" id="lp-date-fld">Date <input type="date" id="lp-date" class="ctrl" /></label>
+            <label class="fld">Activity <select id="lp-activity" class="ctrl" disabled></select></label>
+          </div>
+          <label class="fld">Comment <input type="text" id="lp-comment" class="ctrl" maxlength="255" placeholder="Optional" /></label>
+        </details>
+      </section>
+    </div>
+    <div id="lp-msg" role="alert"></div>
+    <div class="lp-actions">
+      <span class="keys">Enter logs · Shift+Enter adds another</span>
+      <button type="button" class="ghost" id="lp-cancel">Cancel</button>
+      <button type="button" id="lp-again" title="Add this ticket to the list and pick the next one (Shift+Enter)">Add another ticket</button>
+      <button type="submit" class="primary" id="lp-save">Log time</button>
+    </div>
+  </form>
 
   <div id="cell-pop" role="tooltip" hidden></div>
 
