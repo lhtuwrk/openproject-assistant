@@ -477,11 +477,12 @@ export async function createTimeEntry({ wpId, spentOn, hours, linkKey, activityH
   return timeEntryRow(te);
 }
 
-/** Changes the hours and/or the day of a time entry. Returns the saved entry. */
-export async function updateTimeEntry(id, { hours, spentOn }) {
+/** Changes the hours, the day and/or the comment of a time entry. Returns the saved entry. */
+export async function updateTimeEntry(id, { hours, spentOn, comment }) {
   const body = {};
   if (hours != null) { const mins = Math.round(hours * 60); body.hours = `PT${Math.floor(mins / 60)}H${mins % 60}M`; }
   if (spentOn) body.spentOn = spentOn;
+  if (comment != null) body.comment = { raw: comment };
   return timeEntryRow(await apiWrite('PATCH', `/api/v3/time_entries/${id}`, body));
 }
 

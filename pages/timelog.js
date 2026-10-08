@@ -595,9 +595,10 @@ function refreshLogDay() {
         <label class="fld">Hours<input class="ctrl" data-f="hours" value="${fmtIn(e.hours)}" inputmode="decimal" /></label>
         <label class="fld">Day<input type="date" class="ctrl" data-f="date" value="${esc(e.spentOn)}" /></label>
       </div>
+      <label class="fld em">Comment<input class="ctrl" data-f="comment" value="${esc(e.comment ?? '')}" maxlength="255" placeholder="Optional" /></label>
       <span class="acts"><button type="button" class="primary" data-save="${esc(e.id)}">Save</button><button type="button" class="ghost" data-cancel>Cancel</button></span>
     </div>`;
-    return `<div class="lp-entry">${title}<b>${fmtH(e.hours)}</b>
+    return `<div class="lp-entry${e.comment ? ' hasc' : ''}">${title}<b>${fmtH(e.hours)}</b>${e.comment ? `<span class="cm">${esc(e.comment)}</span>` : ''}
       <span class="acts">
         <button type="button" class="ghost" data-edit="${esc(e.id)}">Edit</button>
         <button type="button" class="ghost" data-del="${esc(e.id)}">Delete</button>
@@ -1474,14 +1475,15 @@ async function saveEdit() {
   if (!row || !old) return;
   const hours = parseHours(row.querySelector('[data-f="hours"]').value);
   const date = row.querySelector('[data-f="date"]').value;
+  const comment = row.querySelector('[data-f="comment"]').value.trim();
   if (!(hours > 0 && hours <= 24)) { setLogMsg('Enter hours like 1.5, 1h30 or 90m.'); return; }
   if (!date)                       { setLogMsg('Pick a date.'); return; }
-  if (Math.abs(hours - old.hours) < EPS && date === old.spentOn) { lp.editing = null; refreshLogDay(); return; }
+  if (Math.abs(hours - old.hours) < EPS && date === old.spentOn && comment === (old.comment ?? '')) { lp.editing = null; refreshLogDay(); return; }
 
   row.querySelectorAll('button, input').forEach(el => { el.disabled = true; });
   setLogMsg('');
   let saved;
-  try { saved = await updateTimeEntry(old.id, { hours, spentOn: date }); }
+  try { saved = await updateTimeEntry(old.id, { hours, spentOn: date, comment }); }
   catch (err) { lp.editing = old.id; refreshLogDay(); setLogMsg(err?.message ?? String(err)); return; }
   applyEntryChange(old.id, saved);
   touchWp(old.wpId, saved.hours - old.hours);
@@ -1490,8 +1492,9 @@ async function saveEdit() {
   refreshLogDay();
 
   const moved = saved.spentOn !== old.spentOn;
-  showToast(moved ? `Moved ${fmtH(saved.hours)} h to ${DOW[dayOfWeek(saved.spentOn)]} ${mmdd(saved.spentOn)}` : `Changed to ${fmtH(saved.hours)} h`, 'Undo', async () => {
-    try { const back = await updateTimeEntry(old.id, { hours: old.hours, spentOn: old.spentOn }); applyEntryChange(old.id, back); touchWp(old.wpId, back.hours - saved.hours); }
+  const hoursChanged = Math.abs(saved.hours - old.hours) >= EPS;
+  showToast(moved ? `Moved ${fmtH(saved.hours)} h to ${DOW[dayOfWeek(saved.spentOn)]} ${mmdd(saved.spentOn)}` : hoursChanged ? `Changed to ${fmtH(saved.hours)} h` : 'Comment updated', 'Undo', async () => {
+    try { const back = await updateTimeEntry(old.id, { hours: old.hours, spentOn: old.spentOn, comment: old.comment ?? '' }); applyEntryChange(old.id, back); touchWp(old.wpId, back.hours - saved.hours); }
     catch (err) { showToast(`Could not undo: ${err.message}`); return; }
     renderGrid();
     if (lp.open) refreshLogDay();
