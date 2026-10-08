@@ -6,6 +6,11 @@
 // chrome.storage.onChanged.
 
 const groupsEl = document.getElementById('groups');
+const DEV_KEY = '__blm_dev_unlocked';   // the Experimental group is only shown once it is unlocked (tap your avatar seven times)
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && DEV_KEY in changes) location.reload();
+});
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -19,6 +24,7 @@ async function readFeatures() {
   const html = await (await fetch(chrome.runtime.getURL('pages/dashboard.html'))).text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return [...doc.querySelectorAll('section.group')].map(g => ({
+    lab: g.id === 'group-lab',
     title: g.querySelector('.group-title')?.textContent.trim() ?? '',
     features: [...g.querySelectorAll('.feature[data-key]')].map(f => ({
       key:  f.dataset.key,
@@ -60,7 +66,8 @@ function themeRow() {
 async function render() {
   let groups;
   try {
-    groups = await readFeatures();
+    const unlocked = !!(await chrome.storage.local.get(DEV_KEY))[DEV_KEY];
+    groups = (await readFeatures()).filter(g => !g.lab || unlocked);
   } catch {
     groupsEl.replaceChildren(el('p', 'note', "Couldn't read the settings. Use All settings instead."));
     return;
