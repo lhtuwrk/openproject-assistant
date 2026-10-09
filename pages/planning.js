@@ -157,9 +157,12 @@ function addMinutes(hhmm, min) {
   return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
-function avatar(id, name) {
+/** Initials on a hue; with the principal's `href`, the profile picture covers them once it has loaded. */
+function avatar(id, name, href) {
   if (!name) return '<span class="avatar none" aria-hidden="true">–</span>';
-  return `<span class="avatar" style="--hue:${avatarHue(id ?? name)}" aria-hidden="true">${esc(initials(name))}</span>`;
+  const userId = /^\/api\/v3\/users\/(\d+)$/.exec(href ?? '')?.[1];
+  const photo = userId ? `<img data-blob="/api/v3/users/${userId}/avatar" alt="" />` : '';
+  return `<span class="avatar" style="--hue:${avatarHue(id ?? name)}" aria-hidden="true">${esc(initials(name))}${photo}</span>`;
 }
 
 function fileSize(bytes) {
@@ -537,7 +540,7 @@ function withBlobSrc(html) {
 
 /** Fills images that need the session cookie (description images, attachment thumbnails). */
 function hydrateImages() {
-  for (const img of document.querySelectorAll('#view img[data-blob]:not([src])')) {
+  for (const img of document.querySelectorAll('#view img[data-blob]:not([src]), .pick-pop img[data-blob]:not([src])')) {
     const path = img.dataset.blob;
     const url = blobs.get(path);
     if (url && url !== 'loading' && url !== 'failed') { img.src = url; continue; }
@@ -965,7 +968,7 @@ function patchFormState(a, b) {
 }
 
 // Re-rendering replaces the controls, so the focused one is found again by its data attribute.
-const FOCUS_KEYS = ['field', 'set', 'budget', 'per', 'act', 'role'];
+const FOCUS_KEYS = ['field', 'set', 'budget', 'per', 'act', 'role', 'pick'];
 function focusKey() {
   const el = document.activeElement;
   const k = el && FOCUS_KEYS.find(x => el.dataset?.[x]);
@@ -1008,6 +1011,7 @@ function render() {
     }
   }
   if (s.phase !== 'lobby') { ensureDetail(); hydrateImages(); }
+  refreshPick();
 }
 
 /** Says a milestone to screen readers without re-reading the page. */
@@ -1168,6 +1172,14 @@ function writeErrHtml(key, label) {
   return e ? `<div class="card-error" role="alert">Couldn't change the ${label}: ${esc(e)}</div>` : '';
 }
 
+/** Jira-style category of a status name: to do, in progress or done. */
+function statusTone(name) {
+  const n = (name ?? '').toLowerCase();
+  if (/closed|done|resolved|rejected|released|finished|complete/.test(n)) return 'done';
+  if (/progress|review|test|develop|approved|ready|implement|started|analy/.test(n)) return 'progress';
+  return 'todo';
+}
+
 function statusSelect(wpId, currentHref, currentName, options, parentId) {
   const opts = [...(options ?? [])];
   if (currentHref && !opts.some(o => o.href === currentHref)) opts.unshift({ href: currentHref, name: currentName });
@@ -1193,13 +1205,10 @@ function assigneeSelect(wpId, currentHref, currentName, parentId, { field = 'ass
 function fieldsHtml(id, d) {
   const wp = d.wp, L = wp._links ?? {};
   return `<div class="fields">
-    <label class="fld"><span>Status</span>${statusSelect(id, L.status?.href, L.status?.title, d.statuses)}</label>
-    <label class="fld"><span>Assignee</span>${assigneeSelect(id, L.assignee?.href, L.assignee?.title)}</label>
     <div class="fld"><span>Author</span><b>${esc(L.author?.title ?? '—')}</b></div>
     <div class="fld"><span>Updated</span><b>${esc(shortDate(wp.updatedAt))}</b></div>
     ${L.parent?.href ? `<div class="fld"><span>Parent</span><a href="${BACKLOG_URL}/work_packages/${esc(idOf(L.parent.href))}" target="_blank" rel="noopener">${esc(L.parent.title ?? `#${idOf(L.parent.href)}`)} ↗</a></div>` : ''}
-  </div>
-  ${writeErrHtml(`${id}:status`, 'status')}${writeErrHtml(`${id}:assignee`, 'assignee')}`;
+  </div>`;
 }
 
 function descHtml(d) {
@@ -1353,17 +1362,53 @@ function paintCardClock(card) {
   el.querySelector('[data-role="sc-meter"]').style.setProperty('--fill', c.fill);
 }
 
+const TYPE_GLYPH = {
+  bug:   '<circle cx="12" cy="13" r="5"/><path d="M12 8V5M7 13H4M20 13h-3M8 9 6 7M16 9l2-2"/>',
+  story: '<path d="M7 4h10v16l-5-4-5 4z"/>',
+  task:  '<path d="m6 12 4 4 8-8"/>',
+  epic:  '<path d="M13 3 6 13h5l-1 8 7-10h-5z"/>',
+  other: '<rect x="7" y="7" width="10" height="10" rx="2"/>',
+};
+function typeKind(name) {
+  const n = (name ?? '').toLowerCase();
+  if (/bug|defect|incident/.test(n)) return 'bug';
+  if (/story|feature|requirement/.test(n)) return 'story';
+  if (/epic|initiative/.test(n)) return 'epic';
+  if (/task|chore|support|investigation|sub/.test(n)) return 'task';
+  return 'other';
+}
+
+/** What matters at a glance when planning: type, story points, status and assignee. */
+function factsHtml(card, d) {
+  const kind = typeKind(card.type);
+  const L = d?.wp?._links ?? {};
+  const type = `<span class="type-chip" data-kind="${kind}"><i aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${TYPE_GLYPH[kind]}</svg></i>${esc(card.type || 'Work item')}</span>`;
+  const points = `<span class="pts-field${savingCls(`${card.id}:storyPoints`)}"><input type="number" min="0" step="1" inputmode="numeric" data-field="points" data-wp="${esc(card.id)}"
+      data-orig="${card.points ?? ''}" value="${card.points ?? ''}" placeholder="–" aria-label="Story points of #${esc(card.id)}" /><span class="pts-unit">pts</span></span>`;
+  const open = f => (pickSt?.wp === card.id && pickSt.field === f ? 'true' : 'false');
+  const status = d?.wp
+    ? `<button type="button" class="pick status-pick${savingCls(`${card.id}:status`)}" data-pick="status" data-wp="${esc(card.id)}" data-tone="${statusTone(L.status?.title)}"
+        aria-haspopup="listbox" aria-expanded="${open('status')}" aria-label="Status of #${esc(card.id)}: ${esc(L.status?.title ?? 'none')}. Change"><span class="nm">${esc(L.status?.title ?? '—')}</span></button>`
+    : '<span class="fact-wait">…</span>';
+  const assignee = d?.wp
+    ? `<button type="button" class="pick who-pick${savingCls(`${card.id}:assignee`)}" data-pick="assignee" data-wp="${esc(card.id)}"
+        aria-haspopup="listbox" aria-expanded="${open('assignee')}" aria-label="Assignee of #${esc(card.id)}: ${esc(L.assignee?.title ?? 'unassigned')}. Change">${avatar(idOf(L.assignee?.href), L.assignee?.title, L.assignee?.href)}<span class="nm">${esc(L.assignee?.title ?? 'Unassigned')}</span></button>`
+    : '<span class="fact-wait">…</span>';
+  const fact = (k, v, edit) => `<div class="fact${edit ? ' edit' : ''}"><span class="fact-k">${k}</span>${v}</div>`;
+  return `<div class="facts">
+      ${fact('Type', type)}${fact('Story points', points, true)}${fact('Status', status, true)}${fact('Assignee', assignee, true)}
+    </div>
+    ${writeErrHtml(`${card.id}:storyPoints`, 'story points')}${writeErrHtml(`${card.id}:status`, 'status')}${writeErrHtml(`${card.id}:assignee`, 'assignee')}`;
+}
+
 function cardHeadHtml(card) {
   const labels = card.labels.map(l => `<span class="tag lbl">${esc(l)}</span>`).join('');
   return `<div class="card-meta">
       <a href="${BACKLOG_URL}/work_packages/${card.id}" target="_blank" rel="noopener">#${card.id} ↗</a>
-      <span>${esc(card.type)}</span>
-      <label class="pts-edit${savingCls(`${card.id}:storyPoints`)}"><span>Story points</span><input class="ctrl num" type="number" min="0" step="1" inputmode="numeric" data-field="points" data-wp="${esc(card.id)}"
-        data-orig="${card.points ?? ''}" value="${card.points ?? ''}" placeholder="–" aria-label="Story points of #${esc(card.id)}" /></label>
-      ${writeErrHtml(`${card.id}:storyPoints`, 'story points')}
       ${card.priority ? `<span class="tag">${esc(card.priority)}</span>` : ''}${labels}
     </div>
-    <h2 class="card-title">${esc(card.subject)}</h2>`;
+    <h2 class="card-title">${esc(card.subject)}</h2>
+    ${factsHtml(card, details.get(card.id))}`;
 }
 
 /** The story on the table: what it is and what it says, in the wide column. */
@@ -1432,7 +1477,7 @@ function sideHtml() {
   }
   const total = [...rows.values()].reduce((t, r) => t + r.p, 0);
   const people = [...rows.entries()].sort((a, b) => b[1].p - a[1].p).map(([name, r]) => `
-    <div class="who-row">${avatar(r.id, name)}<span class="nm">${name ? esc(name) : 'Unassigned'}</span><span class="num">${pts(r.p)}</span></div>`).join('');
+    <div class="who-row">${avatar(r.id, name, r.id)}<span class="nm">${name ? esc(name) : 'Unassigned'}</span><span class="num">${pts(r.p)}</span></div>`).join('');
   const recent = s.history.slice(-5).reverse().map(id => {
     const d = s.decisions[id];
     return d ? `<div>${d.d === 'defer' ? '→' : '✓'} #${id} ${esc(d.card.subject)}</div>` : '';
@@ -1513,7 +1558,7 @@ function allHtml() {
         <span class="chip ${st.key}">${st.key === 'plan' ? icon('check', 12) : ''}${esc(st.label)}</span>
         <span class="num muted">#${esc(id)}</span>
         <span class="a-subject">${esc(c.subject)}</span>
-        <span class="a-meta">${c.priority ? `<span class="tag">${esc(c.priority)}</span>` : ''}<span class="num">${c.points == null ? '–' : pts(c.points)}</span>${avatar(c.assigneeHref, c.assigneeName)}</span>
+        <span class="a-meta">${c.priority ? `<span class="tag">${esc(c.priority)}</span>` : ''}<span class="num">${c.points == null ? '–' : pts(c.points)}</span>${avatar(c.assigneeHref, c.assigneeName, c.assigneeHref)}</span>
       </button></li>`;
     }).join('');
     return `<section class="all-group lvl-${l.key}">
@@ -1798,6 +1843,145 @@ document.addEventListener('toggle', e => {
 document.addEventListener('input', e => {
   if (e.target.dataset.role === 'sub-subject') rt.sub.draft = e.target.value;
 });
+
+// ─── Jira-style pickers: status and assignee of the story on the table ────────
+// A button opens a popover with a search box and a list (statuses as lozenges,
+// people with their picture). It lives on <body>, outside the morphed #view, so a
+// repaint never closes it; render() only refreshes its list. The choice is
+// written with writeField, like the selects used for subtasks.
+
+let pickEl = null;
+let pickSt = null;   // { field, wp, q, active, options }
+
+function pickCurrent() {
+  const L = details.get(pickSt.wp)?.wp?._links ?? {};
+  return L[pickSt.field]?.href ?? null;
+}
+
+/** [{ href, name, me? }] for the open picker, or null while its list is still loading. */
+function pickChoices() {
+  const { field, wp } = pickSt;
+  const d = details.get(wp);
+  const L = d?.wp?._links ?? {};
+  if (field === 'status') {
+    if (!d?.statuses) return null;
+    const list = [...d.statuses];
+    if (L.status?.href && !list.some(o => o.href === L.status.href)) list.unshift({ href: L.status.href, name: L.status.title });
+    return list;
+  }
+  if (!rt.people) return null;
+  const others = rt.people.filter(p => p.href !== rt.me?.href);
+  return [{ href: null, name: 'Unassigned' }, ...(rt.me ? [{ href: rt.me.href, name: rt.me.name, me: true }] : []), ...others];
+}
+
+function pickRows() {
+  const choices = pickChoices();
+  const ul = pickEl.querySelector('ul');
+  if (!choices) { ul.innerHTML = '<li class="pick-note" role="presentation">Loading…</li>'; pickSt.options = []; return; }
+  const q = pickSt.q.trim().toLowerCase();
+  const cur = pickCurrent();
+  pickSt.options = choices.filter(o => !q || o.name.toLowerCase().includes(q));
+  if (pickSt.active >= pickSt.options.length) pickSt.active = pickSt.options.length - 1;
+  ul.innerHTML = pickSt.options.length
+    ? pickSt.options.map((o, i) => {
+        const body = pickSt.field === 'status'
+          ? `<span class="lz" data-tone="${statusTone(o.name)}">${esc(o.name)}</span>`
+          : `${avatar(idOf(o.href), o.href ? o.name : '', o.href)}<span class="nm">${esc(o.me ? `${o.name} (me)` : o.name)}</span>`;
+        return `<li role="option" id="pick-o${i}" data-i="${i}" class="pick-opt${i === pickSt.active ? ' active' : ''}${(o.href ?? null) === cur ? ' current' : ''}" aria-selected="${(o.href ?? null) === cur}">${body}</li>`;
+      }).join('')
+    : '<li class="pick-note" role="presentation">No match</li>';
+  hydrateImages();
+  pickEl.querySelector('input').setAttribute('aria-activedescendant', pickSt.active >= 0 ? `pick-o${pickSt.active}` : '');
+  pickEl.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+}
+
+function placePick(btn) {
+  const r = btn.getBoundingClientRect();
+  const w = Math.max(r.width, 280);
+  pickEl.style.width = `${w}px`;
+  pickEl.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+  const below = innerHeight - r.bottom, h = pickEl.offsetHeight;
+  if (below < Math.min(h, 340) + 12 && r.top > below) { pickEl.style.top = 'auto'; pickEl.style.bottom = `${innerHeight - r.top + 4}px`; }
+  else { pickEl.style.bottom = 'auto'; pickEl.style.top = `${r.bottom + 4}px`; }
+}
+
+function closePick({ refocus = false } = {}) {
+  if (!pickEl) return;
+  const { field, wp } = pickSt;
+  pickEl.remove();
+  pickEl = pickSt = null;
+  const btn = document.querySelector(`[data-pick="${field}"][data-wp="${CSS.escape(wp)}"]`);
+  btn?.setAttribute('aria-expanded', 'false');
+  if (refocus) btn?.focus();
+}
+
+function choosePick(i) {
+  const o = pickSt?.options[i];
+  if (!o) return;
+  const { field, wp } = pickSt;
+  const same = (o.href ?? null) === pickCurrent();
+  closePick({ refocus: true });
+  if (!same) writeField(wp, field, o.href);
+}
+
+function openPick(btn) {
+  const { pick: field, wp } = btn.dataset;
+  if (pickSt?.field === field && pickSt.wp === wp) return closePick({ refocus: true });
+  closePick();
+  pickSt = { field, wp, q: '', active: 0, options: [] };
+  pickEl = document.createElement('div');
+  pickEl.className = 'pick-pop';
+  pickEl.innerHTML = `<input type="search" class="pick-q" role="combobox" aria-expanded="true" aria-controls="pick-list" autocomplete="off"
+      placeholder="${field === 'status' ? 'Search statuses' : 'Search people'}" aria-label="${field === 'status' ? 'Search statuses' : 'Search people'}" />
+    <ul id="pick-list" role="listbox"></ul>`;
+  document.body.append(pickEl);
+  btn.setAttribute('aria-expanded', 'true');
+  pickSt.active = Math.max(0, (pickChoices() ?? []).findIndex(o => (o.href ?? null) === pickCurrent()));
+  pickRows();
+  placePick(btn);
+  const input = pickEl.querySelector('input');
+  input.focus();
+  input.addEventListener('input', () => { pickSt.q = input.value; pickSt.active = 0; pickRows(); });
+  input.addEventListener('keydown', e => {
+    const n = pickSt.options.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (n) { pickSt.active = (pickSt.active + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; pickRows(); }
+    } else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); choosePick(pickSt.active); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePick({ refocus: true }); }
+    else if (e.key === 'Tab') closePick({ refocus: true });
+    else e.stopPropagation();   // typing must not trigger the page's P / D / N shortcuts
+  });
+  pickEl.querySelector('ul').addEventListener('click', e => {
+    const li = e.target.closest('[data-i]');
+    if (li) choosePick(Number(li.dataset.i));
+  });
+  pickEl.querySelector('ul').addEventListener('pointermove', e => {
+    const li = e.target.closest('[data-i]');
+    if (li && Number(li.dataset.i) !== pickSt.active) {
+      pickEl.querySelector('.active')?.classList.remove('active');
+      li.classList.add('active');
+      pickSt.active = Number(li.dataset.i);
+    }
+  });
+}
+
+/** After every repaint: keep an open picker's list current, or close it when its story is gone. */
+function refreshPick() {
+  if (!pickEl) return;
+  const btn = document.querySelector(`[data-pick="${pickSt.field}"][data-wp="${CSS.escape(pickSt.wp)}"]`);
+  if (!btn) return closePick();
+  pickRows();
+  placePick(btn);
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest?.('[data-pick]');
+  if (btn) { openPick(btn); return; }
+  if (pickEl && !pickEl.contains(e.target)) closePick();
+});
+addEventListener('resize', () => closePick());
+addEventListener('scroll', e => { if (pickEl && !pickEl.contains(e.target)) closePick(); }, true);
 
 // Arrow keys on a closed select change its value at once; writing on every
 // change would move a story's status while someone only looks at the options.
