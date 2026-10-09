@@ -12,6 +12,7 @@ body {
   background: var(--bg); color: var(--text);
   padding-inline-start: var(--rail-w);
   -webkit-font-smoothing: antialiased;
+  transition: padding-inline-start var(--dur-med) var(--ease-out);
 }
 
 /* ── Rail ─────────────────────────────────────────────────────────────── */
@@ -20,8 +21,46 @@ body {
   display: flex; flex-direction: column; gap: var(--space-lg);
   padding: var(--space-md) var(--space-sm);
   background: var(--surface); border-inline-end: 1px solid var(--border);
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
+  transition: width var(--dur-med) var(--ease-out);
 }
+html.rail-resizing .rail, html.rail-resizing body { transition: none; }
+html.rail-resizing { cursor: col-resize; user-select: none; }
+
+.rail-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2xs); }
+.rail-top .rail-brand { flex: 1; min-width: 0; }
+.rail-brand span:not(.ver) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail-toggle {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px;
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--muted); cursor: pointer;
+  transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+}
+.rail-toggle:hover { background: var(--surface2); color: var(--text); }
+.rail-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.rail-toggle svg { transition: transform var(--dur-med) var(--ease-out); }
+html[data-rail="collapsed"] .rail-toggle svg { transform: rotate(180deg); }
+
+/* The drag edge sits on the rail's right border, over the page. */
+.rail-resize {
+  position: fixed; top: 0; bottom: 0; left: calc(var(--rail-w) - 3px); width: 6px; z-index: 121; cursor: col-resize;
+  transition: left var(--dur-med) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+}
+.rail-resize:hover, .rail-resize:focus-visible, html.rail-resizing .rail-resize { background: color-mix(in srgb, var(--accent) 50%, transparent); outline: none; }
+html.rail-resizing .rail-resize { transition: none; }
+.rail-resize[hidden] { display: none; }
+
+/* Collapsed: icons only. */
+html[data-rail="collapsed"] .rail { padding-inline: var(--space-xs); align-items: center; }
+html[data-rail="collapsed"] .rail-top { flex-direction: column; }
+html[data-rail="collapsed"] .rail-brand { padding-inline: 0; justify-content: center; flex: none; }
+html[data-rail="collapsed"] .rail-brand span,
+html[data-rail="collapsed"] .profile-who,
+html[data-rail="collapsed"] .profile-stats,
+html[data-rail="collapsed"] .rail-nav a > span,
+html[data-rail="collapsed"] .rail-foot { display: none; }
+html[data-rail="collapsed"] .profile { padding: var(--space-2xs); background: none; border-color: transparent; }
+html[data-rail="collapsed"] .rail-nav { width: 100%; }
+html[data-rail="collapsed"] .rail-nav a { justify-content: center; padding: var(--space-xs); }
 
 .rail-brand {
   display: flex; align-items: center; gap: var(--space-xs);
@@ -107,6 +146,8 @@ body {
 /* ── Narrow windows: the rail becomes a top strip ────────────────────── */
 @media (max-width: 900px) {
   body { padding-inline-start: 0; }
+  .rail-toggle, .rail-resize { display: none; }
+  .rail-top { display: contents; }
   .rail {
     position: static; width: auto; flex-direction: row; flex-wrap: wrap; align-items: center;
     gap: var(--space-xs) var(--space-md); padding: var(--space-xs) var(--space-md);
@@ -124,7 +165,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail-nav a { transition-duration: 0s; }
+  .rail-nav a, .rail, body, .rail-resize, .rail-toggle, .rail-toggle svg { transition-duration: 0s; }
 }
 
 /* a short message after tapping the avatar (experimental options) */

@@ -134,6 +134,9 @@ that says where the sprint stands ("Nothing decided yet" / "3 of 14 decided" /
 a Next panel (Copy summary, Review all stories, Back to the arena) ending in
 "Start a new planning…", which asks once, inline, only when decisions would be
 lost.
+A level's minutes can also be set by hand in the lobby (its minutes field turns cobalt, ↺ returns it
+to automatic): that level keeps them, the others share what is left of the window, and each
+story's clock in it is its share of those minutes.
 Time follows the stories: each story gets minutes by its priority (set in the
 lobby), a level's timebox is the sum over its stories, and when the sprint
 doesn't fit the session every story is scaled down by the same share. The

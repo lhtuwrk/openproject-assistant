@@ -12,6 +12,8 @@
 (() => {
   'use strict';
 
+  if (window.top !== window) return;   // loaded as a classic script by the dashboard pages, whose drawer iframes must not open their own
+
   let host = null;
 
   function close() {

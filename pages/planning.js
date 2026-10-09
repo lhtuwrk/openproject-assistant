@@ -279,6 +279,8 @@ function freshSession(prev) {
   return {
     v: 1,
     sortBy: prev?.sortBy ?? 'priority',   // priority · points · id: how stories are ordered inside a level
+    manual: prev?.manual ?? {},           // levelKey -> minutes the facilitator set by hand (otherwise from the stories)
+    levelScale: {},                       // levelKey -> share of each story's own minutes, fixed at Start
     splits: prev?.splits ?? {},           // levelKey -> story numbers where the level is cut in two (see rebuildParts)
     startAt: prev?.startAt ?? START_AT,   // the planning window: HH:MM, set in the lobby
     endAt:   prev?.endAt ?? END_AT,
@@ -337,10 +339,15 @@ function bucketOf(priority) {
   return 'normal';
 }
 const storyMin = card => Number(s.perStory[bucketOf(card.priority)]) || 0;
-const cardBudgetMs = card => storyMin(card) * s.scale * 60000;
+const cardBudgetMs = card => storyMin(card) * (s.levelScale?.[levelKeyOf(card.id)] ?? s.scale) * 60000;
 
 const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 
+/** The minutes set by hand for a section, or null when it follows its stories. */
+const manualMin = key => {
+  const v = s.manual?.[key];
+  return v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Math.max(0, Number(v));
+};
 const startAt = () => s.startAt || START_AT;
 const endAt   = () => s.endAt || END_AT;
 const hhmm = total => {
@@ -355,9 +362,17 @@ function timePlan() {
   const raw = Object.fromEntries(PLAY_LEVELS.map(l => [l.key,
     levelIds(l.key).filter(id => rt.cards.has(id)).reduce((t, id) => t + storyMin(rt.cards.get(id)), 0)]));
   const sum = Object.values(raw).reduce((t, m) => t + m, 0);
-  const avail = Math.max(0, toMin(endAt()) - toMin(startAt()) - LOOT_MIN - breakMin());
-  const scale = sum > avail && sum > 0 ? avail / sum : 1;
-  return { raw, sum, avail, scale, minutes: key => raw[key] * scale };
+  // Sections set by hand keep their minutes; the others share what is left of the window.
+  const fixed = PLAY_LEVELS.reduce((t, l) => t + (manualMin(l.key) ?? 0), 0);
+  const autoSum = PLAY_LEVELS.reduce((t, l) => t + (manualMin(l.key) === null ? raw[l.key] : 0), 0);
+  const avail = Math.max(0, toMin(endAt()) - toMin(startAt()) - LOOT_MIN - breakMin() - fixed);
+  const scale = autoSum > avail && autoSum > 0 ? avail / autoSum : 1;
+  return {
+    raw, sum, autoSum, fixed, avail, scale,
+    minutes: key => manualMin(key) ?? raw[key] * scale,
+    /** What share of each story's own minutes its section gives it. */
+    scaleOf: key => (manualMin(key) === null ? scale : raw[key] > 0 ? manualMin(key) / raw[key] : 1),
+  };
 }
 
 /** Every section in play order with its minutes and when it runs, from the start time on:
@@ -697,6 +712,7 @@ function startQuest() {
   for (const l of PLAY_LEVELS) syncOrder(l.key);
   const plan = timePlan();
   s.scale = plan.scale;
+  s.levelScale = Object.fromEntries(PLAY_LEVELS.map(l => [l.key, plan.scaleOf(l.key)]));
   for (const l of PLAY_LEVELS) s.budgets[l.key] = plan.minutes(l.key);
   save(); render();
 }
@@ -791,7 +807,18 @@ function mergeLevel(key) {
   if (left.length) s.splits[def.of] = left; else delete s.splits[def.of];
   s.levelOrder = s.levelOrder.filter(k => k !== key);
   delete s.budgets[key];
+  if (key in s.manual) { s.manual = { ...s.manual }; delete s.manual[key]; }
   applyOrder(); save(); render();
+}
+
+/** Sets a section's minutes by hand; an empty value returns it to the time its stories give it. */
+function setLevelMinutes(key, raw) {
+  if (s.phase !== 'lobby' || !DEF[key] || DEF[key].isBreak) return render();
+  s.manual = { ...s.manual };
+  const n = Math.round(Number(raw));
+  if (raw === '' || !Number.isFinite(n)) delete s.manual[key];
+  else s.manual[key] = Math.max(0, Math.min(300, n));
+  save(); render();
 }
 
 /** Moves the cut that ends a part, so the part holds `raw` stories (the last part takes the rest). */
@@ -809,6 +836,7 @@ function setPartSize(key, raw) {
   const oldKey = `${base}~${end}`, newKey = `${base}~${cut}`;
   s.levelOrder = s.levelOrder.map(k => (k === oldKey ? newKey : k));
   if (oldKey in s.budgets) { s.budgets[newKey] = s.budgets[oldKey]; delete s.budgets[oldKey]; }
+  if (oldKey in s.manual) { s.manual = { ...s.manual, [newKey]: s.manual[oldKey] }; delete s.manual[oldKey]; }
   applyOrder(); save(); render();
 }
 
@@ -1404,7 +1432,9 @@ function lobbyHtml() {
       : `<div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>`;
     const mins = l.isBreak
       ? `<label class="mins"><input class="ctrl num" type="number" min="0" max="180" step="5" value="${esc(s.budgets[l.key])}" data-budget="${l.key}" aria-label="Minutes of ${esc(l.name)}" /> <span class="muted">min</span></label>`
-      : `<span class="mins num" title="${counts[l.key].n} stories × minutes by priority${plan.scale < 1 ? ', scaled to fit' : ''}">${rt.loading ? '…' : Math.round(w.min)} <span class="muted">min</span></span>`;
+      : `<label class="mins${manualMin(l.key) === null ? '' : ' manual'}" title="${manualMin(l.key) === null ? `${counts[l.key].n} stories × minutes by priority${plan.scale < 1 ? ', scaled to fit' : ''}. ` : 'Set by hand. '}Type a number to set this section's time yourself.">
+          <input class="ctrl num" type="number" min="0" max="300" step="1" value="${rt.loading ? '' : Math.round(w.min)}" data-level-min="${l.key}" aria-label="Minutes of ${esc(l.name)}" /> <span class="muted">min</span>
+          ${manualMin(l.key) === null ? '' : `<button type="button" class="ghost icon auto-btn" data-act="min-auto" data-key="${l.key}" title="Back to the automatic time" aria-label="Back to the automatic time of ${esc(l.name)}">↺</button>`}</label>`;
     return `
     <div class="lvl-row lvl-${lvlCls(l)}" data-level="${l.key}">
       <span class="grip" title="Drag to reorder" aria-hidden="true">${icon('grip')}</span>
@@ -1447,7 +1477,7 @@ function lobbyHtml() {
         ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
         <div class="lvl-foot">
           <span class="text2">Starts ${startAt()} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${toMin(endAt()) <= toMin(startAt()) ? ' <span class="warn-text">(the end time is before the start)</span>' : ends > endAt() ? ` <span class="warn-text">(past ${endAt()})</span>` : ''}</span>
-          ${plan.scale < 1 ? `<span class="warn-text">${Math.round(plan.sum)} min of stories don't fit ${plan.avail} min, so every story gets ${Math.round(plan.scale * 100)}% of its time</span>` : ''}
+          ${plan.scale < 1 ? `<span class="warn-text">${Math.round(plan.autoSum)} min of stories don't fit ${Math.round(plan.avail)} min${plan.fixed ? ' (after the sections set by hand)' : ''}, so every story gets ${Math.round(plan.scale * 100)}% of its time</span>` : ''}
           <span class="spacer"></span>
           <button class="primary big" data-act="start"${ready ? '' : ' disabled'}>Start quest</button>
         </div>
@@ -2066,6 +2096,7 @@ async function onAction(act, el) {
     case 'rule-add': return addRule();
     case 'break-add': return addBreak(Number(el.dataset.at));
     case 'split': return askSplit(el.dataset.key, el);
+    case 'min-auto': return setLevelMinutes(el.dataset.key, '');
     case 'merge': return mergeLevel(el.dataset.key);
     case 'break-remove': return removeBreak(el.dataset.key);
     case 'rule-remove': return applyRules(ruleDefs.filter(d => d.key !== el.dataset.key));
@@ -2366,6 +2397,7 @@ document.addEventListener('change', async e => {
     save(); render();
     return;
   }
+  if (t.dataset.levelMin !== undefined) return setLevelMinutes(t.dataset.levelMin, t.value);
   if (t.dataset.splitSize) return setPartSize(t.dataset.splitSize, t.value);
   if (t.dataset.set === 'startAt' || t.dataset.set === 'endAt') {
     if (s.phase === 'lobby' && /^\d{2}:\d{2}$/.test(t.value)) { s[t.dataset.set] = t.value; save(); }

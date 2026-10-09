@@ -43,7 +43,8 @@ document.querySelectorAll('[data-open]').forEach(btn =>
 document.getElementById('btn-settings').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   try {
-    if (!/^https?:/.test(tab?.url ?? '')) throw new Error('no content script here');
+    const own = tab?.url?.startsWith(chrome.runtime.getURL(''));   // the dashboard pages load the same drawer script
+    if (!own && !/^https?:/.test(tab?.url ?? '')) throw new Error('no content script here');
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'blm-quick-settings' });
     if (!res?.ok) throw new Error('drawer not available');
     window.close();

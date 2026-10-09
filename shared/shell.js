@@ -45,11 +45,14 @@ function buildRail() {
   rail.className = 'rail';
   rail.setAttribute('aria-label', 'Backlog Monitor');
   rail.innerHTML = `
-    <a class="rail-brand" href="dashboard.html">
-      <img src="/icons/icon-32.png" alt="" width="22" height="22" />
-      <span>Backlog Monitor</span>
-      <span class="ver">v${esc(chrome.runtime.getManifest().version)}</span>
-    </a>
+    <div class="rail-top">
+      <a class="rail-brand" href="dashboard.html" title="Backlog Monitor">
+        <img src="/icons/icon-32.png" alt="" width="22" height="22" />
+        <span>Backlog Monitor</span>
+        <span class="ver">v${esc(chrome.runtime.getManifest().version)}</span>
+      </a>
+      <button type="button" class="rail-toggle" aria-expanded="true" aria-label="Collapse the sidebar" title="Collapse the sidebar"></button>
+    </div>
     <section class="profile loading" aria-label="Your account">
       <div class="profile-id">
         <span class="avatar" aria-hidden="true"></span>
@@ -58,7 +61,7 @@ function buildRail() {
       <div class="profile-stats" hidden></div>
     </section>
     <nav class="rail-nav" aria-label="Dashboard">
-      ${NAV.map(n => `<a href="${n.href}" data-nav="${n.page}"${n.page === current ? ' aria-current="page"' : ''}>${icon(n.page)}<span>${n.label}</span></a>`).join('')}
+      ${NAV.map(n => `<a href="${n.href}" data-nav="${n.page}" title="${n.label}"${n.page === current ? ' aria-current="page"' : ''}>${icon(n.page)}<span>${n.label}</span></a>`).join('')}
     </nav>
     <div class="rail-foot">
       <div class="sync-line" hidden><span class="dot"></span><span class="txt"></span></div>
@@ -167,6 +170,65 @@ if (cached.me) renderIdentity(rail, cached.me, cached.avatar);
 if (state[STATS_KEY]?.sprint === currentSprint()?.key) paintStats(rail, state[STATS_KEY]);
 renderSync(rail, state);
 document.body.prepend(rail);
+
+// ── Collapse and resize ──────────────────────────────────────────────────────
+// The state lives in rail-prefs.js (window.blmRail), which sets --rail-w before first paint.
+{
+  const prefs = window.blmRail;
+  const toggle = rail.querySelector('.rail-toggle');
+  toggle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+  const handle = document.createElement('div');
+  handle.className = 'rail-resize';
+  handle.setAttribute('role', 'separator');
+  handle.setAttribute('aria-orientation', 'vertical');
+  handle.setAttribute('aria-label', 'Resize the sidebar (drag, or use the arrow keys)');
+  handle.tabIndex = 0;
+  rail.after(handle);
+
+  const sync = () => {
+    const { w, collapsed } = prefs.get();
+    const label = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', label);
+    toggle.title = label;
+    handle.hidden = collapsed;
+    handle.setAttribute('aria-valuemin', prefs.MIN);
+    handle.setAttribute('aria-valuemax', prefs.MAX);
+    handle.setAttribute('aria-valuenow', w);
+  };
+  sync();
+  document.addEventListener('blm-rail-change', sync);
+  toggle.addEventListener('click', () => prefs.set({ collapsed: !prefs.get().collapsed }));
+
+  // Drag the edge to resize; dragging far enough in collapses it. Double-click resets the width.
+  handle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.documentElement.classList.add('rail-resizing');
+    let x = e.clientX;
+    const move = ev => { x = ev.clientX; prefs.preview(x); };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      document.documentElement.classList.remove('rail-resizing');
+      if (x < prefs.MIN - 60) prefs.set({ collapsed: true });
+      else prefs.set({ w: x, collapsed: false });
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('dblclick', () => prefs.set({ w: prefs.DEFAULT }));
+  handle.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 48 : 16;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prefs.set({ w: prefs.get().w - step }); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); prefs.set({ w: prefs.get().w + step }); }
+    else if (e.key === 'Home') { e.preventDefault(); prefs.set({ w: prefs.MIN }); }
+    else if (e.key === 'End') { e.preventDefault(); prefs.set({ w: prefs.MAX }); }
+  });
+}
 
 // ── Experimental options: tap your avatar seven times, like Android's developer mode ──
 const DEV_KEY = '__blm_dev_unlocked';
