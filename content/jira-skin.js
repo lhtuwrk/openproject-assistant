@@ -766,6 +766,8 @@ html.${WP_CLASS} .work-packages--show-view .op-uc-container {
   font-family: var(--jx-font); font-size: 14px; line-height: 1.714; color: var(--jx-text);
 }
 html.${WP_CLASS} .op-user-activity--user-name,
+html.${WP_CLASS} { --blm-chip-bg: var(--jx-hover); --blm-chip-border: var(--jx-border); --blm-chip-fg: var(--jx-text); --blm-chip-muted: var(--jx-text-subtle); --blm-chip-hover: var(--jx-btn-hover); --blm-chip-focus: var(--jx-focus); }
+html.${WP_CLASS} a.blm-chip { color: var(--jx-text); text-decoration: none; }
 html.${WP_CLASS} .user-comment--user { font-weight: 600; color: var(--jx-text); }
 html.${WP_CLASS} .op-user-activity--date,
 html.${WP_CLASS} .user-comment--date { color: var(--jx-text-subtlest); }
@@ -3872,6 +3874,32 @@ window.addEventListener('blur', endDrag);   // not captured: element blurs would
 
 let frame = 0;
 let wasOnWp = false;
+// ─── #123 references as chips (shared/wp-chips.js) ──────────────────────────────
+const chipDetails = new Map();   // wp id -> { type, subject, status } | null when it can't be read
+const chipLoading = new Set();
+
+function chipInfo(id) {
+  if (chipDetails.has(id)) return chipDetails.get(id);
+  if (!chipLoading.has(id)) {
+    chipLoading.add(id);
+    getJson(`/api/v3/work_packages/${id}`)
+      .then(wp => chipDetails.set(id, { type: wp._links?.type?.title ?? '', subject: wp.subject ?? '', status: wp._links?.status?.title ?? '' }))
+      .catch(() => chipDetails.set(id, null))
+      .finally(() => { chipLoading.delete(id); schedule(); });
+  }
+  return undefined;
+}
+
+/** In the description and the comments of the work package on screen, "#123" and links to
+ *  other work packages become chips: type icon, id and title. */
+function renderChips() {
+  if (!window.blmChips) return;
+  const roots = document.querySelectorAll('.work-packages--details :is(.op-uc-container, .user-comment), .work-packages--show-view :is(.op-uc-container, .user-comment)');
+  if (!roots.length) return;
+  blmChips.installStyles();
+  for (const root of roots) blmChips.transform(root, { origin: API_BASE, info: chipInfo, newTab: false });
+}
+
 function schedule() {
   if (frame || dragging) return;
   frame = requestAnimationFrame(() => {
@@ -3885,7 +3913,7 @@ function schedule() {
     if (onWp && !wasOnWp) pickQuote();
     wasOnWp = onWp;
     if (onWp) {
-      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); syncJump(); adjustRelationsCount(); }
+      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); renderChips(); syncJump(); adjustRelationsCount(); }
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();

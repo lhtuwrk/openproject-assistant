@@ -143,6 +143,16 @@ export async function fetchWorkPackageActivities(wpId) {
   return data._embedded?.elements ?? [];
 }
 
+/** The comments of a work package, oldest first: the activities that carry a note, without the pure field changes. */
+export async function fetchComments(wpId) {
+  return (await fetchWorkPackageActivities(wpId)).filter(a => (a.comment?.raw ?? '').trim());
+}
+
+/** Adds a comment to a work package; resolves to the new activity. */
+export function postComment(wpId, raw) {
+  return apiWrite('POST', `/api/v3/work_packages/${wpId}/activities`, { comment: { raw } });
+}
+
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
 /**

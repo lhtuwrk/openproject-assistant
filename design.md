@@ -116,7 +116,7 @@ level, a time bank) and the numbers, never in extra colour or motion. Each level
 has one signal colour, used only for its mark, the card's top rule and the meter.
 The story on the table is the focus: levels and a compact level clock share one
 strip on top; below, the story takes the wide column (id, type, points, tags,
-title, then the Description · Subtasks · Relations · Attachments tabs at full
+title, then the Description · Subtasks · Relations · Attachments · Comments tabs at full
 length) and a sticky 320 px side column holds the story's own clock, Planned /
 Defer, Prev / Next, Status · Assignee · Author · Updated, the planned tally and
 what's up next. Under 1100 px the side column moves above the story. The
@@ -150,13 +150,19 @@ Space pauses. Only the sprint being planned is chosen; its open stories are the
 deck (a subtask of a story in the same sprint comes with its story). Planned and
 Defer are the game's own bookkeeping and write nothing, with one exception: Defer's tray has a searchable "Move to" version picker, and a story deferred with a version chosen is moved there (with its open subtasks of this sprint); Undo or Mark not planned moves them back. Under the card, the
 story's detail panel (Status · Assignee · Author · Updated, then Description ·
-Subtasks · Relations · Attachments tabs) is where the team reads and edits the
+Subtasks · Relations · Attachments · Comments tabs) is where the team reads and edits the
 story: status, assignee, new subtasks (type · subject · assignee, created in the
 sprint) and subtask status/assignee are written to OpenProject at once with no
 confirm dialog. The description is OpenProject's HTML, sanitized; images and
 attachment thumbnails are fetched with the session cookie. View all lists every
 story by level with a Planned / Deferred / On the table / Not planned chip and
 opens the same detail panel beside the list.
+A work package reference (#12345, or a link to one) in a description or a comment shows as a chip: a
+type icon (bug red, story green, task cobalt, other amber), the id and the title, in Planning and, with
+the Jira skin, on the backlog's own work package page (shared/wp-chips.js).
+The Comments tab lists a story's comments newest first and posts a new one (Ctrl+Enter); typing @ opens the same
+people list as the assignee picker (picture, name, search by typing on), and a chosen name is sent as an
+OpenProject mention so that person is notified.
 
 ## Injected skin on OpenProject
 `jira-skin.js` dresses OpenProject itself, not an extension page, so it follows

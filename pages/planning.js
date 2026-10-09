@@ -11,7 +11,7 @@
 import {
   fetchActiveProjects, fetchOpenVersions, fetchProjectWorkPackages, fetchWorkPackage,
   fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses,
-  fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes,
+  fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchComments, postComment, fetchUserName,
   fetchBacklogBlob, sprintCalendar,
 } from '../shared/api.js';
 import { cachedMe, refreshMe, initials, avatarHue, todayStr } from '../shared/me.js';
@@ -323,6 +323,10 @@ const rt = {
   saving: new Set(),           // `${wpId}:${field}` writes in flight
   writeErr: new Map(),         // `${wpId}:${field}` -> message
   sub: { draft: '', typeHref: null, assigneeHref: undefined, busy: false, err: '' },
+  commentDrafts: new Map(),    // wpId -> text typed but not posted
+  commentBusy: new Set(),      // wpIds with a comment being posted
+  commentErr: new Map(),       // wpId -> message of the last failed post
+  commentMentions: new Map(),  // wpId -> { name: href } of the people picked with @ in the draft
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -534,8 +538,8 @@ function detailId() {
 async function loadDetail(id) {
   const d = { loading: true };
   details.set(id, d);
-  const [wp, kids, relations, files] = await Promise.allSettled([
-    fetchWorkPackage(id), fetchChildWorkPackages(id), fetchRelations(id), fetchAttachments(id),
+  const [wp, kids, relations, files, comments] = await Promise.allSettled([
+    fetchWorkPackage(id), fetchChildWorkPackages(id), fetchRelations(id), fetchAttachments(id), fetchComments(id),
   ]);
   d.loading = false;
   if (wp.status === 'rejected') { d.err = wp.reason; requestRender(); return; }
@@ -543,7 +547,9 @@ async function loadDetail(id) {
   d.kids = kids.status === 'fulfilled' ? kids.value : null;
   d.relations = relations.status === 'fulfilled' ? relations.value : null;
   d.files = files.status === 'fulfilled' ? files.value : null;
-  d.partialErr = [kids, relations, files].find(r => r.status === 'rejected')?.reason?.message ?? '';
+  d.comments = comments.status === 'fulfilled' ? comments.value : null;
+  loadCommentAuthors(d.comments);
+  d.partialErr = [kids, relations, files, comments].find(r => r.status === 'rejected')?.reason?.message ?? '';
   d.kidStatuses = new Map();
   requestRender();
   loadStatuses(id);
@@ -1263,6 +1269,9 @@ function patchChildren(from, to) {
 }
 
 function patchAttrs(a, b) {
+  // A reused <img> that now stands for another picture must drop the old one, or the new
+  // owner of the slot (a re-sorted list) shows the previous person's picture.
+  if (a.tagName === 'IMG' && a.dataset.blob !== undefined && a.getAttribute('data-blob') !== b.getAttribute('data-blob')) a.removeAttribute('src');
   for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
   for (const { name } of [...a.attributes]) {
     if (b.hasAttribute(name)) continue;
@@ -1554,11 +1563,46 @@ function fieldsHtml(id, d) {
   </div>`;
 }
 
+// ─── #123 references as chips (type icon, id, title) ──────────────────────────
+const chipInfo = new Map();        // wp id -> { type, subject, status } | null when it can't be read
+const chipLoading = new Set();
+const chipCache = new Map();       // html -> { v, out }
+let chipVersion = 0;               // grows whenever details arrive, so cached pages are rebuilt
+
+function chipOf(id) {
+  if (chipInfo.has(id)) return chipInfo.get(id);
+  const card = rt.cards.get(id) ?? s.decisions[id]?.card;
+  if (card) return { type: card.type, subject: card.subject, status: '' };   // a story of this sprint: known already
+  if (!chipLoading.has(id)) {
+    chipLoading.add(id);
+    fetchWorkPackage(id)
+      .then(wp => chipInfo.set(id, { type: wp._links?.type?.title ?? '', subject: wp.subject ?? '', status: wp._links?.status?.title ?? '' }))
+      .catch(() => chipInfo.set(id, null))
+      .finally(() => { chipLoading.delete(id); chipVersion++; requestRender(); });
+  }
+  return undefined;
+}
+
+/** Sanitized rich text with its work package references turned into chips. */
+function withChips(html) {
+  if (!window.blmChips || !html) return html ?? '';
+  const hit = chipCache.get(html);
+  if (hit?.v === chipVersion) return hit.out;
+  blmChips.installStyles();
+  const t = document.createElement('template');
+  t.innerHTML = html;
+  blmChips.transform(t.content, { origin: BACKLOG_URL, info: chipOf });
+  const out = t.innerHTML;
+  if (chipCache.size > 200) chipCache.clear();
+  chipCache.set(html, { v: chipVersion, out });
+  return out;
+}
+
 function descHtml(d) {
   const html = d.wp.description?.html ?? '';
   if (!html.replace(/<[^>]*>/g, '').trim() && !/<img/i.test(html)) return '<p class="text2">No description.</p>';
   if (d.descFor !== html) { d.descFor = html; d.descSafe = safeHtml(html); }
-  return `<div class="rich">${d.descSafe}</div>`;
+  return `<div class="rich">${withChips(d.descSafe)}</div>`;
 }
 
 function kidsHtml(id, d) {
@@ -1633,15 +1677,194 @@ function detailHtml(id) {
 }
 
 /** Description · Subtasks · Relations · Attachments for a loaded story. */
+const userNames = new Map();   // user id -> name ('' when it can't be read)
+
+/** An activity's author: the name OpenProject sends with the link, else one we looked up. */
+function authorName(user) {
+  if (user?.title) return user.title;
+  const id = idOf(user?.href);
+  const known = id && (userNames.get(id) ?? rt.people?.find(p => p.id === id)?.name ?? (rt.me?.id === id ? rt.me.name : undefined));
+  return known === undefined ? null : known || 'Unknown user';
+}
+
+/** Looks up the names of comment authors the activity feed only links to. */
+async function loadCommentAuthors(comments) {
+  const missing = [...new Set((comments ?? []).map(a => a._links?.user).filter(u => u && !authorName(u)).map(u => idOf(u.href)).filter(Boolean))];
+  if (!missing.length) return;
+  await Promise.all(missing.map(async id => userNames.set(id, (await fetchUserName(id)) ?? '')));
+  requestRender();
+}
+
+/** Comments of a story, newest first, under a box to add one. */
+function commentsHtml(id, d) {
+  const draft = rt.commentDrafts.get(id) ?? '';
+  const busy = rt.commentBusy.has(id);
+  const err = rt.commentErr.get(id);
+  const composer = `<div class="comment-new">
+      <textarea class="ctrl" data-role="comment" data-id="${esc(id)}" rows="3" placeholder="Add a comment (Ctrl+Enter posts it)" aria-label="New comment on #${esc(id)}"
+        value="${esc(draft)}"${busy ? ' readonly aria-busy="true"' : ''}>${esc(draft)}</textarea>
+      <div class="comment-actions">${err ? `<span class="card-error" role="alert">Couldn't post the comment: ${esc(err)}</span>` : ''}<span class="spacer"></span>
+        <button class="primary" data-act="comment-post" data-id="${esc(id)}"${busy || !draft.trim() ? ' disabled' : ''}>${busy ? 'Posting…' : 'Comment'}</button></div>
+    </div>`;
+  if (!d.comments) return `${composer}<p class="card-error">Couldn't load the comments.</p>`;
+  if (!d.comments.length) return `${composer}<p class="text2">No comments yet.</p>`;
+  const when = iso => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+  const items = [...d.comments].reverse().map(a => {
+    const user = a._links?.user ?? {};
+    const who = authorName(user) ?? '…';
+    a._safe ??= safeHtml(a.comment?.html || esc(a.comment?.raw ?? '').replace(/\n/g, '<br>'));
+    return `<li class="comment">
+      <div class="c-head">${avatar(idOf(user.href), who, user.href)}<b>${esc(who)}</b><span class="muted">${esc(when(a.createdAt))}</span></div>
+      <div class="rich">${withChips(a._safe)}</div></li>`;
+  }).join('');
+  return `${composer}<ul class="comments">${items}</ul>`;
+}
+
+// ─── @mentions in a comment ───────────────────────────────────────────────────
+// Typing "@" opens the same people list as the assignee picker (picture, name, search by
+// typing on). The box shows a plain "@Name"; when the comment is posted every chosen name
+// becomes the mention tag OpenProject understands, so that person is notified.
+
+let mentionEl = null;
+let mentionSt = null;   // { wp, start, q, active, options }
+
+function closeMention() { mentionEl?.remove(); mentionEl = null; mentionSt = null; }
+
+/** The "@query" being typed just before the caret, or null. */
+function mentionTarget(ta) {
+  const caret = ta.selectionStart ?? 0;
+  const m = /(?:^|\s)@([^\s@]*)$/.exec(ta.value.slice(0, caret));
+  return m ? { start: caret - m[1].length - 1, q: m[1] } : null;
+}
+
+function mentionRows() {
+  const ul = mentionEl.querySelector('ul');
+  if (!rt.people) { ul.innerHTML = '<li class="pick-note" role="presentation">Loading people…</li>'; mentionSt.options = []; return; }
+  const q = mentionSt.q.toLowerCase();
+  const mentionable = rt.people.filter(p => /^\/api\/v3\/(users|groups)\/\d+$/.test(p.href));
+  mentionSt.options = mentionable
+    .filter(p => !q || p.name.toLowerCase().includes(q))
+    .sort((a, b) => Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q)))
+    .slice(0, 8);
+  if (mentionSt.active >= mentionSt.options.length) mentionSt.active = 0;
+  ul.innerHTML = mentionSt.options.length
+    ? mentionSt.options.map((p, i) => `<li role="option" data-i="${i}" class="pick-opt${i === mentionSt.active ? ' active' : ''}" aria-selected="${i === mentionSt.active}">
+        ${avatar(idOf(p.href), p.name, p.href)}<span class="nm">${esc(p.name)}</span></li>`).join('')
+    : '<li class="pick-note" role="presentation">No one by that name</li>';
+  hydrateImages();
+}
+
+/** Opens, updates or closes the people list for the textarea's caret. */
+function updateMention(ta) {
+  const t = mentionTarget(ta);
+  if (!t) { closeMention(); return; }
+  if (!mentionEl) {
+    mentionEl = document.createElement('div');
+    mentionEl.className = 'pick-pop mention-pop';
+    mentionEl.innerHTML = '<ul role="listbox" aria-label="People to mention"></ul>';
+    document.body.append(mentionEl);
+    // Choosing must not take the focus from the textarea.
+    mentionEl.addEventListener('pointerdown', e => e.preventDefault());
+    mentionEl.addEventListener('click', e => {
+      const li = e.target.closest('[data-i]');
+      if (li) chooseMention(Number(li.dataset.i));
+    });
+    mentionSt = { wp: ta.dataset.id, start: t.start, q: t.q, active: 0, options: [] };
+  }
+  Object.assign(mentionSt, { wp: ta.dataset.id, start: t.start, q: t.q });
+  mentionRows();
+  const r = ta.getBoundingClientRect();
+  const h = mentionEl.offsetHeight, below = innerHeight - r.bottom;
+  mentionEl.style.width = `${Math.min(320, r.width)}px`;
+  mentionEl.style.left = `${Math.max(8, r.left)}px`;
+  if (below < h + 12 && r.top > below) { mentionEl.style.top = 'auto'; mentionEl.style.bottom = `${innerHeight - r.top + 4}px`; }
+  else { mentionEl.style.bottom = 'auto'; mentionEl.style.top = `${r.bottom + 4}px`; }
+}
+
+function chooseMention(i) {
+  const p = mentionSt?.options[i];
+  const ta = document.querySelector(`[data-role="comment"][data-id="${CSS.escape(mentionSt?.wp ?? '')}"]`);
+  if (!p || !ta) return closeMention();
+  const caret = ta.selectionStart ?? ta.value.length;
+  const before = ta.value.slice(0, mentionSt.start), after = ta.value.slice(caret);
+  const insert = `@${p.name} `;
+  ta.value = before + insert + after;
+  ta.setSelectionRange(before.length + insert.length, before.length + insert.length);
+  const wp = mentionSt.wp;
+  rt.commentDrafts.set(wp, ta.value);
+  rt.commentMentions.set(wp, { ...(rt.commentMentions.get(wp) ?? {}), [p.name]: p.href });
+  document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(wp)}"]`)?.removeAttribute('disabled');
+  closeMention();
+  ta.focus();
+}
+
+/** The text to send: each "@Name" chosen from the list becomes OpenProject's mention tag. */
+function withMentionTags(id, text) {
+  const chosen = rt.commentMentions.get(id) ?? {};
+  const names = Object.keys(chosen).sort((a, b) => b.length - a.length);   // longest first, so "Gia Võ Hoàng" wins over "Gia"
+  if (!names.length) return text;
+  // One pass over the text: a name inside an inserted tag is never matched again.
+  return text.replace(new RegExp(`@(${names.map(escRe).join('|')})(?![\\p{L}\\p{N}])`, 'gu'), (all, name) => {
+    const href = chosen[name];
+    const type = href.includes('/groups/') ? 'group' : 'user';
+    return `<mention class="mention" data-id="${idOf(href)}" data-type="${type}" data-text="@${esc(name)}">@${esc(name)}</mention>`;
+  });
+}
+
+document.addEventListener('input', e => { if (e.target.dataset?.role === 'comment') updateMention(e.target); });
+document.addEventListener('click', e => { if (e.target.dataset?.role === 'comment') updateMention(e.target); });
+document.addEventListener('keyup', e => {
+  if (e.target.dataset?.role === 'comment' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) updateMention(e.target);
+});
+document.addEventListener('focusout', e => { if (e.target.dataset?.role === 'comment') closeMention(); });
+document.addEventListener('keydown', e => {
+  if (!mentionEl || e.target.dataset?.role !== 'comment') return;
+  const n = mentionSt.options.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (n) { mentionSt.active = (mentionSt.active + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; mentionRows(); mentionEl.querySelector('.active')?.scrollIntoView({ block: 'nearest' }); }
+  } else if ((e.key === 'Enter' || e.key === 'Tab') && n && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    chooseMention(mentionSt.active);
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopImmediatePropagation();
+    closeMention();
+  }
+}, true);
+addEventListener('resize', closeMention);
+
+/** Posts the comment typed for a story, then shows it first in its list. */
+async function addComment(id) {
+  const raw = (rt.commentDrafts.get(id) ?? '').trim();
+  if (!raw || rt.commentBusy.has(id)) return;
+  rt.commentBusy.add(id); rt.commentErr.delete(id); render();
+  try {
+    const saved = await postComment(id, withMentionTags(id, raw));
+    const d = details.get(id);
+    if (d) d.comments = [...(d.comments ?? []), saved];
+    loadCommentAuthors([saved]);
+    rt.commentDrafts.delete(id);
+    rt.commentMentions.delete(id);
+    announce(`Comment added to #${id}`);
+  } catch (err) {
+    rt.commentErr.set(id, err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message);
+  } finally {
+    rt.commentBusy.delete(id);
+    render();
+    document.querySelector('[data-role="comment"]')?.focus();
+  }
+}
+
 function tabsHtml(id, d) {
   const tabs = [
     ['desc', 'Description', ''],
     ['sub', 'Subtasks', d.kids?.length],
     ['rel', 'Relations', d.relations?.length],
     ['files', 'Attachments', d.files?.length],
+    ['comments', 'Comments', d.comments?.length],
   ];
   const body = rt.tab === 'sub' ? kidsHtml(id, d) : rt.tab === 'rel' ? relationsHtml(id, d)
-    : rt.tab === 'files' ? filesHtml(d) : descHtml(d);
+    : rt.tab === 'files' ? filesHtml(d) : rt.tab === 'comments' ? commentsHtml(id, d) : descHtml(d);
   return `<div class="tabs" role="tablist">${tabs.map(([k, label, n]) => `<button role="tab" class="tab" data-act="tab" data-tab="${k}" aria-selected="${rt.tab === k}">${label}${n ? ` <span class="num muted">${n}</span>` : ''}</button>`).join('')}</div>
     <div class="tab-body" role="tabpanel" data-key="${esc(id)}:${rt.tab}">${body}</div>
     ${d.partialErr ? `<p class="muted" style="font-size:var(--text-xs)">Some parts didn't load: ${esc(d.partialErr)}</p>` : ''}
@@ -2130,6 +2353,7 @@ async function onAction(act, el) {
       if (rt.tab === 'sub') { const id = detailId(); if (id) loadKidStatuses(id); }
       return render();
     case 'sub-create': return createSubtask(el.dataset.id);
+    case 'comment-post': return addComment(el.dataset.id);
     case 'detail-retry': details.delete(el.dataset.id); return render();
     case 'end':      return endGame();
     case 'back':     rt.view = null; s.phase = 'play'; s.level = Math.min(s.level, LEVELS.length - 1); save(); return render();
@@ -2199,6 +2423,17 @@ document.addEventListener('toggle', e => {
 
 document.addEventListener('input', e => {
   if (e.target.dataset.role === 'sub-subject') rt.sub.draft = e.target.value;
+  if (e.target.dataset.role === 'comment') {
+    rt.commentDrafts.set(e.target.dataset.id, e.target.value);
+    const post = document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(e.target.dataset.id)}"]`);
+    if (post) post.disabled = !e.target.value.trim() || rt.commentBusy.has(e.target.dataset.id);
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.dataset?.role === 'comment' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    addComment(e.target.dataset.id);
+  }
 });
 
 // ─── Jira-style pickers: status and assignee of the story on the table ────────

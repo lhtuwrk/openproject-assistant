@@ -266,6 +266,16 @@
     .split-row input { width: 72px; text-align: right; }
     .split-pop p { font-size: var(--text-xs); }
     .split-actions { display: flex; justify-content: flex-end; gap: var(--space-xs); }
+    /* Comments tab */
+    .comment-new { display: grid; gap: var(--space-xs); margin-bottom: var(--space-md); }
+    .comment-new textarea { width: 100%; height: auto; min-height: 76px; padding: var(--space-xs) var(--space-sm); resize: vertical; line-height: 1.45; }
+    .comment-actions { display: flex; align-items: center; gap: var(--space-sm); }
+    .comment-actions .spacer { flex: 1; }
+    .comments { list-style: none; margin: 0; padding: 0; display: grid; }
+    .comment { display: grid; gap: var(--space-2xs); padding: var(--space-sm) 0; border-top: 1px solid var(--border); }
+    .comment .c-head { display: flex; align-items: center; gap: var(--space-xs); font-size: var(--text-sm); }
+    .comment .c-head .avatar { width: 24px; height: 24px; font-size: 10px; }
+    .comment .rich { font-size: var(--text-md); }
     .ctx-menu {
       position: fixed; z-index: 80; display: grid; min-width: 220px; padding: var(--space-2xs);
       background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / .28);
@@ -633,6 +643,7 @@
 
   <script type="module" src="../shared/shell.js"></script>
   <script src="../content/quick-settings-host.js"></script>
+  <script src="../shared/wp-chips.js"></script>
   <script type="module" src="planning.js"></script>
 </body>
 </html>
