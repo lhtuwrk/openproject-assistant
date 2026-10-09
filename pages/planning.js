@@ -562,7 +562,7 @@ async function writeField(wpId, field, href, parentId) {
   if (rt.saving.has(key)) return;
   rt.saving.add(key); rt.writeErr.delete(key); render();
   try {
-    const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, { _links: { [field]: { href } } }));
+    const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, field === 'storyPoints' ? { storyPoints: href } : { _links: { [field]: { href } } }));
     const d = details.get(parentId ?? wpId);
     if (d?.loading) {
       details.delete(parentId ?? wpId);   // a reload started before the save: load it again after
@@ -574,6 +574,7 @@ async function writeField(wpId, field, href, parentId) {
       const card = rt.cards.get(String(wpId));
       if (card) rt.cards.set(card.id, { ...toCard(saved), labels: card.labels });
       if (field === 'status') loadStatuses(wpId);
+      if (field === 'storyPoints' && s.decisions[wpId]) s.decisions[wpId].card.points = toCard(saved).points;
     }
     announce(`#${wpId} ${field} saved`);
   } catch (err) {
@@ -744,9 +745,45 @@ function togglePause() {
   save(); render();
 }
 
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** The story on the table is thrown off as a clone (planned: to the right, deferred: to the left)
+ *  while the real page already shows the next story, which then rises in. */
+function flyOut(d) {
+  if (reducedMotion()) return;
+  const live = document.querySelector('.story-main');
+  if (!live) return;
+  const r = live.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const ghost = live.cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.inert = true;
+  ghost.classList.add('fly-ghost', d === 'plan' ? 'fly-plan' : 'fly-defer');
+  Object.assign(ghost.style, { top: `${r.top}px`, left: `${r.left}px`, width: `${r.width}px`, height: `${r.height}px` });
+  document.body.append(ghost);
+  const done = () => ghost.remove();
+  ghost.addEventListener('animationend', done, { once: true });
+  setTimeout(done, 1000);
+  rt.enterNext = true;
+}
+
+/** Slides the freshly shown story in after a decision (see flyOut). */
+function enterCard() {
+  if (!rt.enterNext) return;
+  rt.enterNext = false;
+  const el = document.querySelector('.story-main');
+  if (!el) return;
+  el.classList.remove('card-enter');
+  void el.offsetWidth;   // restart the animation
+  el.classList.add('card-enter');
+  el.addEventListener('animationend', () => el.classList.remove('card-enter'), { once: true });
+}
+
 /** Marks a story planned or deferred. Game bookkeeping only: nothing is written to OpenProject. */
 function decide(card, d, extra = {}) {
   hideToast();
+  if (currentId() === card.id && s.phase === 'play' && !s.decisions[card.id]) flyOut(d);
   const level = levelKeyOf(card.id) ?? curLevel().key;
   const wasOnTable = currentId() === card.id;
   s.decisions[card.id] = {
@@ -765,6 +802,7 @@ function decide(card, d, extra = {}) {
     if (!undecided(level).length && !s.cursor[level]) pause();   // level cleared: the clock stops on the win
   }
   save(); render();
+  enterCard();
   announce(d === 'plan' ? `#${card.id} planned` : `#${card.id} deferred`);
   toast(`#${card.id} ${d === 'plan' ? 'planned' : 'deferred'}`, 'Undo', () => (s.history.at(-1) === card.id ? undo() : hideToast()));
 }
@@ -1223,7 +1261,7 @@ function relationsHtml(id, d) {
 function filesHtml(d) {
   if (!d.files) return `<p class="card-error">Couldn't load the attachments.</p>`;
   if (!d.files.length) return '<p class="text2">No attachments.</p>';
-  return `<ul class="files">${d.files.map(f => `<li><a class="file" href="${BACKLOG_URL}${esc(f.href)}" target="_blank" rel="noopener">
+  return `<ul class="files">${d.files.map(f => `<li><a class="file" href="${BACKLOG_URL}${esc(f.href)}" target="_blank" rel="noopener"${f.type.startsWith('image/') ? ` data-viewer="${esc(f.href)}" data-name="${esc(f.name)}"` : ''}>
     <span class="thumb">${f.type.startsWith('image/') ? `<img data-blob="${esc(f.href)}" alt="" />` : icon('file', 22)}</span>
     <span class="f-name">${esc(f.name)}</span>
     <span class="f-meta">${esc([fileSize(f.size), f.author, shortDate(f.created)].filter(Boolean).join(' · '))}</span>
@@ -1320,7 +1358,9 @@ function cardHeadHtml(card) {
   return `<div class="card-meta">
       <a href="${BACKLOG_URL}/work_packages/${card.id}" target="_blank" rel="noopener">#${card.id} ↗</a>
       <span>${esc(card.type)}</span>
-      <span class="num">${card.points == null ? 'no estimate' : `${pts(card.points)} pts`}</span>
+      <label class="pts-edit${savingCls(`${card.id}:storyPoints`)}"><span>Story points</span><input class="ctrl num" type="number" min="0" step="1" inputmode="numeric" data-field="points" data-wp="${esc(card.id)}"
+        data-orig="${card.points ?? ''}" value="${card.points ?? ''}" placeholder="–" aria-label="Story points of #${esc(card.id)}" /></label>
+      ${writeErrHtml(`${card.id}:storyPoints`, 'story points')}
       ${card.priority ? `<span class="tag">${esc(card.priority)}</span>` : ''}${labels}
     </div>
     <h2 class="card-title">${esc(card.subject)}</h2>`;
@@ -1703,6 +1743,48 @@ async function onAction(act, el) {
   }
 }
 
+// ─── Image viewer: pictures open over the page instead of in a new tab ────────
+
+let viewerEl = null;
+function closeViewer() { viewerEl?.remove(); viewerEl = null; }
+
+async function openViewer(path, name) {
+  closeViewer();
+  viewerEl = document.createElement('div');
+  viewerEl.className = 'viewer';
+  viewerEl.setAttribute('role', 'dialog');
+  viewerEl.setAttribute('aria-modal', 'true');
+  viewerEl.setAttribute('aria-label', name || 'Image');
+  viewerEl.innerHTML = `<button class="ghost viewer-close" data-viewer-close aria-label="Close image">✕</button>
+    <div class="viewer-body" data-role="viewer-body"><span class="muted">Loading…</span></div>`;
+  document.body.append(viewerEl);
+  const el = viewerEl;
+  viewerEl.querySelector('[data-viewer-close]').focus();
+  let url = blobUrl(path);
+  if (!url) {
+    try { url = URL.createObjectURL(await fetchBacklogBlob(path)); blobs.set(path, url); }
+    catch { if (viewerEl === el) el.querySelector('[data-role="viewer-body"]').textContent = "Couldn't load the image."; return; }
+  }
+  if (viewerEl !== el) return;
+  const img = document.createElement('img');
+  img.src = url; img.alt = name || '';
+  el.querySelector('[data-role="viewer-body"]').replaceChildren(img);
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-viewer-close]') || e.target === viewerEl) return closeViewer();
+  const f = e.target.closest('a[data-viewer]');
+  const pic = !f && e.target.closest('.rich img[data-blob]');
+  const path = f?.dataset.viewer ?? pic?.dataset.blob;
+  if (path && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    e.preventDefault();
+    return openViewer(path.replace(/&amp;/g, '&'), f?.dataset.name ?? pic?.alt);
+  }
+  if (e.target.closest('.rich a[href]') && e.target.closest('a')?.querySelector('img[data-blob]')) e.preventDefault();   // a picture wrapped in a link to itself
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewerEl) { e.stopImmediatePropagation(); closeViewer(); } }, true);
+
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (a && !a.disabled) onAction(a.dataset.act, a);
@@ -1736,6 +1818,13 @@ document.addEventListener('change', async e => {
   if (isWpSelect(t)) {
     if (pickedWithPointer === t) commitSelect(t);
     return;   // keyboard: written on Enter or when focus leaves
+  }
+  if (t.dataset.field === 'points') {
+    const raw = t.value.trim(), n = raw === '' ? null : Math.max(0, Math.round(Number(raw)));
+    if (n !== null && !Number.isFinite(n)) { t.value = t.dataset.orig; return; }
+    if (String(n ?? '') === t.dataset.orig) { t.value = t.dataset.orig; return; }
+    t.dataset.orig = String(n ?? '');
+    return writeField(t.dataset.wp, 'storyPoints', n);
   }
   if (t.dataset.field === 'sub-assignee') { rt.sub.assigneeHref = t.value || null; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
