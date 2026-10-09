@@ -458,9 +458,12 @@
     const reply = (r) => window.postMessage(
       { source: 'blm-progress-hook', type: 'write-result', reqId: d.reqId, ...r }, location.origin);
 
-    const hrefOk = WRITE_HREF[d.field] && (
-      (typeof d.href === 'string' && WRITE_HREF[d.field].test(d.href)) ||
-      (d.href === null && d.field === 'assignee'));
+    const isSubject = d.field === 'subject';
+    const hrefOk = isSubject
+      ? typeof d.value === 'string' && d.value.trim() !== '' && d.value.length <= 255
+      : WRITE_HREF[d.field] && (
+          (typeof d.href === 'string' && WRITE_HREF[d.field].test(d.href)) ||
+          (d.href === null && d.field === 'assignee'));
     if (!/^\d+$/.test(String(d.id)) || !hrefOk) { reply({ ok: false, message: 'invalid request' }); return; }
 
     try {
@@ -474,7 +477,9 @@
       if (csrf) headers['X-CSRF-TOKEN'] = csrf;
       const res = await window.fetch(`/api/v3/work_packages/${d.id}`, {
         method: 'PATCH', credentials: 'include', headers,
-        body: JSON.stringify({ lockVersion, _links: { [d.field]: { href: d.href } } }),
+        body: JSON.stringify(isSubject
+          ? { lockVersion, subject: d.value.trim() }
+          : { lockVersion, _links: { [d.field]: { href: d.href } } }),
       });
       let message = '';
       if (!res.ok) { try { message = (await res.json()).message ?? ''; } catch { /* not JSON */ } }

@@ -1204,6 +1204,16 @@ html.${WP_CLASS} .blm-jx-children .subject {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--jx-text); text-decoration: none;
 }
+html.${WP_CLASS} .blm-jx-children span.subject { cursor: text; border-radius: var(--jx-radius, 3px); }
+html.${WP_CLASS} .blm-jx-children span.subject:hover { background: var(--jx-btn-hover); }
+html.${WP_CLASS} .blm-jx-children span.subject:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
+html.${WP_CLASS} .blm-jx-children span.subject.saving { opacity: 0.6; cursor: progress; }
+html.${WP_CLASS} .blm-jx-children span.subject.error { color: var(--jx-error); }
+html.${WP_CLASS} .blm-jx-children input.subject {
+  width: 100%; min-width: 0; box-sizing: border-box; height: 28px; padding: 0 var(--jx-space-2);
+  font: inherit; color: var(--jx-text); background: var(--jx-surface);
+  border: 1px solid var(--jx-focus); border-radius: 3px; outline: none;
+}
 html.${WP_CLASS} .blm-jx-children a:hover { color: var(--jx-link); text-decoration: underline; }
 html.${WP_CLASS} .blm-jx-children a:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
 html.${WP_CLASS} .blm-jx-children .assignee {
@@ -1600,7 +1610,7 @@ window.addEventListener('message', e => {
 });
 
 /** Sets one link (status or assignee) on a work package; href null clears it. */
-function writeWp(kidId, field, href) {
+function writeWp(kidId, field, href, value) {
   const reqId = `w${++writeSeq}-${Date.now()}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -1608,7 +1618,7 @@ function writeWp(kidId, field, href) {
       reject(new Error('no answer from the page (reload it)'));
     }, 60_000);   // long enough for a "Confirm open subtasks" dialog
     writeWaiters.set(reqId, { resolve, reject, timer });
-    window.postMessage({ source: 'blm-jira-skin', type: 'write-wp', reqId, id: kidId, field, href }, location.origin);
+    window.postMessage({ source: 'blm-jira-skin', type: 'write-wp', reqId, id: kidId, field, href, value }, location.origin);
   });
 }
 
@@ -1728,9 +1738,15 @@ function buildChildren(wpId, kids) {
     const href = `/work_packages/${k.id}/activity`;
     const key = el('a', 'key', `#${k.id}`);
     key.href = href;
-    const subject = el('a', 'subject', k.subject);
-    subject.href = href;
-    subject.title = k.subject;
+    // Only the #id opens the detail page; the title edits in place.
+    const subject = el('span', 'subject', k.subject);
+    subject.tabIndex = 0;
+    subject.setAttribute('role', 'button');
+    subject.setAttribute('aria-label', `Edit title of #${k.id}: ${k.subject}`);
+    subject.title = writeErrors.has(`${k.id}:subject`)
+      ? `Couldn't change the title: ${writeErrors.get(`${k.id}:subject`)}` : 'Click to edit the title';
+    if (pendingWrites.has(`${k.id}:subject`)) { subject.classList.add('saving'); subject.setAttribute('aria-busy', 'true'); }
+    if (writeErrors.has(`${k.id}:subject`)) subject.classList.add('error');
     key.dataset.kid = subject.dataset.kid = k.id;
     key.dataset.focus = 'key';
     subject.dataset.focus = 'subject';
@@ -1899,6 +1915,60 @@ async function changeField(wpId, kidId, field, value) {
     writeErrors.set(key, err.message || 'request failed');
     updateKid(wpId, kidId, { [field]: before[field], [`${field}Href`]: before[`${field}Href`] });
   }
+}
+
+// ─── Inline title edit ────────────────────────────────────────────────────────
+
+async function changeSubject(wpId, kidId, text) {
+  const cached = childCache.get(wpId);
+  const before = Array.isArray(cached) ? cached.find(k => k.id === kidId) : null;
+  if (!before || before.subject === text) return;
+  const key = `${kidId}:subject`;
+  writeErrors.delete(key);
+  pendingWrites.set(key, { name: text });
+  updateKid(wpId, kidId, { subject: text });
+  try {
+    await writeWp(kidId, 'subject', null, text);
+    pendingWrites.delete(key);
+    if (viewWpId() === wpId) childCache.delete(wpId);
+    schedule();
+  } catch (err) {
+    pendingWrites.delete(key);
+    writeErrors.set(key, err.message || 'request failed');
+    updateKid(wpId, kidId, { subject: before.subject });
+  }
+}
+
+function editSubject(span) {
+  const section = span.closest('.blm-jx-children');
+  const kidId = span.dataset.kid;
+  if (!section || !kidId || pendingWrites.has(`${kidId}:subject`)) return;
+  const wpId = section.dataset.wp;
+  const original = span.textContent;
+  const input = el('input', 'subject');
+  input.type = 'text';
+  input.value = original;
+  input.maxLength = 255;
+  input.dataset.kid = kidId;
+  input.setAttribute('aria-label', `Title of #${kidId}`);
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    const text = input.value.trim();
+    input.replaceWith(span);
+    if (save && text && text !== original) changeSubject(wpId, kidId, text);
+    else span.focus();
+  };
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  span.replaceWith(input);
+  input.focus();
+  input.select();
 }
 
 // ─── Picker (assignee or status) ──────────────────────────────────────────────
@@ -2126,6 +2196,8 @@ async function openPicker(button) {
 }
 
 document.addEventListener('click', e => {
+  const title = e.target.closest?.('.blm-jx-children span.subject');
+  if (title && skinEnabled) { editSubject(title); return; }
   const button = e.target.closest?.('.blm-jx-children [data-field]');
   if (button && skinEnabled) { togglePicker(button); return; }
   if (picker && !picker.el.contains(e.target)) closePicker();
@@ -2133,6 +2205,11 @@ document.addEventListener('click', e => {
 // OpenProject's own inline editors (assignee, status, ...) stay open when you click
 // away, and the skin's cells stop their clicks from reaching OpenProject's outside-click
 // handling. Escape cancels an unchanged edit, so send it on any outside press.
+document.addEventListener('keydown', e => {
+  if ((e.key !== 'Enter' && e.key !== ' ') || !skinEnabled) return;
+  const title = e.target.closest?.('.blm-jx-children span.subject');
+  if (title) { e.preventDefault(); editSubject(title); }
+});
 document.addEventListener('mousedown', e => {
   if (!skinEnabled) return;
   const field = document.querySelector('.inline-edit--active-field');
