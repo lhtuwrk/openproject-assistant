@@ -5,7 +5,8 @@
 // clock. The story on the table shows everything needed to plan it — description,
 // subtasks, relations, attachments — and its status, assignee and subtasks can be
 // changed right there; those edits are written to OpenProject at once. Marking a
-// story planned or deferred is the game's own bookkeeping and writes nothing.
+// story planned or deferred is the game's own bookkeeping and writes nothing,
+// except that a deferred story can be moved to another version (see moveStory).
 
 import {
   fetchActiveProjects, fetchOpenVersions, fetchProjectWorkPackages, fetchWorkPackage,
@@ -99,17 +100,19 @@ function mergeDefs(saved) {
       ...(d.isBreak || d.catchAll ? {} : Object.fromEntries(EXTRA.map(k => [k, String(o[k] ?? '')]))) } : d;
   });
   const custom = [...byKey.values()].filter(d => d.custom && !DEFAULT_DEFS.some(b => b.key === d.key))
-    .map(d => ({ key: String(d.key), custom: true, name: String(d.name || 'New level').slice(0, 40),
+    .map(d => d.isBreak
+      ? { key: String(d.key), custom: true, isBreak: true, name: String(d.name || 'Break').slice(0, 40), sub: 'No tickets', min: 10 }
+      : { key: String(d.key), custom: true, name: String(d.name || 'New level').slice(0, 40),
       min: 15, labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
-      ...Object.fromEntries(EXTRA.map(k => [k, String(d[k] ?? '')])) }));
+      ...Object.fromEntries(EXTRA.map(k => [k, String(d[k] ?? '')])) });
   return [...custom, ...builtIn];
 }
 
 let LEVEL_DEFS, DEFAULT_ORDER, DEF;
 function setDefs(raw) {
   LEVEL_DEFS = raw.map(compile);
-  DEFAULT_ORDER = LEVEL_DEFS.filter(l => l.custom).map(l => l.key)
-    .concat(DEFAULT_DEFS.map(d => d.key));
+  DEFAULT_ORDER = LEVEL_DEFS.filter(l => l.custom && !l.isBreak).map(l => l.key)
+    .concat(DEFAULT_DEFS.map(d => d.key), LEVEL_DEFS.filter(l => l.custom && l.isBreak).map(l => l.key));
   DEF = Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l]));
 }
 let ruleDefs = mergeDefs(null);
@@ -118,13 +121,39 @@ setDefs(ruleDefs);
 /** Known keys in the saved order, then any level the saved order doesn't know yet. */
 function normalizeOrder(order) {
   const known = (Array.isArray(order) ? order : []).filter((k, i, a) => DEF[k] && a.indexOf(k) === i);
-  return [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
+  const out = [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
+  // A part of a split level always plays: one the order lost goes right after its level's last known part.
+  for (const k of Object.keys(DEF).filter(x => DEF[x].of && !out.includes(x)).sort((a, b) => DEF[a].from - DEF[b].from)) {
+    const last = out.reduce((at, x, i) => (x === DEF[k].of || DEF[x]?.of === DEF[k].of ? i : at), -1);
+    out.splice(last + 1, 0, k);
+  }
+  return out;
 }
 
 // The play order, set from the session by applyOrder().
 let LEVELS = LEVEL_DEFS;
 let PLAY_LEVELS = LEVELS.filter(l => !l.isBreak);
+const splitCuts = base => [...new Set((s.splits?.[base] ?? []).map(Number).filter(c => Number.isInteger(c) && c > 0))].sort((a, b) => a - b);
+
+/** A level split by breaks plays as consecutive parts: the level itself (its first stories) and one
+ *  `${key}~${from}` part per cut, each starting at story number `from`. DEF gets the parts, named "… 1/2". */
+function rebuildParts() {
+  DEF = Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l]));
+  for (const base of LEVEL_DEFS.filter(l => !l.isBreak)) {
+    const cuts = splitCuts(base.key);
+    if (!cuts.length) continue;
+    const total = cuts.length + 1;
+    const decorate = n => ({ part: n, parts: total, name: `${base.name} · ${n}/${total}`, short: `${base.short} ${n}/${total}` });
+    DEF[base.key] = { ...base, ...decorate(1) };
+    cuts.forEach((from, i) => {
+      const key = `${base.key}~${from}`;
+      DEF[key] = { ...base, ...decorate(i + 2), key, of: base.key, from, match: undefined, catchAll: false, custom: false };
+    });
+  }
+}
+
 function applyOrder() {
+  rebuildParts();
   s.levelOrder = normalizeOrder(s.levelOrder);
   LEVELS = s.levelOrder.map(k => DEF[k]);
   PLAY_LEVELS = LEVELS.filter(l => !l.isBreak);
@@ -250,6 +279,9 @@ function freshSession(prev) {
   return {
     v: 1,
     sortBy: prev?.sortBy ?? 'priority',   // priority · points · id: how stories are ordered inside a level
+    splits: prev?.splits ?? {},           // levelKey -> story numbers where the level is cut in two (see rebuildParts)
+    startAt: prev?.startAt ?? START_AT,   // the planning window: HH:MM, set in the lobby
+    endAt:   prev?.endAt ?? END_AT,
     phase: 'lobby',            // lobby · play · loot
     projectId:   prev?.projectId ?? null,
     projectName: prev?.projectName ?? '',
@@ -309,14 +341,36 @@ const cardBudgetMs = card => storyMin(card) * s.scale * 60000;
 
 const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 
+const startAt = () => s.startAt || START_AT;
+const endAt   = () => s.endAt || END_AT;
+const hhmm = total => {
+  const m = Math.round(total);
+  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+/** Minutes of every break (the ones you added and the coffee one). */
+const breakMin = () => LEVELS.filter(l => l.isBreak).reduce((t, l) => t + (Number(s.budgets[l.key]) || 0), 0);
+
 /** Each play level's minutes from its stories, scaled to fit the session if needed. */
 function timePlan() {
   const raw = Object.fromEntries(PLAY_LEVELS.map(l => [l.key,
     levelIds(l.key).filter(id => rt.cards.has(id)).reduce((t, id) => t + storyMin(rt.cards.get(id)), 0)]));
   const sum = Object.values(raw).reduce((t, m) => t + m, 0);
-  const avail = Math.max(0, toMin(END_AT) - toMin(START_AT) - LOOT_MIN - (Number(s.budgets.break) || 0));
+  const avail = Math.max(0, toMin(endAt()) - toMin(startAt()) - LOOT_MIN - breakMin());
   const scale = sum > avail && sum > 0 ? avail / sum : 1;
   return { raw, sum, avail, scale, minutes: key => raw[key] * scale };
+}
+
+/** Every section in play order with its minutes and when it runs, from the start time on:
+ *  { key: { min, from, to } }. Before Start the minutes come from the stories, after it from the budgets. */
+function schedule() {
+  const plan = s.phase === 'lobby' ? timePlan() : null;
+  let at = toMin(startAt());
+  return Object.fromEntries(LEVELS.map(l => {
+    const min = l.isBreak || !plan ? Number(s.budgets[l.key]) || 0 : plan.minutes(l.key);
+    const from = at;
+    at += min;
+    return [l.key, { min, from: hhmm(from), to: hhmm(at) }];
+  }));
 }
 
 function elapsedMs(key) {
@@ -344,6 +398,7 @@ const cardById = id => rt.cards.get(id) ?? s.decisions[id]?.card ?? null;
 
 /** Keeps a level's play order: known cards keep their place, new ones join at the end. */
 function syncOrder(key) {
+  if (DEF[key]?.of) return;   // a part of a split level: its level keeps the whole order
   const wanted = (DEF[key]?.labels ?? []).map(l => new RegExp(`\\b${escRe(l)}\\b`, 'i'));
   // Where the card's first rule label sits in the level's label list: the list is the label order.
   const labelRank = c => { const i = wanted.findIndex(re => c.labels.some(l => re.test(l))); return i < 0 ? wanted.length : i; };
@@ -356,7 +411,17 @@ function syncOrder(key) {
   s.order[key] = [...kept, ...fresh.filter(id => !kept.includes(id))];
 }
 
-const levelIds = key => s.order[key] ?? [];
+/** The level's stories in play order; for a part of a split level, its slice of the whole list. */
+function levelIds(key) {
+  const def = DEF[key];
+  const base = def?.of ?? key;
+  const full = s.order[base] ?? [];
+  const cuts = splitCuts(base);
+  if (!cuts.length) return full;
+  const from = def?.of ? def.from : 0;
+  const to = cuts.find(c => c > from);
+  return full.slice(from, to);
+}
 const undecided = key => levelIds(key).filter(id => !s.decisions[id] && cardById(id));
 /** The story on the table: where Next / Previous left the cursor, else the level's first unplanned one. */
 function currentId() {
@@ -649,11 +714,14 @@ function setOrder(order) {
 const splitLabels = text => [...new Set(String(text).split(/[,;\n]/).map(x => x.trim()).filter(Boolean))];
 
 /** Stores the rules and re-deals the sprint's stories into the levels they now describe. */
+const persistRules = () => chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom, isBreak }) =>
+  ({ key, name, labels, priority, type, status, assignee, custom, ...(isBreak && custom ? { isBreak } : {}) })) });
+
 function applyRules(next) {
   if (s.phase !== 'lobby') return;
   ruleDefs = next;
   setDefs(ruleDefs);
-  chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom }) => ({ key, name, labels, priority, type, status, assignee, custom })) });
+  persistRules();
   s.order = {};
   applyOrder();
   for (const l of PLAY_LEVELS) syncOrder(l.key);
@@ -674,6 +742,191 @@ function addRule() {
   applyRules([{ key, custom: true, name: 'New level', min: 15, labels: [], priority: '' }, ...ruleDefs]);
   document.querySelector(`[data-rule="name"][data-key="${key}"]`)?.focus();
 }
+
+/** Adds a break of your own to the rules and returns its key; the caller puts it in the play order. */
+function createBreak() {
+  const key = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  ruleDefs = [{ key, custom: true, isBreak: true, name: 'Break', sub: 'No tickets', min: 10 }, ...ruleDefs];
+  setDefs(ruleDefs);
+  persistRules();
+  s.budgets[key] = 10;
+  return key;
+}
+
+/** Splits the play order with a break of your own: `at` is the position it takes (0 = first). */
+function addBreak(at) {
+  if (s.phase !== 'lobby') return;
+  const key = createBreak();
+  const order = [...s.levelOrder];
+  order.splice(Math.max(0, Math.min(at, order.length)), 0, key);
+  s.levelOrder = order;
+  applyOrder(); save(); render();
+  const name = document.querySelector(`[data-rule="name"][data-key="${key}"]`);
+  name?.focus(); name?.select();
+}
+
+/** Cuts a level (or one part of it) in two after its `first` stories (default: the middle), with a break between the halves. */
+function splitLevel(key, first) {
+  const def = DEF[key];
+  if (s.phase !== 'lobby' || !def || def.isBreak) return;
+  const size = levelIds(key).length;
+  if (size < 2) { announce('A part needs at least two stories to be split'); return; }
+  const base = def.of ?? key;
+  const cut = (def.of ? def.from : 0) + Math.max(1, Math.min(Math.round(Number(first)) || Math.ceil(size / 2), size - 1));
+  s.splits = { ...s.splits, [base]: [...splitCuts(base), cut] };
+  const brk = createBreak();
+  const order = [...s.levelOrder];
+  order.splice(order.indexOf(key) + 1, 0, brk, `${base}~${cut}`);
+  s.levelOrder = order;
+  applyOrder(); save(); render();
+  announce(`${def.name} is split in two, with a break between`);
+}
+
+/** Joins a part back onto the part before it (the break between them stays until you remove it). */
+function mergeLevel(key) {
+  const def = DEF[key];
+  if (s.phase !== 'lobby' || !def?.of) return;
+  const left = splitCuts(def.of).filter(c => c !== def.from);
+  s.splits = { ...s.splits };
+  if (left.length) s.splits[def.of] = left; else delete s.splits[def.of];
+  s.levelOrder = s.levelOrder.filter(k => k !== key);
+  delete s.budgets[key];
+  applyOrder(); save(); render();
+}
+
+/** Moves the cut that ends a part, so the part holds `raw` stories (the last part takes the rest). */
+function setPartSize(key, raw) {
+  const def = DEF[key];
+  if (s.phase !== 'lobby' || !def) return render();
+  const base = def.of ?? key, from = def.of ? def.from : 0;
+  const cuts = splitCuts(base);
+  const end = cuts.find(c => c > from);
+  if (end === undefined) return render();
+  const next = cuts.find(c => c > end) ?? (s.order[base] ?? []).length;
+  const cut = from + Math.max(1, Math.min(Math.round(Number(raw)) || 1, next - from - 1));
+  if (cut === end) return render();
+  s.splits = { ...s.splits, [base]: cuts.map(c => (c === end ? cut : c)) };
+  const oldKey = `${base}~${end}`, newKey = `${base}~${cut}`;
+  s.levelOrder = s.levelOrder.map(k => (k === oldKey ? newKey : k));
+  if (oldKey in s.budgets) { s.budgets[newKey] = s.budgets[oldKey]; delete s.budgets[oldKey]; }
+  applyOrder(); save(); render();
+}
+
+function removeBreak(key) {
+  if (s.phase !== 'lobby' || !DEF[key]?.isBreak || !DEF[key].custom) return;
+  const at = s.levelOrder.indexOf(key);
+  ruleDefs = ruleDefs.filter(d => d.key !== key);
+  setDefs(ruleDefs);
+  persistRules();
+  delete s.budgets[key];
+  s.levelOrder = s.levelOrder.filter(k => k !== key);
+  applyOrder(); save(); render();
+  announce('Break removed');
+  document.querySelector(`[data-level="${s.levelOrder[Math.min(at, s.levelOrder.length - 1)]}"]`)?.scrollIntoView({ block: 'nearest' });
+}
+
+// ─── Split: choose how many stories go in the first part ──────────────────────
+
+let splitEl = null;
+function closeSplit() { splitEl?.remove(); splitEl = null; }
+
+/** Asks how many of the section's stories stay in its first part; `at` is the button or { x, y } it opens by. */
+function askSplit(key, at) {
+  const def = DEF[key];
+  if (s.phase !== 'lobby' || !def || def.isBreak) return;
+  const size = levelIds(key).length;
+  if (size < 2) { announce('A section needs at least two stories to be split'); return; }
+  closeSplit();
+  splitEl = document.createElement('div');
+  splitEl.className = 'split-pop';
+  splitEl.setAttribute('role', 'dialog');
+  splitEl.setAttribute('aria-label', `Split ${def.name}`);
+  splitEl.innerHTML = `<h3>Split ${esc(def.name)}</h3>
+    <label class="split-row"><span>Stories in the first part</span>
+      <input class="ctrl num" type="number" min="1" max="${size - 1}" value="${Math.ceil(size / 2)}" aria-label="Stories in the first part" /></label>
+    <p class="muted" data-role="split-rest"></p>
+    <div class="split-actions"><button type="button" class="ghost" data-role="split-cancel">Cancel</button><button type="button" class="primary" data-role="split-ok">Split</button></div>`;
+  document.body.append(splitEl);
+  const input = splitEl.querySelector('input'), rest = splitEl.querySelector('[data-role="split-rest"]');
+  const first = () => Math.max(1, Math.min(Math.round(Number(input.value)) || 1, size - 1));
+  const paint = () => { rest.textContent = `The other ${size - first()} of ${size} play after a break.`; };
+  paint();
+  input.addEventListener('input', paint);
+  const done = save => { const n = first(); closeSplit(); if (save) splitLevel(key, n); };
+  splitEl.querySelector('[data-role="split-ok"]').addEventListener('click', () => done(true));
+  splitEl.querySelector('[data-role="split-cancel"]').addEventListener('click', () => done(false));
+  splitEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); done(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeSplit(); }
+    e.stopPropagation();   // the page's single-key shortcuts must not fire from here
+  });
+  const r = at instanceof Element ? at.getBoundingClientRect() : { left: at.x, right: at.x, top: at.y, bottom: at.y };
+  const { offsetWidth: w, offsetHeight: h } = splitEl;
+  splitEl.style.left = `${Math.max(8, Math.min(r.right - w, innerWidth - w - 8))}px`;
+  splitEl.style.top = `${Math.max(8, Math.min(r.bottom + 6, innerHeight - h - 8))}px`;
+  input.focus();
+  input.select();
+}
+document.addEventListener('mousedown', e => { if (splitEl && !splitEl.contains(e.target)) closeSplit(); }, true);
+addEventListener('resize', closeSplit);
+addEventListener('scroll', e => { if (splitEl && !splitEl.contains(e.target)) closeSplit(); }, true);
+
+// ─── Right-click menu on a section (lobby) ────────────────────────────────────
+// The same actions as the row's buttons and the strips between rows, in one place.
+// Text fields keep the browser's own menu.
+
+let ctxEl = null;
+function closeCtx() { ctxEl?.remove(); ctxEl = null; }
+
+document.addEventListener('contextmenu', e => {
+  const row = s.phase === 'lobby' && e.target.closest?.('[data-role="levels"] .lvl-row');
+  if (!row || e.target.closest('input, textarea, select')) return;
+  const key = row.dataset.level, def = DEF[key];
+  if (!def) return;
+  e.preventDefault();
+  closeCtx();
+  const i = s.levelOrder.indexOf(key);
+  const n = levelIds(key).filter(id => rt.cards.has(id)).length;
+  const items = [
+    !def.isBreak && ['Split in two, with a break…', () => askSplit(key, { x: e.clientX, y: e.clientY }), n < 2],
+    def.of && ['Merge into the previous part', () => mergeLevel(key)],
+    ['Add a break before', () => addBreak(i)],
+    ['Add a break after', () => addBreak(i + 1)],
+    def.isBreak && def.custom && ['Remove this break', () => removeBreak(key)],
+    ['Play earlier', () => moveLevel(key, -1), i <= 0],
+    ['Play later', () => moveLevel(key, +1), i >= s.levelOrder.length - 1],
+  ].filter(Boolean);
+  ctxEl = document.createElement('div');
+  ctxEl.className = 'ctx-menu';
+  ctxEl.setAttribute('role', 'menu');
+  ctxEl.setAttribute('aria-label', def.name);
+  ctxEl.innerHTML = `<div class="ctx-head">${esc(def.name)}</div>${items.map(([label, , off], k) =>
+    `<button type="button" role="menuitem" data-k="${k}"${off ? ' disabled' : ''}>${esc(label)}</button>`).join('')}`;
+  document.body.append(ctxEl);
+  const { offsetWidth: w, offsetHeight: h } = ctxEl;
+  ctxEl.style.left = `${Math.max(8, Math.min(e.clientX, innerWidth - w - 8))}px`;
+  ctxEl.style.top = `${Math.max(8, Math.min(e.clientY, innerHeight - h - 8))}px`;
+  ctxEl.querySelector('button:not(:disabled)')?.focus();
+  ctxEl.addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-k]');
+    if (!b) return;
+    closeCtx();
+    items[Number(b.dataset.k)][1]();
+  });
+  ctxEl.addEventListener('keydown', ev => {
+    const btns = [...ctxEl.querySelectorAll('button:not(:disabled)')];
+    const at = btns.indexOf(document.activeElement);
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      btns[(at + (ev.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length]?.focus();
+    } else if (ev.key === 'Escape' || ev.key === 'Tab') { ev.preventDefault(); closeCtx(); }
+    ev.stopPropagation();   // the page's single-key shortcuts must not fire from the menu
+  });
+});
+document.addEventListener('mousedown', e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); }, true);
+addEventListener('resize', closeCtx);
+addEventListener('blur', closeCtx);
+addEventListener('scroll', e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); }, true);
 
 function moveLevel(key, by) {
   const order = [...s.levelOrder];
@@ -784,8 +1037,41 @@ function enterCard() {
 }
 
 /** Marks a story planned or deferred. Game bookkeeping only: nothing is written to OpenProject. */
+/** Moves a deferred story, and its open subtasks that sit in this sprint, to another version. */
+async function moveStory(card, target) {
+  const moved = [];
+  try {
+    const kids = details.get(card.id)?.kids ?? await fetchChildWorkPackages(card.id);
+    const withIt = kids.filter(k => k._links?.version?.href === s.versionHref
+      && !/closed|rejected|done|resolved/i.test(k._links?.status?.title ?? ''));
+    for (const id of [card.id, ...withIt.map(k => String(k.id))]) {
+      await queueWrite(id, () => patchWorkPackage(id, { _links: { version: { href: target.href } } }));
+      moved.push(id);
+    }
+  } catch (err) {
+    toast(`Couldn't move #${card.id} to ${target.name}: ${err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message}`);
+  }
+  const dec = s.decisions[card.id];
+  if (dec?.moved) { dec.moved.ids = moved; save(); }
+  else revertMove(moved);   // undone while it was moving
+}
+
+/** Puts moved stories back into the sprint being planned. */
+async function revertMove(ids) {
+  if (!ids?.length || !s.versionHref) return;
+  try {
+    for (const id of ids) await queueWrite(id, () => patchWorkPackage(id, { _links: { version: { href: s.versionHref } } }));
+  } catch (err) {
+    toast(`Couldn't move #${ids[0]} back to ${s.versionName}: ${err.message}`);
+  }
+}
+
+/** The detail of a deferred decision: its reason and where it went. */
+const deferNote = dec => [dec.reason, dec.moved && `moved to ${dec.moved.name}`].filter(Boolean).join(' · ');
+
 function decide(card, d, extra = {}) {
   hideToast();
+  revertMove(s.decisions[card.id]?.moved?.ids);   // decided again: an earlier move no longer applies
   if (currentId() === card.id && s.phase === 'play' && !s.decisions[card.id]) flyOut(d);
   const level = levelKeyOf(card.id) ?? curLevel().key;
   const wasOnTable = currentId() === card.id;
@@ -807,7 +1093,8 @@ function decide(card, d, extra = {}) {
   save(); render();
   enterCard();
   announce(d === 'plan' ? `#${card.id} planned` : `#${card.id} deferred`);
-  toast(`#${card.id} ${d === 'plan' ? 'planned' : 'deferred'}`, 'Undo', () => (s.history.at(-1) === card.id ? undo() : hideToast()));
+  if (extra.moved) moveStory(card, extra.moved);
+  toast(`#${card.id} ${d === 'plan' ? 'planned' : extra.moved ? `deferred to ${extra.moved.name}` : 'deferred'}`, 'Undo', () => (s.history.at(-1) === card.id ? undo() : hideToast()));
 }
 
 /** Next: the following story in the level (this one stays unplanned if it was). Previous: the one before. */
@@ -842,6 +1129,7 @@ function reopen(id) {
   const dec = s.decisions[id];
   if (!dec) return;
   delete s.decisions[id];
+  revertMove(dec.moved?.ids);
   const at = s.history.lastIndexOf(id);
   if (at >= 0) s.history.splice(at, 1);
   if (s.phase === 'play' && dec.level === curLevel()?.key) {
@@ -878,7 +1166,7 @@ function playNow(id) {
 }
 
 function openDefer() {
-  rt.ui = { mode: 'defer' };
+  rt.ui = { mode: 'defer', moveTo: null };
   render();
   document.querySelector('[data-role="reason"]')?.focus();
 }
@@ -1027,7 +1315,7 @@ function errorHtml(err) {
 function renderBar() {
   const info = $('bar-info'), actions = $('bar-actions');
   if (s.phase === 'lobby') {
-    info.innerHTML = `<span>Sprint planning, ${START_AT}–${END_AT}</span>`;
+    info.innerHTML = `<span>Sprint planning, ${startAt()}–${endAt()}</span>`;
     actions.innerHTML = '';
     return;
   }
@@ -1076,7 +1364,7 @@ function ruleEditor(l) {
   }).join('');
   const open = EXTRA.some(k => l[k]) || rt.moreOpen.has(l.key);
   return `<div class="rule-edit">
-    ${field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(l.name)}" maxlength="40" />`)}
+    ${field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(ruleDefs.find(d => d.key === l.key)?.name ?? l.name)}" maxlength="40" />`)}
     ${field('Labels', `<input class="ctrl" data-rule="labels" data-key="${l.key}" value="${esc((l.labels ?? []).join(', '))}" placeholder="goal, pilot" />`)}
     ${field('Priority', `<select class="ctrl" data-rule="priority" data-key="${l.key}"><option value="">Any</option>
       ${PRIORITIES.map(p => `<option value="${p}"${l.priority === p ? ' selected' : ''}>${p}</option>`).join('')}</select>`)}
@@ -1091,10 +1379,11 @@ function lobbyHtml() {
     return [l.key, { n: ids.length, p: ids.reduce((t, id) => t + (rt.cards.get(id).points ?? 0), 0) }];
   }));
   const plan = timePlan();
-  const levelMin = l => l.isBreak ? Number(s.budgets.break) || 0 : plan.minutes(l.key);
+  const when = schedule();
+  const levelMin = l => when[l.key].min;
   const total = Math.round(LEVELS.reduce((t, l) => t + levelMin(l), 0));
-  const ends = addMinutes(START_AT, total + LOOT_MIN);
-  const late = ends > END_AT;
+  const ends = hhmm(toMin(startAt()) + total + LOOT_MIN);
+  const late = ends > endAt() || toMin(endAt()) <= toMin(startAt());
   const dealt = PLAY_LEVELS.reduce((t, l) => t + counts[l.key].n, 0);
   const ready = s.projectId && s.versionId && !rt.loading && dealt > 0;
   const emptyNote = s.projectId && !rt.loading && !rt.error
@@ -1106,20 +1395,37 @@ function lobbyHtml() {
   const projOpts = rt.projects.map(p => `<option value="${p.id}"${String(p.id) === String(s.projectId) ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
   const verOpts  = rt.versions.map(v => `<option value="${v.id}"${String(v.id) === s.versionId ? ' selected' : ''}>${esc(v.name)}</option>`).join('');
 
-  const rows = LEVELS.map((l, i) => `
-    <div class="lvl-row lvl-${l.key}" data-level="${l.key}">
+  const rowHtml = (l, i) => {
+    const w = when[l.key];
+    const own = l.isBreak && l.custom;
+    const text = own
+      ? `<div><input class="ctrl name-edit" data-rule="name" data-key="${l.key}" value="${esc(l.name)}" maxlength="40" aria-label="Name of this break" /><div class="sub">${esc(l.sub)}</div></div>`
+      : rt.editRules && !l.catchAll && !l.isBreak && !l.of ? ruleEditor(l)
+      : `<div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>`;
+    const mins = l.isBreak
+      ? `<label class="mins"><input class="ctrl num" type="number" min="0" max="180" step="5" value="${esc(s.budgets[l.key])}" data-budget="${l.key}" aria-label="Minutes of ${esc(l.name)}" /> <span class="muted">min</span></label>`
+      : `<span class="mins num" title="${counts[l.key].n} stories × minutes by priority${plan.scale < 1 ? ', scaled to fit' : ''}">${rt.loading ? '…' : Math.round(w.min)} <span class="muted">min</span></span>`;
+    return `
+    <div class="lvl-row lvl-${lvlCls(l)}" data-level="${l.key}">
       <span class="grip" title="Drag to reorder" aria-hidden="true">${icon('grip')}</span>
-      <span class="lvl-mark">${icon(l.key)}</span>
-      ${rt.editRules && !l.catchAll && !l.isBreak ? ruleEditor(l) : `<div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>`}
-      <span class="count num">${l.isBreak ? '' : rt.loading ? '…' : `${counts[l.key].n} stories · ${pts(counts[l.key].p)} pts`}</span>
-      ${l.isBreak
-        ? `<label class="mins"><input class="ctrl num" type="number" min="0" max="60" step="5" value="${esc(s.budgets.break)}" data-budget="break" aria-label="Break minutes" /> <span class="muted">min</span></label>`
-        : `<span class="mins num" title="${counts[l.key].n} stories × minutes by priority${plan.scale < 1 ? ', scaled to fit' : ''}">${rt.loading ? '…' : Math.round(levelMin(l))} <span class="muted">min</span></span>`}
+      <span class="lvl-mark">${icon(lvlCls(l))}</span>
+      ${text}
+      <span class="count num">${l.isBreak ? '' : rt.loading ? '…' : l.parts && l.part < l.parts
+        ? `<input class="ctrl num size" type="number" min="1" value="${counts[l.key].n}" data-split-size="${l.key}" aria-label="Stories in ${esc(l.name)}" /> stories · ${pts(counts[l.key].p)} pts`
+        : `${counts[l.key].n} stories · ${pts(counts[l.key].p)} pts`}</span>
+      <span class="when num" title="${esc(l.name)} runs from ${w.from} to ${w.to}">${rt.loading && !l.isBreak ? '…' : `${w.from}–${w.to}`}</span>
+      ${mins}
       <span class="moves">
+        ${l.isBreak ? '' : `<button class="ghost split-btn" data-act="split" data-key="${l.key}" title="Cut this section in two, with a break between"${counts[l.key].n < 2 ? ' disabled' : ''}>Split</button>`}
+        ${l.of ? `<button class="ghost split-btn" data-act="merge" data-key="${l.key}" title="Join this part back onto the one before it">Merge</button>` : ''}
         <button class="ghost icon" data-act="up" data-key="${l.key}" aria-label="Play ${esc(l.short)} earlier"${i === 0 ? ' disabled' : ''}>↑</button>
         <button class="ghost icon" data-act="down" data-key="${l.key}" aria-label="Play ${esc(l.short)} later"${i === LEVELS.length - 1 ? ' disabled' : ''}>↓</button>
+        ${own ? `<button class="ghost icon" data-act="break-remove" data-key="${l.key}" aria-label="Remove ${esc(l.name)}">×</button>` : ''}
       </span>
-    </div>`).join('');
+    </div>`;
+  };
+  const rows = LEVELS.map(rowHtml).join('');
+
   const custom = s.levelOrder.join() !== DEFAULT_ORDER.join();
   const sprintLabels = [...new Set([...rt.cards.values()].flatMap(c => c.labels))].sort((a, b) => a.localeCompare(b));
   const rulesChanged = JSON.stringify(ruleDefs.map(({ key, name, labels, priority, type, status, assignee }) => [key, name, labels, priority, type, status, assignee]))
@@ -1132,14 +1438,15 @@ function lobbyHtml() {
         <p class="text2" style="margin-bottom:var(--space-sm)">The sprint's open stories are dealt in priority order, one level at a time. Each story opens with its description, subtasks, relations and attachments.</p>
         ${emptyNote ? `<p class="panel empty" style="margin-bottom:var(--space-sm)">${esc(emptyNote)}</p>` : ''}
         <div class="panel lvl-list" data-role="levels">${rows}</div>
-        <p class="muted order-note">Drag a level (or use ↑ ↓) to change when it's played. A story belongs to the first level whose rule it matches (new levels first, then goal, big three, Immediate, High); everything else lands in the last one.
+        <p class="muted order-note">Drag a level (or use ↑ ↓) to change when it's played. Right-click a row for more actions. A story belongs to the first level whose rule it matches (new levels first, then goal, big three, Immediate, High); everything else lands in the last one.
           <button class="ghost" data-act="rules-edit" aria-pressed="${!!rt.editRules}">${rt.editRules ? 'Done editing' : 'Edit grouping'}</button>
+          <button class="ghost" data-act="break-add" data-at="${LEVELS.length}">+ Add break</button>
           ${rt.editRules ? '<button class="ghost" data-act="rule-add">+ Add level</button>' : ''}
           ${rt.editRules && rulesChanged ? '<button class="ghost" data-act="rules-reset">Default grouping</button>' : ''}
           ${custom ? '<button class="ghost" data-act="order-reset">Default order</button>' : ''}</p>
         ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
         <div class="lvl-foot">
-          <span class="text2">Starts ${START_AT} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${late ? ` <span class="warn-text">(past ${END_AT})</span>` : ''}</span>
+          <span class="text2">Starts ${startAt()} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${toMin(endAt()) <= toMin(startAt()) ? ' <span class="warn-text">(the end time is before the start)</span>' : ends > endAt() ? ` <span class="warn-text">(past ${endAt()})</span>` : ''}</span>
           ${plan.scale < 1 ? `<span class="warn-text">${Math.round(plan.sum)} min of stories don't fit ${plan.avail} min, so every story gets ${Math.round(plan.scale * 100)}% of its time</span>` : ''}
           <span class="spacer"></span>
           <button class="primary big" data-act="start"${ready ? '' : ' disabled'}>Start quest</button>
@@ -1153,6 +1460,12 @@ function lobbyHtml() {
         <label class="field"><span>Sort stories in a level by</span>
           <select class="ctrl" data-set="sort"${s.phase === 'lobby' ? '' : ' disabled'}>${[['priority', 'Priority, then label order'], ['points', 'Story points (biggest first)'], ['id', 'Ticket number']].map(([k, n]) => `<option value="${k}"${s.sortBy === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
         <p class="muted" style="font-size:var(--text-xs)">Only the sprint's open stories are dealt (their subtasks come with them). Labels come from the Label field; priorities from Priority.</p>
+        <fieldset class="per-story window">
+          <legend>Planning time</legend>
+          <label class="per-row"><span>Starts</span><input class="ctrl num" type="time" value="${esc(startAt())}" data-set="startAt" aria-label="Planning starts at" /></label>
+          <label class="per-row"><span>Ends</span><input class="ctrl num" type="time" value="${esc(endAt())}" data-set="endAt" aria-label="Planning ends at" /></label>
+          <p class="muted">${Math.max(0, toMin(endAt()) - toMin(startAt()))} min in all. When the stories (plus breaks and ${LOOT_MIN} min of loot) don't fit, every story's time is scaled down to fit.</p>
+        </fieldset>
         <fieldset class="per-story">
           <legend>Minutes per story</legend>
           ${BUCKETS.map(b => `<label class="per-row"><span>${esc(b.label)}</span>
@@ -1307,18 +1620,22 @@ function tabsHtml(id, d) {
 
 // ─── Render: arena ────────────────────────────────────────────────────────────
 
+/** Every break shares the break colour and icon, whatever its key. */
+const lvlCls = l => (l.isBreak ? 'break' : l.of ?? l.key);
+
 const planned = () => Object.values(s.decisions).filter(d => d.d === 'plan' || d.d === 'commit');
 
 function trackHtml() {
+  const when = schedule();
   return `<nav class="track" aria-label="Levels">${LEVELS.map((l, i) => {
     const st = i < s.level ? 'done' : i === s.level ? 'now' : 'locked';
     const left = l.isBreak ? '' : `${undecided(l.key).length} left · `;
     const meta = st === 'done'
       ? (l.isBreak ? 'Recharged' : `${levelIds(l.key).filter(id => s.decisions[id]?.d === 'plan').length} planned`)
       : `${left}${mins(l.key)} min`;
-    return `<div class="track-item lvl-${l.key} ${st}"${st === 'now' ? ' aria-current="step"' : ''}>
-      <span class="lvl-mark">${icon(st === 'done' ? 'check' : st === 'locked' ? 'lock' : l.key)}</span>
-      <div><div class="t-name">${esc(l.short)}</div><div class="t-meta">${meta}</div></div></div>`;
+    return `<div class="track-item lvl-${lvlCls(l)} ${st}"${st === 'now' ? ' aria-current="step"' : ''}>
+      <span class="lvl-mark">${icon(st === 'done' ? 'check' : st === 'locked' ? 'lock' : lvlCls(l))}</span>
+      <div><div class="t-name">${esc(l.short)}</div><div class="t-meta">${meta}</div><div class="t-when num">${when[l.key].from}–${when[l.key].to}</div></div></div>`;
   }).join('')}</nav>`;
 }
 
@@ -1326,7 +1643,7 @@ function timerHtml(key) {
   const rem = remainingMs(key);
   const cls = !s.runningSince ? 'paused' : rem < 0 ? 'over' : rem < 5 * 60000 ? 'low' : '';
   const fill = Math.min(1, Math.max(0, elapsedMs(key) / (budgetMs(key) || 1)));
-  return `<div class="clock lvl-${key}">
+  return `<div class="clock lvl-${lvlCls(DEF[key] ?? { key })}">
     <div class="clock-label">${esc(DEF[key].short)} ${s.runningSince ? 'left' : '· paused'}</div>
     <div class="timer ${cls}" data-role="timer">${rem < 0 ? '+' : ''}${clock(rem)}</div>
     <div class="meter" role="presentation"><i data-role="meter" style="--fill:${fill}"></i></div>
@@ -1416,13 +1733,13 @@ function storyMainHtml(card) {
   const lv = curLevel();
   const d = details.get(card.id);
   const dec = s.decisions[card.id];
-  const decided = dec ? `<div class="decided ${dec.d === 'defer' ? 'defer' : 'plan'}">${dec.d === 'defer' ? `Deferred${dec.reason ? `: ${esc(dec.reason)}` : ''}` : `${icon('check', 14)} Planned`}</div>` : '';
+  const decided = dec ? `<div class="decided ${dec.d === 'defer' ? 'defer' : 'plan'}">${dec.d === 'defer' ? `Deferred${deferNote(dec) ? `: ${esc(deferNote(dec))}` : ''}` : `${icon('check', 14)} Planned`}</div>` : '';
   let body;
   if (!d || (d.loading && !d.wp)) body = '<p class="text2 story-wait" aria-busy="true">Loading the story…</p>';
   else if (!d.wp) body = `<p class="card-error">Couldn't load #${esc(card.id)}: ${esc(d.err?.message ?? 'request failed')}</p>
     <div><button data-act="detail-retry" data-id="${esc(card.id)}">Try again</button></div>`;
   else body = tabsHtml(card.id, d);
-  return withBlobSrc(`<article class="panel story-main lvl-${lv.key}" aria-label="Story #${card.id}">
+  return withBlobSrc(`<article class="panel story-main lvl-${lvlCls(lv)}" aria-label="Story #${card.id}">
     ${cardHeadHtml(card)}
     ${decided}
     ${body}
@@ -1438,6 +1755,8 @@ function storySideHtml(card) {
   const pos = ids.indexOf(card.id) + 1;
   const tray = rt.ui.mode === 'defer' ? `<div class="defer-row">
       <input class="ctrl" data-role="reason" placeholder="Why not this sprint? (optional)" aria-label="Reason to defer" />
+      ${rt.versions.some(v => String(v.id) !== s.versionId) ? `<button type="button" class="pick ver-pick" data-pick="version" data-wp="${esc(card.id)}" aria-haspopup="listbox"
+        aria-expanded="${pickSt?.field === 'version' ? 'true' : 'false'}" aria-label="Move the story to another version. Now: ${esc(rt.ui.moveTo?.name ?? 'stay in this sprint')}"><span class="ver-k">Move to</span><span class="nm">${esc(rt.ui.moveTo?.name ?? 'Stay in this sprint')}</span></button>` : ''}
       <button class="primary" data-act="defer-ok">Defer</button>
       <button class="ghost" data-act="cancel">Cancel</button></div>` : '';
   const actions = dec
@@ -1448,7 +1767,7 @@ function storySideHtml(card) {
   const rest = (() => { const i = ids.indexOf(card.id);
     return [...ids.slice(i + 1), ...ids.slice(0, i)].filter(x => !s.decisions[x]); })();
   return `<aside class="story-side" aria-label="Plan this story">
-    <section class="panel side-box lvl-${lv.key}">
+    <section class="panel side-box lvl-${lvlCls(lv)}">
       ${cardClockHtml(card)}
       ${tray || `<div class="card-actions">${actions}</div>`}
       <nav class="card-nav" aria-label="Stories in this level">
@@ -1498,8 +1817,8 @@ function stageHtml() {
     const body = lv.isBreak
       ? `${mins(lv.key)} minutes. Stretch, refill${LEVELS[s.level + 1] ? `, come back for ${LEVELS[s.level + 1].short.toLowerCase()}` : ''}.`
       : `${n} stor${n === 1 ? 'y' : 'ies'} · ${mins(lv.key)} minutes${bankMs() ? ` · time bank ${signedClock(bankMs())}` : ''}`;
-    return `<div class="panel moment lvl-${lv.key}">
-      <span class="lvl-mark">${icon(lv.key, 22)}</span>
+    return `<div class="panel moment lvl-${lvlCls(lv)}">
+      <span class="lvl-mark">${icon(lvlCls(lv), 22)}</span>
       <h2>${esc(lv.name)}</h2><p>${esc(lv.sub)} · ${body}</p>
       <button class="primary big" data-act="go">${lv.isBreak ? 'Start the break' : n ? 'Fight' : 'Nothing here, skip ahead'} <kbd>Enter</kbd></button></div>`;
   }
@@ -1515,9 +1834,9 @@ function stageHtml() {
   const card = currentCard();
   if (!card) {
     const used = elapsedMs(lv.key), saved = budgetMs(lv.key) - used;
-    return `${head}<div class="panel moment lvl-${lv.key}">
+    return `${head}<div class="panel moment lvl-${lvlCls(lv)}">
       <span class="lvl-mark">${icon('check', 22)}</span>
-      <h2>${lv.key === 'goal' ? 'Boss defeated' : 'Level cleared'}</h2>
+      <h2>${(lv.of ?? lv.key) === 'goal' ? 'Boss defeated' : 'Level cleared'}</h2>
       <p>Done in <b class="num">${clock(used)}</b>${saved > 0 ? `, <b class="num">${clock(saved)}</b> goes to the time bank` : saved < 0 ? `, <b class="num">${clock(saved)}</b> over` : ''}.</p>
       <div class="card-actions" style="justify-content:center">
         ${levelIds(lv.key).some(x => cardById(x)) ? '<button class="big ghost" data-act="prev-last">← Back to the last story</button>' : ''}
@@ -1561,8 +1880,8 @@ function allHtml() {
         <span class="a-meta">${c.priority ? `<span class="tag">${esc(c.priority)}</span>` : ''}<span class="num">${c.points == null ? '–' : pts(c.points)}</span>${avatar(c.assigneeHref, c.assigneeName, c.assigneeHref)}</span>
       </button></li>`;
     }).join('');
-    return `<section class="all-group lvl-${l.key}">
-      <h3><span class="lvl-mark">${icon(l.key)}</span>${esc(l.short)} <span class="num muted">${done} / ${ids.length} planned</span></h3>
+    return `<section class="all-group lvl-${lvlCls(l)}">
+      <h3><span class="lvl-mark">${icon(lvlCls(l))}</span>${esc(l.short)} <span class="num muted">${done} / ${ids.length} planned</span></h3>
       ${rows ? `<ul>${rows}</ul>` : `<p class="muted all-empty">${ids.length ? 'Nothing in this filter.' : 'No stories.'}</p>`}
     </section>`;
   }).join('');
@@ -1571,9 +1890,9 @@ function allHtml() {
   const sel = rt.selected && cardById(rt.selected);
   const st = sel && stateOf(rt.selected);
   const inPlay = sel && s.phase === 'play' && !s.intro && levelKeyOf(rt.selected) === curLevel()?.key && !s.decisions[rt.selected];
-  const selHead = sel ? `<article class="card lvl-${levelKeyOf(rt.selected) ?? 'rest'}" aria-label="Story #${esc(rt.selected)}">
+  const selHead = sel ? `<article class="card lvl-${lvlCls(DEF[levelKeyOf(rt.selected)] ?? { key: 'rest' })}" aria-label="Story #${esc(rt.selected)}">
       ${cardHeadHtml(rt.cards.get(rt.selected) ?? sel)}
-      <div class="text2">${esc(DEF[levelKeyOf(rt.selected)]?.short ?? '')} · ${esc(st.label)}${s.decisions[rt.selected]?.reason ? ` · ${esc(s.decisions[rt.selected].reason)}` : ''}</div>
+      <div class="text2">${esc(DEF[levelKeyOf(rt.selected)]?.short ?? '')} · ${esc(st.label)}${s.decisions[rt.selected]?.d === 'defer' && deferNote(s.decisions[rt.selected]) ? ` · ${esc(deferNote(s.decisions[rt.selected]))}` : ''}</div>
       <div class="card-actions">
         ${s.decisions[rt.selected]
           ? '<button data-act="reopen">Mark not planned</button>'
@@ -1632,7 +1951,7 @@ function lootHtml() {
   const sum = k => levels.reduce((t, x) => t + x[k], 0);
   const total = sum('total'), plan = sum('plan'), defer = sum('defer'), open = sum('open');
   const decided = plan + defer;
-  const used = levels.reduce((t, x) => t + x.used, 0) + elapsedMs('break');
+  const used = levels.reduce((t, x) => t + x.used, 0) + LEVELS.filter(l => l.isBreak).reduce((t, l) => t + elapsedMs(l.key), 0);
   const pct = n => total ? `${(n / total) * 100}%` : '0%';
   const bar = (x, cls = '') => `<div class="split${cls}" role="img" aria-label="${x.plan} planned, ${x.defer} deferred, ${x.open} not planned">
       <i class="seg plan" style="width:${x.total ? (x.plan / x.total) * 100 : 0}%"></i><i class="seg defer" style="width:${x.total ? (x.defer / x.total) * 100 : 0}%"></i></div>`;
@@ -1644,8 +1963,8 @@ function lootHtml() {
     ? `All ${total} stories are still open. Go back to the arena to plan them, or start over with a fresh game.`
     : `${plan} planned (${pts(sum('pts'))} pts), ${defer} deferred${open ? `, ${open} still open` : ''}. ${clock(used)} at the table, time bank ${signedClock(bankMs())}.`;
 
-  const levelRows = levels.filter(x => x.total).map(x => `<li class="wrap-row lvl-${x.l.key}">
-      <span class="lvl-mark">${icon(x.l.key)}</span>
+  const levelRows = levels.filter(x => x.total).map(x => `<li class="wrap-row lvl-${lvlCls(x.l)}">
+      <span class="lvl-mark">${icon(lvlCls(x.l))}</span>
       <div class="wr-name"><b>${esc(x.l.short)}</b><span class="muted">${x.plan + x.defer} / ${x.total} decided${x.plan ? ` · ${pts(x.pts)} pts` : ''}</span></div>
       ${bar(x)}
       <span class="num muted wr-time" title="Time used of the level's timebox">${clock(x.used)} / ${clock(x.budget)}</span>
@@ -1704,7 +2023,7 @@ function summaryMarkdown() {
     for (const id of levelIds(x.l.key)) {
       const d = s.decisions[id], c = rt.cards.get(id) ?? cardById(id);
       if (!c) continue;
-      const tag = !d ? 'not planned' : d.d === 'defer' ? `deferred${d.reason ? `: ${d.reason}` : ''}` : `planned · ${c.assigneeName || 'unassigned'}`;
+      const tag = !d ? 'not planned' : d.d === 'defer' ? `deferred${deferNote(d) ? `: ${deferNote(d)}` : ''}` : `planned · ${c.assigneeName || 'unassigned'}`;
       lines.push(`- #${id} ${c.subject} (${c.points ?? '?'} pts) · ${tag}`);
     }
     lines.push('');
@@ -1745,6 +2064,10 @@ async function onAction(act, el) {
     case 'order-reset': s.levelOrder = [...DEFAULT_ORDER]; applyOrder(); save(); return render();
     case 'rules-edit': rt.editRules = !rt.editRules; return render();
     case 'rule-add': return addRule();
+    case 'break-add': return addBreak(Number(el.dataset.at));
+    case 'split': return askSplit(el.dataset.key, el);
+    case 'merge': return mergeLevel(el.dataset.key);
+    case 'break-remove': return removeBreak(el.dataset.key);
     case 'rule-remove': return applyRules(ruleDefs.filter(d => d.key !== el.dataset.key));
     case 'rules-reset': return applyRules(mergeDefs(null));
     case 'go':       return startLevel();
@@ -1759,7 +2082,10 @@ async function onAction(act, el) {
       s.cursor[curLevel().key] = ids.at(-1); resume(); save(); return render(); }
     case 'reopen-cur': return card && reopen(card.id);
     case 'cancel':   rt.ui = { mode: null }; return render();
-    case 'defer-ok': return card && decide(card, 'defer', { reason: document.querySelector('[data-role="reason"]')?.value.trim() ?? '' });
+    case 'defer-ok': return card && decide(card, 'defer', {
+      reason: document.querySelector('[data-role="reason"]')?.value.trim() ?? '',
+      ...(rt.ui.moveTo ? { moved: { ...rt.ui.moveTo, ids: [] } } : {}),
+    });
     case 'undo':     return undo();
     case 'all':      return toggleAll();
     case 'select':   if (rt.selected === el.dataset.id) return; rt.selected = el.dataset.id; return render();
@@ -1851,9 +2177,11 @@ document.addEventListener('input', e => {
 // written with writeField, like the selects used for subtasks.
 
 let pickEl = null;
+const PICK_SEARCH = { status: 'Search statuses', assignee: 'Search people', version: 'Search versions' };
 let pickSt = null;   // { field, wp, q, active, options }
 
 function pickCurrent() {
+  if (pickSt.field === 'version') return rt.ui.moveTo?.href ?? null;
   const L = details.get(pickSt.wp)?.wp?._links ?? {};
   return L[pickSt.field]?.href ?? null;
 }
@@ -1861,6 +2189,12 @@ function pickCurrent() {
 /** [{ href, name, me? }] for the open picker, or null while its list is still loading. */
 function pickChoices() {
   const { field, wp } = pickSt;
+  if (field === 'version') {
+    return [{ href: null, name: 'Stay in this sprint' },
+      ...rt.versions.filter(v => String(v.id) !== s.versionId)
+        .sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999') || a.name.localeCompare(b.name))
+        .map(v => ({ href: v._links?.self?.href ?? `/api/v3/versions/${v.id}`, name: v.name, sub: [v.startDate, v.endDate].filter(Boolean).join(' → ') }))];
+  }
   const d = details.get(wp);
   const L = d?.wp?._links ?? {};
   if (field === 'status') {
@@ -1884,10 +2218,12 @@ function pickRows() {
   if (pickSt.active >= pickSt.options.length) pickSt.active = pickSt.options.length - 1;
   ul.innerHTML = pickSt.options.length
     ? pickSt.options.map((o, i) => {
-        const body = pickSt.field === 'status'
+        const body = pickSt.field === 'version'
+          ? `<span class="nm">${esc(o.name)}</span>${o.sub ? `<span class="sub num">${esc(o.sub)}</span>` : ''}`
+          : pickSt.field === 'status'
           ? `<span class="lz" data-tone="${statusTone(o.name)}">${esc(o.name)}</span>`
           : `${avatar(idOf(o.href), o.href ? o.name : '', o.href)}<span class="nm">${esc(o.me ? `${o.name} (me)` : o.name)}</span>`;
-        return `<li role="option" id="pick-o${i}" data-i="${i}" class="pick-opt${i === pickSt.active ? ' active' : ''}${(o.href ?? null) === cur ? ' current' : ''}" aria-selected="${(o.href ?? null) === cur}">${body}</li>`;
+        return `<li role="option" id="pick-o${i}" data-i="${i}" class="pick-opt${pickSt.field === 'version' ? ' ver' : ''}${i === pickSt.active ? ' active' : ''}${(o.href ?? null) === cur ? ' current' : ''}" aria-selected="${(o.href ?? null) === cur}">${body}</li>`;
       }).join('')
     : '<li class="pick-note" role="presentation">No match</li>';
   hydrateImages();
@@ -1920,6 +2256,13 @@ function choosePick(i) {
   if (!o) return;
   const { field, wp } = pickSt;
   const same = (o.href ?? null) === pickCurrent();
+  if (field === 'version') {   // only chosen here; the story moves when it is deferred
+    closePick();
+    rt.ui.moveTo = o.href ? { href: o.href, name: o.name } : null;
+    render();
+    document.querySelector('[data-pick="version"]')?.focus();
+    return;
+  }
   closePick({ refocus: true });
   if (!same) writeField(wp, field, o.href);
 }
@@ -1932,7 +2275,7 @@ function openPick(btn) {
   pickEl = document.createElement('div');
   pickEl.className = 'pick-pop';
   pickEl.innerHTML = `<input type="search" class="pick-q" role="combobox" aria-expanded="true" aria-controls="pick-list" autocomplete="off"
-      placeholder="${field === 'status' ? 'Search statuses' : 'Search people'}" aria-label="${field === 'status' ? 'Search statuses' : 'Search people'}" />
+      placeholder="${PICK_SEARCH[field]}" aria-label="${PICK_SEARCH[field]}" />
     <ul id="pick-list" role="listbox"></ul>`;
   document.body.append(pickEl);
   btn.setAttribute('aria-expanded', 'true');
@@ -2014,13 +2357,19 @@ document.addEventListener('change', async e => {
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
-    s.budgets[t.dataset.budget] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
+    s.budgets[t.dataset.budget] = Math.max(0, Math.min(180, Math.round(Number(t.value) || 0)));
     save(); render();
     return;
   }
   if (t.dataset.per) {
     s.perStory[t.dataset.per] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
     save(); render();
+    return;
+  }
+  if (t.dataset.splitSize) return setPartSize(t.dataset.splitSize, t.value);
+  if (t.dataset.set === 'startAt' || t.dataset.set === 'endAt') {
+    if (s.phase === 'lobby' && /^\d{2}:\d{2}$/.test(t.value)) { s[t.dataset.set] = t.value; save(); }
+    render();
     return;
   }
   if (t.dataset.set === 'sort') {

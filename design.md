@@ -122,6 +122,12 @@ Defer, Prev / Next, Status · Assignee · Author · Updated, the planned tally a
 what's up next. Under 1100 px the side column moves above the story. The
 story's own clock is the side column's headline: elapsed in 40 px Geist Mono over
 its share, with a meter that turns red past it.
+The lobby also sets the planning window (Starts / Ends, a time field each; stories
+are scaled down to fit it) and lets the facilitator split the quest: "+ Add break" (or right-click a level)
+inserts a named break of any length, and × removes it. A long level can be cut from the inside: Split on its row asks how many
+stories stay in the first part, then makes two parts ("High voltage 1/2", "2/2") with a
+break between them; the first part's story count stays editable, Merge joins a part back, and each part has its own clock and time range. Every level row, and each level in the arena's strip, shows its minutes
+and when it runs (from the start time, summing the sections before it).
 The wrap-up (after End game) reads like a report with one way out: a headline
 that says where the sprint stands ("Nothing decided yet" / "3 of 14 decided" /
 "… is planned"), one planned · deferred · not-planned bar, a row per level, and
@@ -139,7 +145,7 @@ their Planned / Deferred mark and Mark not planned). Planned / Defer / Undo
 answer to P / D / U; V opens View all,
 Space pauses. Only the sprint being planned is chosen; its open stories are the
 deck (a subtask of a story in the same sprint comes with its story). Planned and
-Defer are the game's own bookkeeping and write nothing. Under the card, the
+Defer are the game's own bookkeeping and write nothing, with one exception: Defer's tray has a searchable "Move to" version picker, and a story deferred with a version chosen is moved there (with its open subtasks of this sprint); Undo or Mark not planned moves them back. Under the card, the
 story's detail panel (Status · Assignee · Author · Updated, then Description ·
 Subtasks · Relations · Attachments tabs) is where the team reads and edits the
 story: status, assignee, new subtasks (type · subject · assignee, created in the
