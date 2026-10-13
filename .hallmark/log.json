@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-10-13",
+    "scope": "page",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "preserved palette (design.md)",
+    "enrichment": "none",
+    "brief": "Burndown redesign: pace strip, one-line chart toolbar, day strip + full-width day detail, sprint stepper page bar, Versions side sheet"
+  },
+  {
     "date": "2026-10-05",
     "scope": "page section",
     "macrostructure": "Workbench (app, per design.md)",

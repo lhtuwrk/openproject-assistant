@@ -66,6 +66,37 @@ Their filters, data views (charts, ledger grid) and page-specific signal tokens
 (`--miss`, `--wk-bg` in Time log; `--lvl-goal` · `--lvl-big3` · `--lvl-break` ·
 `--lvl-fire` · `--lvl-high` in Planning, all aliases of palette tokens).
 
+## Burndown
+The same layout on the page and in the drawer opened from "Show burndown chart"
+(1100 px), whose page bar keeps only the dates, Sync Now, Copy Charts and ×.
+- Page bar: a sprint stepper (‹ 26.10.B · 10-09 → 10-22 ›; its menu ends with "Custom
+  range…", which shows the two date inputs), the project, a Main view switch, then
+  Versions, Sync Now, the primary Copy Charts and ⋯ More. A sprint runs from its
+  planning Friday to the version's last working day (Thursday).
+- Version header: name in cobalt, a sync chip (green "synced 14:05", amber "not synced
+  today"), Copy chart and Delete all as quiet outline buttons.
+- Pace strip: three tiles in Geist Mono (Remaining, Burned today, Days left).
+- Toolbar: Done and Days menus (the summary shows the choice in cobalt; Done holds the
+  status checkboxes, Days holds "Hide first day" (the version's own first day, offered only when it is in the
+  range; on by default and remembered), and the weekend days), and the
+  legend on the right; its Done chip toggles the Done line.
+- Chart: full width. Each date is the start of that day; the segment to the next date
+  is that day's work; a closing tick follows the last day. Today is a dashed segment to a
+  hollow "now" point. The Ideal line runs from what was left at the start of the work (the
+  first point, or the one after the planning day when that day is shown) to 0 at the closing
+  tick. Scope and ⇄ pills sit under the middle of their segment. Hovering
+  lights the day's band; the selected day keeps an --accent-bg band.
+- Day strip: one cell per day under its segment (weekday, burned in green, scope change
+  on the right, days to come dashed). Clicking a cell or band opens the day detail.
+- Day detail: full width under the chart, never beside it (the chart keeps its width):
+  one story per row so titles show in full; day label, Burned · Scope · Status moves tabs, ‹ ›, ↻ Refresh, Collapse. ← → walk the
+  days while the chart has focus; Escape stays with the drawer.
+- Snapshot table, CFD and Flow are disclosure rows under the chart.
+- Versions is a 420 px side sheet over a scrim (Escape or the scrim closes it): Tracking
+  (the current sprint marked "always shown", others with ×), Add a version (search,
+  project chips, Show closed, + Track per row), Work package filter, Days. Changes save
+  at once, like Settings.
+
 ## Time log: logging time
 The ledger is also where you log your own time. Your row's cells are buttons (a
 dash turns cobalt on hover); the single primary action in the page bar, Log time,

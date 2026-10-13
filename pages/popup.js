@@ -20,15 +20,29 @@ function relativeTime(isoStr) {
   return `${Math.floor(diff / 86400)} d ago`;
 }
 
-/** Focuses an open dashboard tab for `page`, or opens one. */
+/** Focuses a running dashboard tab for `page`, or opens one.
+ *
+ *  A tab left open while the extension was reloaded keeps the page's URL but shows Chrome's
+ *  "blocked" page (ERR_BLOCKED_BY_CLIENT), so a URL match alone can land on a dead tab. Only a
+ *  tab where the page actually runs (a live extension context) is reused; dead tabs with the
+ *  same URL are closed. Any failure falls back to a new tab, so a click never does nothing. */
 async function openPage(page) {
-  const url  = chrome.runtime.getURL('pages/' + page);
-  const tabs = await chrome.tabs.query({ url });
-  if (tabs.length) {
-    await chrome.tabs.update(tabs[0].id, { active: true });
-    await chrome.windows.update(tabs[0].windowId, { focused: true });
-  } else {
-    await chrome.tabs.create({ url });
+  const url = chrome.runtime.getURL('pages/' + page);
+  const isPage = u => u === url || u?.startsWith(url + '#') || u?.startsWith(url + '?');
+  try {
+    const live = (await chrome.runtime.getContexts({ contextTypes: ['TAB'] }))
+      .filter(c => isPage(c.documentUrl) && c.tabId >= 0 && c.frameId === 0)   // not the drawer's iframe on a backlog tab
+      .map(c => c.tabId);
+    const dead = (await chrome.tabs.query({})).filter(t => isPage(t.url) && !live.includes(t.id));
+    if (dead.length) await chrome.tabs.remove(dead.map(t => t.id)).catch(() => {});
+    if (live.length) {
+      const tab = await chrome.tabs.update(live[0], { active: true });
+      await chrome.windows.update(tab.windowId, { focused: true });
+    } else {
+      await chrome.tabs.create({ url });
+    }
+  } catch {
+    await chrome.tabs.create({ url }).catch(() => window.open(url, '_blank'));
   }
   window.close();
 }

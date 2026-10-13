@@ -160,9 +160,9 @@ function addDays(d, n) {
   return dt.toISOString().slice(0, 10);
 }
 
+/** Today in ICT (UTC+7): the background locks each ICT day at its end, so the viewer counts days the same way. */
 function todayStr() {
-  const n = new Date();
-  return [n.getFullYear(), String(n.getMonth()+1).padStart(2,'0'), String(n.getDate()).padStart(2,'0')].join('-');
+  return new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
 }
 
 // ─── Change detection ─────────────────────────────────────────────────────────
@@ -436,11 +436,6 @@ async function copyAllChartsImage() {
   return copyToClipboard(out);
 }
 
-/**
- * actual[]:     { dayIndex, value, status?, statusText? }  — remaining (blue)
- * doneActual[]: { dayIndex, value }                        — done pts  (green)
- * status values: 'no-progress' | 'scope-up' | 'scope-down' | null
- */
 function getChartColors() {
   const light = document.documentElement.dataset.theme === 'light';
   return {
@@ -453,11 +448,16 @@ function getChartColors() {
     ideal:       light ? '#c0254a' : '#f38ba8',
     done:        light ? '#2a7a40' : '#a6e3a1',
     remain:      light ? '#2f5fe0' : '#4c7dff',
-    burnedBg:    light ? '#fff0c8' : '#f9e2af',
-    burnedFg:    light ? '#78350f' : '#111214',
     todayBg:     light ? '#fffbeb' : '#2a2316',
     todayBorder: light ? '#ca8a04' : '#f9e2af',
     todayText:   light ? '#92400e' : '#f9e2af',
+    // Day bands and the day strip (tokens.css --accent-bg, --surface2, --border)
+    band:        light ? '#e8eefc' : '#18233f',
+    bandHover:   light ? '#f2f5fd' : '#141b2c',
+    cell:        light ? '#f0f1f3' : '#202226',
+    cellBorder:  light ? '#e3e4e8' : '#26282d',
+    burned:      light ? '#1f8a4c' : '#5ad08a',
+    reopened:    light ? '#c0283f' : '#f2828f',
     // Status pill colors — darker/richer in light mode for contrast against pale canvas
     pillScopeUp:   light ? '#b01840' : '#f38ba8',
     pillScopeDown: light ? '#006888' : '#89dceb',
@@ -467,15 +467,24 @@ function getChartColors() {
   };
 }
 
-function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, notSyncedToday = false }) {
+/**
+ * actual[]: { dayIndex, value, total, status, statusText, burned, live } — remaining (cobalt); dayIndex may be
+ *           fractional for today's live point.  doneActual[]: { dayIndex, value } — done points (green).
+ * cells[]:  { a, b, k, label, burned, scope, live, empty } — the day strip under the axis; cell k is the segment
+ *           that ends at actual[k], so it spans the days of work between two points.
+ * hover / selected: the k of the highlighted day.
+ * Returns the hit regions in CSS pixels.
+ */
+function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, notSyncedToday = false, cells = [], hover = -1, selected = -1 }) {
   const C = getChartColors();
-  const W = Math.min(canvas.parentElement.clientWidth || 800, 800), H = 300, dpr = window.devicePixelRatio || 1;
+  const PLOT_H = 300, STRIP_H = cells.length ? 48 : 0;
+  const W = Math.max(Math.min(canvas.parentElement.clientWidth || 800, 1400), 320), H = PLOT_H + STRIP_H, dpr = window.devicePixelRatio || 1;
   canvas.style.width = W+'px'; canvas.style.height = H+'px';
   canvas.width = W*dpr; canvas.height = H*dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
 
   const PAD = { top:28, right:24, bottom:48, left:56 };
-  const CW = W-PAD.left-PAD.right, CH = H-PAD.top-PAD.bottom;
+  const CW = W-PAD.left-PAD.right, CH = PLOT_H-PAD.top-PAD.bottom;
 
   const rawMax = maxY > 0 ? maxY : 1;
   const step   = niceStep(rawMax);
@@ -486,6 +495,14 @@ function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, no
   const yAt = v => PAD.top  + CH*(1 - Math.max(0,v)/top);
 
   ctx.fillStyle = C.bg; ctx.fillRect(0,0,W,H);
+
+  // ── Day bands: the hovered and the selected day's segment ──────────────────
+  const band = (k, fill) => {
+    const c = cells.find(c => c.k === k);
+    if (c) { ctx.fillStyle = fill; ctx.fillRect(xAt(c.a), PAD.top, xAt(c.b) - xAt(c.a), CH); }
+  };
+  if (hover >= 0 && hover !== selected) band(hover, C.bandHover);
+  if (selected >= 0) band(selected, C.band);
 
   // ── Y grid + labels ──────────────────────────────────────────────────────────
   for (let v = 0; v <= top + 0.001; v += step) {
@@ -559,238 +576,305 @@ function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, no
   }
 
   // ── Remaining line ───────────────────────────────────────────────────────────
-  const hitAreas = [];
-
+  const pills = [];
   if (actual.length >= 1) {
-    const STATUS_COLOR = { 'no-progress': C.pillNoProg, 'scope-up': C.pillScopeUp, 'scope-down': C.pillScopeDown, 'progress': C.pillProgress };
+    const STATUS_COLOR = { 'scope-up': C.pillScopeUp, 'scope-down': C.pillScopeDown, 'progress': C.pillProgress };
 
-    // Phase 1: compute pill rects for all points, then resolve horizontal overlaps
-    const pillRects = actual.map(p => {
-      if (!p.status || !p.statusText) return null;
-      const color = STATUS_COLOR[p.status] ?? C.muted;
-      ctx.font = 'bold 9px -apple-system,sans-serif';
-      const tw = ctx.measureText(p.statusText).width;
-      const ph = 15, pw = tw + 12;
-      const x = xAt(p.dayIndex), y = yAt(p.value);
-      const nearTop = p.value > top * 0.82;
-      const dir  = nearTop ? 1 : -1;
-      const base = nearTop ? 'top' : 'bottom';
-      const vOff = nearTop ? y + 9 : y - 9;
-      const pillCenter = vOff + dir * 27;
-      const rectY = base === 'bottom' ? pillCenter - ph : pillCenter;
-      return { rx: x - pw / 2, rectY, pw, ph, color, text: p.statusText, dir };
+    // Scope and ⇄ pills describe the segment that ends at a point, so they sit below that segment's
+    // midpoint; burned points live in the day strip.
+    ctx.font = 'bold 9px -apple-system,sans-serif';
+    const pillRects = actual.map((p, k) => {
+      if (k === 0 || !STATUS_COLOR[p.status] || !p.statusText) return null;
+      const a = actual[k - 1];
+      const mx = (xAt(a.dayIndex) + xAt(p.dayIndex)) / 2, my = (yAt(a.value) + yAt(p.value)) / 2;
+      const pw = ctx.measureText(p.statusText).width + 12, ph = 15;
+      return { rx: mx - pw / 2, rectY: my + 10, pw, ph, color: STATUS_COLOR[p.status], text: p.statusText, k };
     });
-
-    // Shift pills that overlap the previous pill further from the dot
     for (let i = 1; i < pillRects.length; i++) {
       const a = pillRects[i - 1], b = pillRects[i];
-      if (!a || !b) continue;
-      if (a.rx + a.pw + 3 > b.rx) b.rectY += b.dir * 17;
+      if (a && b && a.rx + a.pw + 3 > b.rx) b.rectY = Math.max(b.rectY, a.rectY + a.ph + 3);
     }
 
-    // Draw the line
+    // Solid through finished days, dashed into today's live point
     ctx.strokeStyle=C.remain; ctx.lineWidth=2.5; ctx.lineJoin='round';
-    ctx.beginPath(); actual.forEach((p,i) => i===0 ? ctx.moveTo(xAt(p.dayIndex),yAt(p.value)) : ctx.lineTo(xAt(p.dayIndex),yAt(p.value)));
+    const locked = actual.filter(p => !p.live);
+    ctx.beginPath(); locked.forEach((p,i) => i===0 ? ctx.moveTo(xAt(p.dayIndex),yAt(p.value)) : ctx.lineTo(xAt(p.dayIndex),yAt(p.value)));
     ctx.stroke();
+    const live = actual[actual.length - 1];
+    if (live?.live && locked.length) {
+      const from = locked[locked.length - 1];
+      ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(xAt(from.dayIndex), yAt(from.value)); ctx.lineTo(xAt(live.dayIndex), yAt(live.value)); ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
-    actual.forEach((p, pi) => {
+    for (const p of actual) {
       const x = xAt(p.dayIndex), y = yAt(p.value);
-
-      ctx.fillStyle=C.remain; ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2); ctx.fill();
-
+      if (p.live) {
+        ctx.fillStyle=C.bg; ctx.strokeStyle=C.remain; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle=C.remain; ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2); ctx.fill();
+      }
+      if (p.live) {
+        // Right of the dot: it sits close to today's locked point, whose labels are centred
+        ctx.font='bold 11px -apple-system,sans-serif';
+        ctx.fillStyle=C.label; ctx.textAlign='left'; ctx.textBaseline='middle';
+        ctx.fillText(fmt(p.value), x + 9, y);
+        const vw = ctx.measureText(fmt(p.value)).width;
+        ctx.fillStyle=C.muted; ctx.font='9px -apple-system,sans-serif';
+        ctx.fillText('now', x + 13 + vw, y);
+        continue;
+      }
       const nearTop = p.value > top * 0.82;
       const dir  = nearTop ? 1 : -1;
       const base = nearTop ? 'top' : 'bottom';
       const vOff = nearTop ? y+9 : y-9;
+      ctx.font='bold 11px -apple-system,sans-serif';
+      ctx.fillStyle=C.label; ctx.textAlign='center'; ctx.textBaseline=base;
+      ctx.fillText(fmt(p.value), x, vOff);
+      ctx.fillStyle=C.muted; ctx.font='9px -apple-system,sans-serif';
+      ctx.fillText(`/ ${fmt(p.total)}`, x, vOff+dir*14);
+    }
 
-      // Value + burned badge (clickable)
-      ctx.font = 'bold 11px -apple-system,sans-serif';
-      const valStr = fmt(p.value);
-      let burnHit = null;
-      if (p.burnedText) {
-        const valW=ctx.measureText(valStr).width;
-        const badgePad=4, gap=5, badgeH=13;
-        ctx.font='bold 9px -apple-system,sans-serif';
-        const badgeTextW=ctx.measureText(p.burnedText).width;
-        const badgeW=badgeTextW+badgePad*2, totalW=valW+gap+badgeW;
-        const startX=x-totalW/2, badgeX=startX+valW+gap;
-        const badgeY=base==='bottom' ? vOff-badgeH : vOff;
-        ctx.font='bold 11px -apple-system,sans-serif';
-        ctx.fillStyle=C.label; ctx.textAlign='left'; ctx.textBaseline=base;
-        ctx.fillText(valStr, startX, vOff);
-        ctx.fillStyle=C.burnedBg; ctx.beginPath(); ctx.roundRect(badgeX,badgeY,badgeW,badgeH,3); ctx.fill();
-        ctx.font='bold 9px -apple-system,sans-serif';
-        ctx.fillStyle=C.burnedFg; ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(p.burnedText, badgeX+badgeW/2, badgeY+badgeH/2);
-        burnHit = { x: badgeX, y: badgeY, w: badgeW, h: badgeH };
-      } else {
-        ctx.fillStyle=C.label; ctx.textAlign='center'; ctx.textBaseline=base;
-        ctx.fillText(valStr, x, vOff);
-      }
-
-      // Total scope
-      if (p.total !== undefined) {
-        ctx.fillStyle=C.muted; ctx.font='9px -apple-system,sans-serif';
-        ctx.textAlign='center'; ctx.textBaseline=base;
-        ctx.fillText(`/ ${fmt(p.total)}`, x, vOff+dir*14);
-      }
-
-      // Status pill — from pre-computed, collision-resolved rects
-      let pillHit = null;
-      const pr = pillRects[pi];
-      if (pr) {
-        const { rx, rectY, pw, ph, color, text } = pr;
-        ctx.globalAlpha = C.pillFillAlpha; ctx.fillStyle = color;
-        ctx.beginPath(); ctx.roundRect(rx, rectY, pw, ph, 4); ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = color; ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.roundRect(rx, rectY, pw, ph, 4); ctx.stroke();
-        ctx.fillStyle = color; ctx.font = 'bold 9px -apple-system,sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(text, rx + pw / 2, rectY + ph / 2);
-        pillHit = { x: rx, y: rectY, w: pw, h: ph };
-      }
-
-      hitAreas.push({ x, y, date: p.date, prevDate: p.prevDate, status: p.status, statusText: p.statusText, burnedText: p.burnedText, pillHit, burnHit });
-    });
+    for (const pr of pillRects) {
+      if (!pr) continue;
+      const { rx, rectY, pw, ph, color, text } = pr;
+      ctx.globalAlpha = C.pillFillAlpha; ctx.fillStyle = color;
+      ctx.beginPath(); ctx.roundRect(rx, rectY, pw, ph, 4); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.roundRect(rx, rectY, pw, ph, 4); ctx.stroke();
+      ctx.fillStyle = color; ctx.font = 'bold 9px -apple-system,sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, rx + pw / 2, rectY + ph / 2);
+      pills.push({ x0: rx, x1: rx + pw, y0: rectY, y1: rectY + ph, k: pr.k });
+    }
   }
 
-  return hitAreas;
+  // ── Day strip: one cell per day of work, under its segment ───────────────────
+  const strip = [];
+  if (STRIP_H) {
+    const y0 = PLOT_H + 2, h = 38;
+    for (const c of cells) {
+      const x0 = xAt(c.a) + 2, w = Math.max(xAt(c.b) - xAt(c.a) - 4, 6);
+      const sel = c.k === selected, hov = c.k === hover;
+      ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 4);
+      if (c.empty) {
+        ctx.setLineDash([3,3]); ctx.strokeStyle = C.axes; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = sel ? C.band : hov ? C.bandHover : C.cell; ctx.fill();
+        ctx.strokeStyle = sel ? C.remain : C.cellBorder; ctx.lineWidth = sel ? 1.5 : 1; ctx.stroke();
+      }
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+      ctx.font = '10px -apple-system,sans-serif'; ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(c.label, x0 + 6, y0 + 5);
+      if (!c.empty) {
+        ctx.font = 'bold 11px ui-monospace, Consolas, monospace'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+        const b = c.burned ?? 0;
+        if (Math.abs(b) > 0.001) { ctx.fillStyle = b > 0 ? C.burned : C.reopened; ctx.fillText(`${b > 0 ? '−' : '+'}${fmt(Math.abs(b))}`, x0 + 6, y0 + h - 5); }
+        else { ctx.fillStyle = C.muted; ctx.fillText('—', x0 + 6, y0 + h - 5); }
+        if (c.scope) {
+          ctx.fillStyle = c.scope > 0 ? C.pillScopeUp : C.pillScopeDown; ctx.textAlign = 'right';
+          ctx.fillText(`${c.scope > 0 ? '+' : '−'}${fmt(Math.abs(c.scope))}`, x0 + w - 6, y0 + h - 5);
+        }
+        strip.push({ x0, x1: x0 + w, y0, y1: y0 + h, k: c.k });
+      }
+      ctx.restore();
+    }
+  }
+
+  return {
+    plot:  { x0: PAD.left, x1: PAD.left + CW, y0: PAD.top, y1: PAD.top + CH },
+    bands: cells.filter(c => !c.empty).map(c => ({ x0: xAt(c.a), x1: xAt(c.b), k: c.k })),
+    strip, pills,
+  };
 }
 
 // ─── Burndown section ─────────────────────────────────────────────────────────
 
-function buildBurndownSection(version, dateMap, detailRecord = new Map()) {
+/** Weekdays (Mon–Fri) from a to b inclusive. */
+function weekdaysBetween(a, b) {
+  return a > b ? 0 : calendarRange(a, b).filter(d => !isWeekend(d)).length;
+}
+
+/** Strip label for the days a segment covers: "Tue 13" or "Fri–Sun". */
+function cellLabel(days) {
+  const wd = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' });
+  return days.length > 1 ? `${wd(days[0])}–${wd(days[days.length - 1])}` : `${wd(days[0])} ${days[0].slice(8)}`;
+}
+
+/** Closes any open chart menu when the click lands outside it (one listener for every section). */
+document.addEventListener('click', e => {
+  for (const m of document.querySelectorAll('details.chart-menu[open]')) if (!m.contains(e.target)) m.removeAttribute('open');
+});
+
+const HIDE_FIRST_DAY_KEY = '__blm_hide_first_day';
+
+/** The open day and tab per version, so a re-render (new data for today) keeps the detail open. */
+const daySelection = new Map();
+
+function buildBurndownSection(version, dateMap, detailRecord = new Map(), hideFirstDay = false, versionStart = null) {
   const snapDates = [...dateMap.keys()].sort();
   const allStats  = collectStatuses(dateMap);
   const wrap = document.createElement('div'); wrap.className = 'burndown-section';
 
-  const heading = document.createElement('div'); heading.className='burndown-heading'; heading.textContent='Burndown Chart';
-  wrap.appendChild(heading);
+  // ── Pace strip ─────────────────────────────────────────────────────────────
+  const pace = document.createElement('div'); pace.className = 'pace';
+  wrap.appendChild(pace);
 
-  const ctrl = document.createElement('div'); ctrl.className='chart-controls';
-  const grp  = document.createElement('div'); grp.className='ctrl-group';
-  grp.innerHTML='<label class="ctrl-label">Done statuses</label>';
-  const doneBox = document.createElement('div'); doneBox.className='done-checkboxes';
+  // ── Toolbar: Done and Weekends menus, pace pill, legend ─────────────────────
+  const toolbar = document.createElement('div'); toolbar.className = 'chart-toolbar';
+  const menu = (label) => {
+    const d = document.createElement('details'); d.className = 'chart-menu';
+    const s = document.createElement('summary');
+    const k = document.createElement('span'); k.className = 'menu-k'; k.textContent = label;
+    const v = document.createElement('span'); v.className = 'menu-v';
+    s.append(k, v, document.createTextNode(' ▾'));
+    const pop = document.createElement('div'); pop.className = 'menu-pop';
+    d.append(s, pop);
+    return { el: d, value: v, pop };
+  };
+  const doneMenu = menu('Done');
+  const doneBox  = doneMenu.pop;
   allStats.forEach(s => {
     const lbl=document.createElement('label'); lbl.className='done-label';
     const cb=document.createElement('input'); cb.type='checkbox'; cb.value=s; cb.checked=DEFAULT_DONE.has(s.toLowerCase());
     lbl.appendChild(cb); lbl.appendChild(document.createTextNode(' '+s)); doneBox.appendChild(lbl);
   });
-  grp.appendChild(doneBox); ctrl.appendChild(grp);
+  // Days menu: hide the range's first day (the planning day, whose scope jump dwarfs the
+  // rest of the chart), then the weekend days to show
+  const weekendMenu    = menu('Days');
+  const weekendDaysBox = weekendMenu.pop;
+  let hideFirst = hideFirstDay;
+  const weekendSelected = new Set();   // the user's per-date choices, kept across redraws
 
-  // Chart options: Show Done line
-  const doneLineGrp = document.createElement('div'); doneLineGrp.className='ctrl-group';
-  doneLineGrp.innerHTML='<label class="ctrl-label">Options</label>';
+  const spacer   = document.createElement('span'); spacer.className = 'spacer';
+  const legend   = document.createElement('div'); legend.className = 'chart-legend';
+  legend.innerHTML = `
+    <span class="legend-chip"><i class="sw-remain"></i>Remaining</span>
+    <button type="button" class="legend-chip legend-toggle" aria-pressed="false" title="Show the Done line"><i class="sw-done"></i>Done</button>
+    <span class="legend-chip"><i class="sw-ideal"></i>Ideal</span>`;
+  const doneToggle = legend.querySelector('.legend-toggle');
+  let showDone = false;
+  toolbar.append(doneMenu.el, weekendMenu.el, spacer, legend);
+  wrap.appendChild(toolbar);
 
-  const doneLineLbl = document.createElement('label'); doneLineLbl.className='done-label';
-  const doneLineCb  = document.createElement('input'); doneLineCb.type='checkbox'; doneLineCb.checked=false;
-  doneLineLbl.appendChild(doneLineCb); doneLineLbl.appendChild(document.createTextNode(' Show Done line'));
-  doneLineGrp.appendChild(doneLineLbl);
-  ctrl.appendChild(doneLineGrp);
-
-  // Weekend day selector — rebuilt each time the date range changes
-  const weekendGrp = document.createElement('div'); weekendGrp.className='ctrl-group';
-  weekendGrp.innerHTML='<label class="ctrl-label">Weekends</label>';
-  const weekendDaysBox = document.createElement('div'); weekendDaysBox.className='done-checkboxes';
-  weekendGrp.appendChild(weekendDaysBox);
-  ctrl.appendChild(weekendGrp);
-
-  // Persists the user's per-date selections across redraws
-  const weekendSelected = new Set();
-
-  wrap.appendChild(ctrl);
-
+  // ── Chart ──────────────────────────────────────────────────────────────────
   const chartRow = document.createElement('div'); chartRow.className='chart-row';
   const canvas = document.createElement('canvas'); canvas.className='burndown-canvas';
   const noMsg  = document.createElement('p'); noMsg.className='chart-no-data'; noMsg.style.display='none';
-
-  const legend = document.createElement('div'); legend.className='chart-legend';
-  legend.innerHTML = `
-    <div class="legend-item">
-      <svg width="26" height="14" viewBox="0 0 26 14">
-        <line x1="0" y1="7" x2="26" y2="7" stroke="var(--accent)" stroke-width="2.5"/>
-        <circle cx="13" cy="7" r="4" fill="var(--accent)"/>
-      </svg>
-      <span class="legend-label">Remaining</span>
-    </div>
-    <div class="legend-item">
-      <svg width="26" height="14" viewBox="0 0 26 14">
-        <line x1="0" y1="7" x2="26" y2="7" stroke="#a6e3a1" stroke-width="2"/>
-        <circle cx="13" cy="7" r="4" fill="#a6e3a1"/>
-      </svg>
-      <span class="legend-label">Done</span>
-    </div>
-    <div class="legend-item">
-      <svg width="26" height="14" viewBox="0 0 26 14">
-        <line x1="0" y1="7" x2="26" y2="7" stroke="#f38ba8" stroke-width="1.8" stroke-dasharray="6,4"/>
-      </svg>
-      <span class="legend-label">Ideal</span>
-    </div>
-  `;
-
-  chartRow.appendChild(canvas);
-  chartRow.appendChild(noMsg);
-  chartRow.appendChild(legend);
+  chartRow.append(canvas, noMsg);
   wrap.appendChild(chartRow);
 
+  // ── Day detail, under the chart ────────────────────────────────────────────
+  const detail = document.createElement('div'); detail.className = 'day-detail';
+  wrap.appendChild(detail);
+
   let curStart = snapDates[0], curEnd = addDays(snapDates[0], 9);
+  let model = null;          // what compute() derived; paint() and the detail read it
+  let hover = -1;            // k of the hovered day
+  let selDate = daySelection.get(version)?.date ?? null;   // the selected day, by the snapshot date its segment ends at
+  let selTab  = daySelection.get(version)?.tab ?? null;    // 'burned' | 'scope' | 'progress'
+  let hits = { plot: null, bands: [], strip: [], pills: [] };
 
-  function redraw() {
+  const selectedK = () => model && selDate ? model.actual.findIndex((p, k) => k > 0 && p.date === selDate) : -1;
+
+  function compute() {
     const s=curStart, e=curEnd;
-    if (!s||!e||s>e) { canvas.style.display='none'; noMsg.textContent='Invalid date range.'; noMsg.style.display='block'; return; }
+    model = null;
+    if (!s||!e||s>e) { canvas.style.display='none'; noMsg.textContent='Invalid date range.'; noMsg.style.display='block'; renderPace(); renderDetail(); return; }
     const done = new Set([...doneBox.querySelectorAll('input:checked')].map(c=>c.value));
+    doneMenu.value.textContent = [...done].join(', ') || 'none';
 
-    // Rebuild weekend checkboxes for current range, preserving existing selections
+    // Rebuild weekend checkboxes for the current range, keeping existing selections.
+    // The range is the days of work, last one included; the axis adds a closing tick on the
+    // day after, whose point is the end of that last day.
     const allInRange  = calendarRange(s, e);
+    const closing     = addDays(e, 1);
     const weekendDays = allInRange.filter(isWeekend);
     weekendDaysBox.innerHTML = '';
-    if (weekendDays.length === 0) {
-      weekendGrp.style.display = 'none';
-    } else {
-      weekendGrp.style.display = '';
-      weekendDays.forEach(d => {
-        const dt      = new Date(d + 'T12:00:00Z');
-        const dayName = dt.toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' });
-        const lbl = document.createElement('label'); lbl.className='done-label';
-        const cb  = document.createElement('input'); cb.type='checkbox'; cb.checked=weekendSelected.has(d);
-        cb.addEventListener('change', () => {
-          if (cb.checked) weekendSelected.add(d); else weekendSelected.delete(d);
-          redraw();
-        });
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(` ${d.slice(5)} (${dayName})`));
-        weekendDaysBox.appendChild(lbl);
+    const dayName = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' });
+    // "First day" is the version's own first day (its planning day), not the first day of the
+    // range on screen: a drawer plan or a custom range can start later, and then nothing is hidden.
+    const firstDay = versionStart && versionStart >= s && versionStart <= e ? versionStart : null;
+    if (firstDay) {
+      const firstLbl = document.createElement('label'); firstLbl.className = 'done-label';
+      const firstCb  = document.createElement('input'); firstCb.type = 'checkbox'; firstCb.checked = hideFirst;
+      firstCb.addEventListener('change', () => {
+        hideFirst = firstCb.checked;
+        chrome.storage.local.set({ [HIDE_FIRST_DAY_KEY]: hideFirst });
+        compute();
       });
+      firstLbl.append(firstCb, document.createTextNode(` Hide first day (${dayName(firstDay)} ${firstDay.slice(5)})`));
+      weekendDaysBox.appendChild(firstLbl);
     }
+    if (weekendDays.length) {
+      const head = document.createElement('div'); head.className = 'menu-sub'; head.textContent = 'Show weekend days';
+      weekendDaysBox.appendChild(head);
+    }
+    weekendDays.forEach(d => {
+      const lbl = document.createElement('label'); lbl.className='done-label';
+      const cb  = document.createElement('input'); cb.type='checkbox'; cb.checked=weekendSelected.has(d);
+      cb.addEventListener('change', () => {
+        if (cb.checked) weekendSelected.add(d); else weekendSelected.delete(d);
+        compute();
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(` ${d.slice(5)} (${dayName(d)})`));
+      weekendDaysBox.appendChild(lbl);
+    });
+    const shownWeekends = weekendDays.filter(d => weekendSelected.has(d));
+    const xDates = [...allInRange.filter(d => !(hideFirst && d === firstDay) && (!isWeekend(d) || weekendSelected.has(d))), closing];
+    weekendMenu.value.textContent = [hideFirst && firstDay ? `from ${xDates[0].slice(5)}` : 'all',
+      ...(shownWeekends.length ? [`+ ${shownWeekends.map(d => d.slice(5)).join(', ')}`] : [])].join(' ');
+    const n = xDates.length;
+    const today = todayStr();
 
-    const xDates  = allInRange.filter(d => !isWeekend(d) || weekendSelected.has(d));
-    const inRange = snapDates.filter(d => d>=s && d<=e && (!isWeekend(d) || weekendSelected.has(d)));
-    if (!inRange.length) { canvas.style.display='none'; noMsg.textContent='No snapshots in range.'; noMsg.style.display='block'; return; }
+    // Each x tick is the START of its day: the point on day D is the state locked at the end
+    // of the day before, so the segment from D to the next tick is the progress made on D
+    // (Monday's work is the segment Monday → Tuesday).  Ticks after today have no point;
+    // today's own snapshot is live and drawn between today's tick and the next one.
+    const snapBefore = (d, after) => {
+      let found = null;
+      for (const x of snapDates) { if (x >= d) break; if (x > after) found = x; }
+      return found;
+    };
+    const pts = [];   // { idx, snap, live }
+    let lastSnap = null;
+    xDates.forEach((d, i) => {
+      if (d > today) return;
+      const snap = snapBefore(d, lastSnap ?? addDays(d, -4));
+      if (snap) { pts.push({ idx: i, snap }); lastSnap = snap; }
+    });
+    const dayFrac = ((Date.now() + 7 * 3600000) % 86400000) / 86400000;   // of today, in ICT
+    if (today >= s && today <= e && dateMap.has(today) && (!lastSnap || today > lastSnap)) {
+      const i = xDates.findLastIndex(d => d <= today);
+      if (i >= 0) {
+        const span = dayDiff(xDates[i], xDates[i + 1] ?? addDays(xDates[i], 1));
+        pts.push({ idx: Math.min(i + Math.min((dayDiff(xDates[i], today) + dayFrac) / span, 1), n - 1), snap: today, live: true });
+      }
+    }
+    if (!pts.length) { canvas.style.display='none'; noMsg.textContent='No snapshots in range.'; noMsg.style.display='block'; renderPace(); renderDetail(); return; }
     noMsg.style.display='none'; canvas.style.display='block';
-    const n=xDates.length;
-    const dIdx=new Map(xDates.map((d,i)=>[d,i]));
 
     const sumPts  = arr => arr.reduce((a,x)=>a+(parseFloat(x.point)||0),0);
     const remaining = d => sumPts((dateMap.get(d)??[]).filter(x=>!done.has(x.status)));
 
-    // Ideal line: starts at the total scope of the most recent snapshot (matches the summary-report
-    // approach of using the current sprint total), burns to 0 by the last x-axis day.
-    const latestTotal = sumPts(dateMap.get(inRange[inRange.length - 1]) ?? []);
-    const ideal = xDates.map((_, i) => latestTotal * (1 - i / Math.max(n - 1, 1)));
-
     const fmtPts = v => { const a = Math.abs(v); return (Number.isInteger(a) ? a : a.toFixed(1)) + 'pts'; };
 
-    const actual = inRange.map((d,i) => {
+    // date / prevDate are snapshot days: the segment ending at a point covers (prevDate, date]
+    const actual = pts.map(({ idx, snap: d, live }, i) => {
       const value = remaining(d);
-      let status = null, statusText = null, burnedText = null;
-      const prev = i > 0 ? inRange[i-1] : null;
+      let status = null, statusText = null, burned = 0, scope = 0;
+      const prev = i > 0 ? pts[i-1].snap : null;
       if (prev) {
         const scopeNow = sumPts(dateMap.get(d)??[]);
         const scopePrv = sumPts(dateMap.get(prev)??[]);
-        const diff     = scopeNow - scopePrv;
-        if      (diff >  0.001) { status = 'scope-up';   statusText = `+${fmtPts(diff)}`; }
-        else if (diff < -0.001) { status = 'scope-down'; statusText = `−${fmtPts(diff)}`; }
+        scope = Math.round((scopeNow - scopePrv) * 10) / 10;
+        if      (scope >  0.001) { status = 'scope-up';   statusText = `+${fmtPts(scope)}`; }
+        else if (scope < -0.001) { status = 'scope-down'; statusText = `−${fmtPts(scope)}`; }
         else if (Math.abs(value - remaining(prev)) < 0.001) {
           // Scope flat AND remaining flat: tell a genuine internal status reshuffle
           // (e.g. Specified → In progress) apart from "truly nothing changed".
@@ -800,13 +884,11 @@ function buildBurndownSection(version, dateMap, detailRecord = new Map()) {
         }
 
         // "Burned" = work actually completed (status transitions into a done status, net
-        // of reopens) over the window since the previous visible day.  The aggregate
-        // Done-delta would also count scope that arrives already-done (e.g. a story moved
-        // in already Resolved), which isn't a completion.  Fall back to the Done-delta
-        // only for old snapshots that have no statusChanges detail.
+        // of reopens) over the segment's days.  The aggregate Done-delta would also count
+        // scope that arrives already-done (e.g. a story moved in already Resolved), which
+        // isn't a completion.  Fall back to the Done-delta only when a day has no detail.
         const gap = calendarRange(addDays(prev, 1), d);
         const bi  = netBurnedOverGap(detailRecord, gap, done);
-        let burned;
         if (bi.hasDetail) {
           burned = Math.round((bi.burnedPts - bi.reopenedPts) * 10) / 10;
         } else {
@@ -814,97 +896,185 @@ function buildBurndownSection(version, dateMap, detailRecord = new Map()) {
           const doneNow  = sumPts(dateMap.get(d)??[])    - remaining(d);
           burned = Math.round((doneNow - donePrev) * 10) / 10;
         }
-        if (Math.abs(burned) > 0.001) {
-          const n = Number.isInteger(Math.abs(burned)) ? String(Math.abs(burned)) : Math.abs(burned).toFixed(1);
-          burnedText = burned < 0 ? `-${n}` : n;
-        }
       }
+      const burnedText = Math.abs(burned) > 0.001 ? String(Math.abs(burned)).replace(/^(\d+\.\d).*$/, '$1') : null;
       const total = sumPts(dateMap.get(d) ?? []);
-      return { dayIndex: dIdx.get(d), date: d, prevDate: prev, value, total, status, statusText, burnedText };
+      return { dayIndex: idx, date: d, prevDate: prev, value, total, status, statusText, burned, scope,
+               burnedText: burnedText && (burned < 0 ? `-${burnedText}` : burnedText), live: !!live };
     });
 
-    const doneActual = doneLineCb.checked
-      ? inRange.map(d => ({ dayIndex: dIdx.get(d), value: Math.round((sumPts(dateMap.get(d)??[]) - remaining(d)) * 10) / 10 }))
+    // Ideal line: from what was left when the sprint's work started, straight down to 0 at the
+    // closing tick.  That start is the first point, or, when the planning day is shown and its
+    // point is the state before planning, the point after it.
+    const planningShown = !hideFirst && firstDay && xDates[0] === firstDay && actual[0].dayIndex === 0 && actual.length > 1 && !actual[1].live;
+    const idealStart = (planningShown ? actual[1] : actual[0]).value;
+    const ideal = xDates.map((_, i) => idealStart * (1 - i / Math.max(n - 1, 1)));
+
+    // Day strip cells: the segments with data, then dashed cells for the days still to come
+    const cells = [];
+    if (actual[0].dayIndex > 0) cells.push({ a: 0, b: actual[0].dayIndex, k: -1, label: '', empty: true });
+    actual.forEach((p, k) => {
+      if (k === 0) return;
+      const a = actual[k - 1].dayIndex;
+      const b = p.live ? Math.min(Math.floor(a) + 1, n - 1) : p.dayIndex;
+      if (b <= a) return;
+      cells.push({ a, b, k, label: p.live ? 'Today' : cellLabel(calendarRange(addDays(p.prevDate, 1), p.date)), burned: p.burned, scope: p.scope, live: p.live });
+    });
+    const last = actual[actual.length - 1];
+    const futureFrom = last.live ? Math.min(Math.floor(actual.length > 1 ? actual[actual.length - 2].dayIndex : last.dayIndex) + 1, n - 1) : last.dayIndex;
+    for (let i = futureFrom; i < n - 1; i++) cells.push({ a: i, b: i + 1, k: -1, label: cellLabel([xDates[i]]), empty: true });
+
+    const doneActual = showDone
+      ? pts.map(({ idx, snap }) => ({ dayIndex: idx, value: Math.round((sumPts(dateMap.get(snap)??[]) - remaining(snap)) * 10) / 10 }))
       : null;
-    const maxScope = Math.max(...inRange.map(d => sumPts(dateMap.get(d)??[])));
-    const today = todayStr();
-    const notSyncedToday = xDates.includes(today) && !inRange.includes(today);
-    hitAreas = drawBurndownChart(canvas,{ xDates, actual, doneActual, ideal, maxY: Math.max(maxScope, 1), notSyncedToday }) ?? [];
+    const maxScope = Math.max(...pts.map(({ snap }) => sumPts(dateMap.get(snap)??[])));
+    const notSyncedToday = xDates.includes(today) && !dateMap.has(today);
+
+    // Pace strip: what is left and the working days left (today counts for the part not yet gone)
+    const daysLeft = today > e ? 0
+      : today < s ? weekdaysBetween(s, e)
+      : (isWeekend(today) ? 0 : 1 - dayFrac) + weekdaysBetween(addDays(today, 1), e);
+    model = { done, xDates, actual, doneActual, ideal, maxY: Math.max(maxScope, 1), notSyncedToday, cells,
+              pace: { remaining: last.value, total: last.total, live: last.live ? last : null, daysLeft } };
+    renderPace();
+    paint();
+    renderDetail();
   }
 
-  doneBox.addEventListener('change', redraw);
-  doneLineCb.addEventListener('change', redraw);
-  let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(redraw,120); });
+  function paint() {
+    if (!model) return;
+    hits = drawBurndownChart(canvas, { ...model, hover, selected: selectedK() }) ?? hits;
+  }
 
-  // ── Detail panel ──────────────────────────────────────────────────────────
-  let hitAreas = [];
-  const detailPanel = document.createElement('div');
-  detailPanel.className = 'chart-detail-panel';
-  wrap.appendChild(detailPanel);
+  // ── Pace strip ─────────────────────────────────────────────────────────────
+  function renderPace() {
+    if (!model) { pace.innerHTML = ''; return; }
+    const p = model.pace;
+    const f = v => v == null ? '—' : (Math.round(v * 10) / 10).toString();
+    const stat = (k, v, sub) => `<div class="pace-stat"><span class="pace-k">${k}</span><span class="pace-v num">${v}</span><span class="pace-sub">${sub}</span></div>`;
+    pace.innerHTML =
+      stat('Remaining', f(p.remaining), `of ${f(p.total)} pts`) +
+      stat('Burned today', p.live ? f(p.live.burned) : '—', p.live ? 'live · since 00:00 ICT' : 'no live data for today') +
+      stat('Days left', f(p.daysLeft), `until ${curEnd.slice(5)}`);
+  }
 
-  canvas.addEventListener('click', async (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    let nearest = null, clickType = 'dot', minDist = 22;
-    for (const h of hitAreas) {
-      if (h.pillHit) {
-        const { x: px, y: py, w: pw, h: ph } = h.pillHit;
-        if (mx >= px && mx <= px+pw && my >= py && my <= py+ph) { nearest = h; clickType = 'pill'; break; }
-      }
-      if (h.burnHit) {
-        const { x: bx, y: by, w: bw, h: bh } = h.burnHit;
-        if (mx >= bx && mx <= bx+bw && my >= by && my <= by+bh) { nearest = h; clickType = 'burn'; break; }
-      }
-      const d = Math.hypot(h.x - mx, h.y - my);
-      if (d < minDist) { minDist = d; nearest = h; clickType = 'dot'; }
+  // ── Day detail ─────────────────────────────────────────────────────────────
+  function renderDetail() {
+    const k = selectedK();
+    if (!model || k < 1) {
+      selDate = null;
+      daySelection.delete(version);
+      detail.className = 'day-detail is-empty';
+      detail.textContent = model ? 'Click a day under the chart to see its stories.' : '';
+      return;
     }
-    if (!nearest) { detailPanel.classList.remove('visible'); return; }
+    const p = model.actual[k];
+    const days = calendarRange(addDays(p.prevDate, 1), p.date);
+    const scopeEvent = p.status === 'scope-up' || p.status === 'scope-down';
+    if (!selTab) selTab = p.burnedText ? 'burned' : scopeEvent ? 'scope' : 'progress';
+    daySelection.set(version, { date: selDate, tab: selTab });
+    const hit = { date: p.date, prevDate: p.prevDate, status: p.status, statusText: p.statusText, burnedText: p.burnedText };
 
-    // Click semantics — each visual element has one clear action:
-    //   Burned badge  → showBurnedDetail  (what was completed)
-    //   scope-up/down pill → showPointDetail  (what changed scope)
-    //   Dot           → showBurnedDetail if burned points exist, else dismiss
-    //   "—" pill      → dismiss (no scope change, nothing to explain)
-    const done = new Set([...doneBox.querySelectorAll('input:checked')].map(c => c.value));
-    if (clickType === 'burn') {
-      await showBurnedDetail(detailPanel, version, nearest, done);
-    } else if (clickType === 'pill' && (nearest.status === 'scope-up' || nearest.status === 'scope-down')) {
-      await showPointDetail(detailPanel, version, nearest);
-    } else if (clickType === 'pill' && nearest.status === 'progress') {
-      await showProgressDetail(detailPanel, version, nearest);
-    } else if (clickType === 'dot' && nearest.burnedText) {
-      // Dot on a day with burned points: show burned detail (same as clicking the badge)
-      await showBurnedDetail(detailPanel, version, nearest, done);
-    } else {
-      // "—" pill, dot with no burns, or any other non-actionable click → dismiss
-      detailPanel.classList.remove('visible');
-    }
-  });
-
-  // Cursor: pointer only where a click actually does something.
-  //   scope-up / scope-down pill  → pointer (opens scope detail)
-  //   burned badge                → pointer (opens burned detail)
-  //   dot with burned points      → pointer (opens burned detail)
-  //   "—" pill / dot with no burns → default (no action)
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const over = hitAreas.some(h => {
-      if (h.pillHit && (h.status === 'scope-up' || h.status === 'scope-down' || h.status === 'progress')) {
-        const { x: px, y: py, w: pw, h: ph } = h.pillHit;
-        if (mx >= px && mx <= px+pw && my >= py && my <= py+ph) return true;
-      }
-      if (h.burnHit) {
-        const { x: bx, y: by, w: bw, h: bh } = h.burnHit;
-        if (mx >= bx && mx <= bx+bw && my >= by && my <= by+bh) return true;
-      }
-      if (h.burnedText && Math.hypot(h.x - mx, h.y - my) < 18) return true;
-      return false;
+    detail.className = 'day-detail';
+    detail.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'dd-head';
+    const title = document.createElement('strong'); title.textContent = dayLabel(days) + (p.live ? ' · live' : '');
+    const tabs = document.createElement('div'); tabs.className = 'dd-tabs'; tabs.setAttribute('role', 'tablist');
+    const tab = (id, label) => {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(selTab === id)); b.textContent = label;
+      b.addEventListener('click', () => { selTab = id; renderDetail(); });
+      tabs.appendChild(b);
+    };
+    tab('burned',   `Burned ${p.burnedText ?? 0}`);
+    tab('scope',    `Scope ${scopeEvent ? p.statusText.replace('pts', '') : '0'}`);
+    tab('progress', 'Status moves');
+    const sp = document.createElement('span'); sp.className = 'spacer';
+    const btn = (label, title, fn) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'dd-btn'; b.textContent = label; b.title = title;
+      b.addEventListener('click', fn); return b;
+    };
+    const prevBtn = btn('‹', 'Previous day', () => step(-1)); prevBtn.disabled = k <= 1;
+    const nextBtn = btn('›', 'Next day', () => step(1));      nextBtn.disabled = k >= model.actual.length - 1;
+    const refresh = btn('↻ Refresh', 'Rebuild the snapshot(s) behind this day', async () => {
+      const keys = days.flatMap(d => [`${d}__${version}`, `${DETAIL_PREFIX}${d}__${version}`]);
+      await chrome.storage.local.remove(keys);
+      triggerSync();
     });
-    canvas.style.cursor = over ? 'pointer' : 'default';
+    const collapse = btn('Collapse ▴', 'Close the day detail', () => { selDate = null; selTab = null; renderDetail(); paint(); });
+    head.append(title, tabs, sp, prevBtn, nextBtn, refresh, collapse);
+
+    const body = document.createElement('div'); body.className = 'dd-body';
+    detail.append(head, body);
+    const done = model.done;
+    if (selTab === 'burned')     showBurnedDetail(body, version, hit, done);
+    else if (selTab === 'scope') showPointDetail(body, version, hit);
+    else                         showProgressDetail(body, version, hit);
+  }
+
+  function select(k, tabId = null) {
+    if (!model || k < 1) return;
+    const date = model.actual[k].date;
+    if (date === selDate && !tabId) { selDate = null; selTab = null; }
+    else { selDate = date; selTab = tabId; }
+    paint(); renderDetail();
+  }
+  function step(dir) {
+    const k = selectedK() + dir;
+    if (k >= 1 && model && k < model.actual.length) { selDate = model.actual[k].date; selTab = null; paint(); renderDetail(); }
+  }
+
+  doneBox.addEventListener('change', compute);
+  doneToggle.addEventListener('click', () => {
+    showDone = !showDone;
+    doneToggle.setAttribute('aria-pressed', String(showDone));
+    compute();
+  });
+  let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(paint,120); });
+
+  // ── Pointer: hover lights a day, click selects it ─────────────────────────
+  const kAt = (mx, my) => {
+    const inside = r => mx >= r.x0 && mx <= r.x1 && my >= r.y0 && my <= r.y1;
+    const pill = hits.pills.find(inside);
+    if (pill) return { k: pill.k, tab: 'scope' };
+    const cell = hits.strip.find(inside);
+    if (cell) return { k: cell.k };
+    if (hits.plot && my >= hits.plot.y0 && my <= hits.plot.y1) {
+      const b = hits.bands.find(b => mx >= b.x0 && mx < b.x1);
+      if (b) return { k: b.k };
+    }
+    return null;
+  };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  let raf = 0;
+  canvas.addEventListener('mousemove', e => {
+    const hit = kAt(...pos(e));
+    const k = hit ? hit.k : -1;
+    canvas.style.cursor = k >= 1 ? 'pointer' : 'default';
+    if (k === hover) return;
+    hover = k;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(paint);
+  });
+  canvas.addEventListener('mouseleave', () => { if (hover !== -1) { hover = -1; paint(); } });
+  canvas.addEventListener('click', e => { const hit = kAt(...pos(e)); if (hit) select(hit.k, hit.tab ?? null); });
+
+  // ← / → walk the days while the chart has focus (Escape stays with the drawer)
+  canvas.tabIndex = 0;
+  canvas.setAttribute('aria-label', `Burndown chart for ${version}. Use the left and right arrows to walk the days.`);
+  canvas.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    if (selectedK() < 1 && model) select(model.actual.length - 1);
+    else step(e.key === 'ArrowLeft' ? -1 : 1);
   });
 
-  return { el:wrap, update(s,e){ curStart=s; curEnd=e; redraw(); }, getCanvas(){ return canvas; }, isDoneShown(){ return doneLineCb.checked; } };
+  return {
+    el: wrap,
+    update(s, e) { curStart = s; curEnd = e; compute(); },
+    redraw: paint,
+    getCanvas() { return canvas; },
+    isDoneShown() { return showDone; },
+  };
 }
 
 // ─── Cumulative Flow Diagram + Flow metrics ───────────────────────────────────
@@ -912,6 +1082,12 @@ function buildBurndownSection(version, dateMap, detailRecord = new Map()) {
 const WP_BASE_URL = `${BACKLOG_URL}/work_packages`;
 const CFD_PALETTE = ['#89b4fa','#a6e3a1','#f9e2af','#fab387','#f38ba8','#cba6f7','#94e2d5','#eba0ac','#74c7ec','#b4befe','#f2cdcd','#89dceb'];
 const AGING_THRESHOLD_DAYS = 5;
+
+/** "10-12 (Mon)" for one day, "10-09 → 10-11" for a segment spanning several. */
+function dayLabel(days) {
+  const one = d => `${d.slice(5)} (${new Date(d + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' })})`;
+  return days.length > 1 ? `${days[0].slice(5)} → ${days[days.length - 1].slice(5)}` : one(days[0]);
+}
 
 function dayDiff(fromStr, toStr) {
   if (!fromStr || !toStr) return 0;
@@ -924,7 +1100,6 @@ function ensureFlowStyles() {
   const s = document.createElement('style');
   s.id = '__blm-flow-style';
   s.textContent = `
-    .btn-toggle-table.active { background:var(--overlay); color:var(--text); }
     .flow-section { margin-top:14px; padding:14px 16px; background:var(--card,var(--surface)); border:1px solid var(--border); border-radius:10px; }
     [data-theme="light"] .flow-section { background:#f4f4fa; border-color:#dcdce8; }
     .flow-stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
@@ -1168,9 +1343,8 @@ async function showPointDetail(panel, version, hit) {
   const isStale    = scopeEvent && !hasDetail && anyReconstructed && anyMissingDetail;
 
   let html = `<div class="dp-header">
-    <span class="dp-date">${hit.date}</span>
+    <span class="dp-date">${dayLabel(gapDays)}</span>
     ${hit.status ? `<span class="dp-badge ${STATUS_CLS[hit.status] ?? ''}">${hit.statusText ?? ''}</span>` : ''}
-    ${gapDays.length > 1 ? `<span class="dp-from">net change since ${hit.prevDate}</span>` : ''}
     <div class="dp-header-actions">
       <button class="dp-refresh" title="Re-reconstruct the snapshot(s) behind this point">↻ Refresh</button>
       <button class="dp-close"   title="Close">✕</button>
@@ -1269,9 +1443,8 @@ async function showProgressDetail(panel, version, hit) {
   const moves = [...recs.values()].filter(r => r.from !== r.to);
 
   let html = `<div class="dp-header">
-    <span class="dp-date">${hit.date}</span>
+    <span class="dp-date">${dayLabel(gapDays)}</span>
     <span class="dp-badge" style="color:var(--green-soft);border-color:var(--green-soft)">⇄ Progress</span>
-    ${gapDays.length > 1 ? `<span class="dp-from">since ${hit.prevDate}</span>` : ''}
     <div class="dp-header-actions">
       <button class="dp-refresh" title="Re-reconstruct the snapshot(s) behind this point">↻ Refresh</button>
       <button class="dp-close"   title="Close">✕</button>
@@ -1325,7 +1498,7 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
   // snapshot (6AM) to today's locked snapshot (6AM).
   if (isStale && isToday && !_autoTriggered) {
     panel.innerHTML = `<div class="dp-header">
-      <span class="dp-date">${hit.date}</span>
+      <span class="dp-date">${dayLabel(gapDays)}</span>
       <span class="dp-badge scope-down">Computing…</span>
       <div class="dp-header-actions">
         <button class="dp-close" title="Close">✕</button>
@@ -1396,9 +1569,8 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
     : (hit.burnedText ? `−${hit.burnedText}pts` : '?');
 
   let html = `<div class="dp-header">
-    <span class="dp-date">${hit.date}</span>
+    <span class="dp-date">${dayLabel(gapDays)}</span>
     <span class="dp-badge scope-down">Burned ${netLabel}</span>
-    ${gapDays.length > 1 ? `<span class="dp-from">since ${hit.prevDate}</span>` : ''}
     ${movedOut.length ? `<span class="dp-badge moved-out" title="Scope removed by moving stories to other sprints">−${fmtPts(movedOutPts)} moved out</span>` : ''}
     <div class="dp-header-actions">
       <button class="dp-refresh" title="Re-reconstruct this snapshot">↻ Refresh</button>
@@ -1428,21 +1600,10 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
   }
 
   if (!burned.length && !reopened.length && !movedOut.length) {
-    // isStale + isToday means reconstruction ran but skipped today (daily cutoff
-    // hasn't passed yet — only stories completed before 09:30 AM ICT count).
-    let cutoffNote = '';
-    if (isStale && isToday) {
-      // Same rule as the background job: sprint start/end days lock at the planning cutoff, other days at the daily one.
-      const kept = await chrome.storage.local.get([TRACKED_KEY, SETTINGS_KEY]);
-      const cfg = kept[SETTINGS_KEY] ?? {};
-      const planning = (kept[TRACKED_KEY] ?? []).some(t => t.startDate === hit.date || t.endDate === hit.date);
-      cutoffNote = planning
-        ? `Today is a sprint start/end day, so its burn detail locks at the planning cutoff (${cfg.planningCutoff ?? '21:00'} ICT)`
-        : `Today's burn detail locks at the daily cutoff (${cfg.dailyCutoff ?? '09:30'} ICT)`;
-    }
+    // isStale + isToday: today's detail couldn't be computed (sync failed or is off).
     html += `<p class="dp-empty">${
       isStale && isToday
-        ? `⏳ ${cutoffNote}. The chart shows live numbers until then; stories completed after the cutoff count toward the next day.`
+        ? '⏳ Today is live until it ends (23:59 ICT) and its burn detail isn\'t computed yet — click ↻ Refresh.'
         : isStale
           ? '⚠ No burn detail available — click ↻ Refresh to re-reconstruct.'
           : 'No items burned or reopened this day.'
@@ -1461,39 +1622,31 @@ async function showBurnedDetail(panel, version, hit, done, _autoTriggered = fals
 
 // ─── Backlog section ──────────────────────────────────────────────────────────
 
-function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap = new Map(), throughputMap = new Map(), flowRecord = null, detailRecord = new Map()) {
+function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap = new Map(), throughputMap = new Map(), flowRecord = null, detailRecord = new Map(), syncMeta = null, hideFirstDay = false, versionStart = null) {
   const section = document.createElement('div'); section.className='backlog-section';
 
+  // ── Version header: name, sync state, Copy chart, Delete all ──────────────
   const bar = document.createElement('div'); bar.className='backlog-title-bar';
-  const titleGroup = document.createElement('div'); titleGroup.style.cssText='display:flex;align-items:center;gap:10px;';
-  const title = document.createElement('span'); title.className='backlog-title'; title.textContent=version;
-  titleGroup.appendChild(title);
-
-  if (!dateMap.has(todayStr())) {
-    const warn = document.createElement('span');
-    warn.className = 'sync-warning';
-    warn.title = 'No snapshot for today — visit the backlog page to capture data';
-    warn.textContent = '⚠ Not synced today';
-    titleGroup.appendChild(warn);
+  const title = document.createElement('h2'); title.className='backlog-title'; title.textContent=version;
+  const chip = document.createElement('span');
+  if (dateMap.has(todayStr())) {
+    const at = syncMeta?.lastSync && new Date(syncMeta.lastSync);
+    chip.className = 'sync-chip ok';
+    chip.textContent = at && !isNaN(at) ? `synced ${at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'synced today';
+  } else {
+    chip.className = 'sync-chip warn';
+    chip.textContent = 'not synced today';
+    chip.title = 'No snapshot for today yet — click Sync Now';
   }
-
-  const rightBtns = document.createElement('div'); rightBtns.style.cssText='display:flex;gap:8px;align-items:center;';
-  const toggleBtn = document.createElement('button'); toggleBtn.className='btn-toggle-table'; toggleBtn.textContent='Hide Table';
-  const COPY_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`;
-  const copyImgBtn = document.createElement('button'); copyImgBtn.className='btn-copy-image';
-  copyImgBtn.innerHTML = COPY_ICON + 'Copy Chart';
+  const spacer = document.createElement('span'); spacer.className = 'spacer';
+  const COPY_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`;
+  const copyImgBtn = document.createElement('button'); copyImgBtn.type = 'button'; copyImgBtn.className='btn-copy-image';
+  copyImgBtn.innerHTML = COPY_ICON + 'Copy chart';
   copyImgBtn.title = 'Copy chart as image to clipboard';
-  const cfdBtn  = document.createElement('button'); cfdBtn.className='btn-toggle-table';  cfdBtn.textContent='CFD';   cfdBtn.title='Cumulative Flow Diagram';
-  const flowBtn = document.createElement('button'); flowBtn.className='btn-toggle-table'; flowBtn.textContent='Flow'; flowBtn.title='Throughput, rework & Aging WIP';
-  const delVersionBtn = document.createElement('button'); delVersionBtn.className='btn-delete-version'; delVersionBtn.textContent='Delete All';
+  const delVersionBtn = document.createElement('button'); delVersionBtn.type = 'button'; delVersionBtn.className='btn-delete-version'; delVersionBtn.textContent='Delete all';
   delVersionBtn.title = `Delete all snapshots for "${version}"`;
-  rightBtns.appendChild(toggleBtn); rightBtns.appendChild(cfdBtn); rightBtns.appendChild(flowBtn); rightBtns.appendChild(copyImgBtn); rightBtns.appendChild(delVersionBtn);
-  bar.appendChild(titleGroup); bar.appendChild(rightBtns); section.appendChild(bar);
-
-  const tableWrap = document.createElement('div'); tableWrap.style.display='none'; section.appendChild(tableWrap);
-  let tableVisible = false;
-  toggleBtn.textContent = 'Show Table';
-  toggleBtn.addEventListener('click',()=>{ tableVisible=!tableVisible; tableWrap.style.display=tableVisible?'':'none'; toggleBtn.textContent=tableVisible?'Hide Table':'Show Table'; });
+  bar.append(title, chip, spacer, copyImgBtn, delVersionBtn);
+  section.appendChild(bar);
 
   // Delete a single date snapshot (core + detail)
   const onDeleteDate = async (date) => {
@@ -1512,33 +1665,39 @@ function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap 
     await renderAll();
   });
 
-  const { el:chartEl, update:updateChart, getCanvas, isDoneShown } = buildBurndownSection(version, dateMap, detailRecord);
-  section.appendChild(chartEl);
+  const chart = buildBurndownSection(version, dateMap, detailRecord, hideFirstDay, versionStart);
+  section.appendChild(chart.el);
 
-  // Flow metrics + Cumulative Flow Diagram (collapsible, off by default)
+  // ── Table, CFD and Flow open as rows under the chart ──────────────────────
+  const tableWrap = document.createElement('div'); tableWrap.className = 'sec-body';
   const flowPanel = buildFlowPanel(version, throughputMap, flowRecord);
   const cfd       = buildCFDSection(version, dateMap);
-  section.appendChild(flowPanel.el);
-  section.appendChild(cfd.el);
-
-  let curS, curE, cfdVisible = false, flowVisible = false;
-  cfdBtn.addEventListener('click', () => {
-    cfdVisible = !cfdVisible; cfd.show(cfdVisible); cfdBtn.classList.toggle('active', cfdVisible);
-    if (cfdVisible) cfd.update(curS, curE);
+  let curS, curE;
+  const row = (name, hint, body, onOpen) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'sec-row'; b.setAttribute('aria-expanded', 'false');
+    b.innerHTML = `<strong>${name}</strong><span class="sec-hint">${hint}</span><span class="sec-chev" aria-hidden="true">▸</span>`;
+    let open = false;
+    const set = v => { open = v; b.setAttribute('aria-expanded', String(v)); onOpen(v); };
+    b.addEventListener('click', () => set(!open));
+    section.append(b, body);
+    set(false);
+    return { isOpen: () => open };
+  };
+  const tableRow = row('Snapshot table', 'status × day, CSV and moved-in/out badges, delete a day', tableWrap, v => {
+    tableWrap.style.display = v ? '' : 'none';
+    if (v) { tableWrap.innerHTML = ''; tableWrap.appendChild(buildTable(dateMap, curS, curE, onDeleteDate, sourcesMap, movesMap)); }
   });
-  flowBtn.addEventListener('click', () => {
-    flowVisible = !flowVisible; flowPanel.show(flowVisible); flowBtn.classList.toggle('active', flowVisible);
-    if (flowVisible) flowPanel.update(curS, curE);
-  });
+  const cfdRow  = row('CFD', 'cumulative flow by status', cfd.el, v => { cfd.show(v); if (v) cfd.update(curS, curE); });
+  const flowRow = row('Flow', 'throughput, rework and aging WIP', flowPanel.el, v => { flowPanel.show(v); if (v) flowPanel.update(curS, curE); });
 
   copyImgBtn.addEventListener('click', async () => {
-    const canvas = getCanvas();
+    const canvas = chart.getCanvas();
     if (!canvas || canvas.style.display === 'none') return;
     try {
-      const dataUrl = await copyChartImage(canvas, version, isDoneShown());
-      copyImgBtn.innerHTML = '✓ Copied!';
+      const dataUrl = await copyChartImage(canvas, version, chart.isDoneShown());
+      copyImgBtn.innerHTML = '✓ Copied';
       copyImgBtn.classList.add('copied');
-      setTimeout(() => { copyImgBtn.innerHTML = COPY_ICON + 'Copy Chart'; copyImgBtn.classList.remove('copied'); }, 2000);
+      setTimeout(() => { copyImgBtn.innerHTML = COPY_ICON + 'Copy chart'; copyImgBtn.classList.remove('copied'); }, 2000);
       showCopyPreview(dataUrl);
     } catch(e) {
       console.error('[BacklogMonitor] Copy image failed:', e);
@@ -1547,16 +1706,15 @@ function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap 
 
   return {
     el: section,
-    getCanvas,
-    isDoneShown,
+    getCanvas: chart.getCanvas,
+    isDoneShown: chart.isDoneShown,
     isSyncedToday: () => dateMap.has(todayStr()),
     update(s,e) {
       curS = s; curE = e;
-      tableWrap.innerHTML=''; tableWrap.appendChild(buildTable(dateMap,s,e,onDeleteDate,sourcesMap,movesMap));
-      if (!tableVisible) tableWrap.style.display='none';
-      updateChart(s,e);
-      if (cfdVisible)  cfd.update(s,e);
-      if (flowVisible) flowPanel.update(s,e);
+      if (tableRow.isOpen()) { tableWrap.innerHTML=''; tableWrap.appendChild(buildTable(dateMap,s,e,onDeleteDate,sourcesMap,movesMap)); }
+      chart.update(s,e);
+      if (cfdRow.isOpen())  cfd.update(s,e);
+      if (flowRow.isOpen()) flowPanel.update(s,e);
     }
   };
 }
@@ -2088,6 +2246,13 @@ async function resolveEmbeddedTarget() {
     if (!version) return null;
     embeddedTarget = { project, version };
     embeddedPlan = ((await chrome.storage.local.get(PLAN_KEY))[PLAN_KEY] ?? {})[version.id] ?? null;
+    // Plans made by the old default started on the Monday after the version's planning Friday,
+    // so the drawer showed other dates than the page.  Move those to the version's own start
+    // (the planning day is then hidden by "Hide first day", as on the page); a hand-picked start stays.
+    if (embeddedPlan && version.startDate && embeddedPlan.start !== version.startDate
+        && embeddedPlan.start === addDays(version.startDate, (8 - new Date(version.startDate + 'T12:00:00Z').getUTCDay()) % 7 || 7)) {
+      await saveEmbeddedPlan(version.startDate, embeddedPlan.end);
+    }
   } catch { embeddedTarget = null; }
   return embeddedTarget;
 }
@@ -2099,18 +2264,14 @@ async function saveEmbeddedPlan(start, end) {
   await chrome.storage.local.set({ [PLAN_KEY]: plans });
 }
 
-function mondayOnOrAfter(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7));
-  return d.toISOString().slice(0, 10);
-}
-
 let embeddedSyncTried = false;
-/** Drawer: what the empty chart means while the version's history is still being fetched. */
-async function embeddedEmptyNote(noData) {
+/** What the empty chart means while the shown version's history is still being fetched. */
+async function emptyVersionNote(noData, name) {
   const syncOn = (await chrome.storage.local.get('__blm_sync_burndown')).__blm_sync_burndown ?? true;
   if (syncOn) {
-    noData.replaceChildren(document.createTextNode(`No data for ${embeddedTarget.version.name} yet — fetching it from OpenProject. The chart appears here when it's ready.`));
+    const spin = document.createElement('span'); spin.className = 'spinner'; spin.setAttribute('aria-hidden', 'true');
+    noData.setAttribute('role', 'status');
+    noData.replaceChildren(spin, document.createTextNode(`No data for ${name} yet — fetching it from OpenProject. The chart appears here when it's ready.`));
     return;
   }
   // The background fetches nothing while "Burndown sync" is off, so the chart can never fill
@@ -2122,9 +2283,9 @@ async function embeddedEmptyNote(noData) {
     await chrome.storage.local.set({ __blm_sync_burndown: true });
     embeddedSyncTried = true;
     triggerSync();
-    embeddedEmptyNote(noData);
+    emptyVersionNote(noData, name);
   });
-  noData.replaceChildren(`Burndown sync is switched off, so nothing is collected for ${embeddedTarget.version.name}.`, document.createElement('br'), turnOn);
+  noData.replaceChildren(`Burndown sync is switched off, so nothing is collected for ${name}.`, document.createElement('br'), turnOn);
 }
 
 /** First open of a version: ask for the planned dates instead of drawing a chart. */
@@ -2152,8 +2313,7 @@ function showPlanSetup(output, noData) {
     wrap.append(label, input);
     return [wrap, input];
   };
-  // Sprints are planned on a Friday; the work (and the burndown) starts on the Monday after
-  const [startWrap, start] = field('Sprint start', 'plan-start', mondayOnOrAfter(version.startDate ?? fallback.start));
+  const [startWrap, start] = field('Sprint start', 'plan-start', version.startDate ?? fallback.start);
   const [endWrap, end]     = field('Sprint end', 'plan-end', version.endDate ?? fallback.end);
   const go = document.createElement('button');
   go.type = 'button'; go.textContent = 'Show burndown';
@@ -2177,7 +2337,7 @@ function showPlanSetup(output, noData) {
 async function autoTrackCurrentVersion(tracked) {
   const name = currentMainViewVersion();
   if (!name) return tracked;
-  const have = tracked.find(t => t.versionName === name);
+  const have = tracked.find(t => sameVersion(t.versionName, name));
   if (have) {
     // Tracked before the sprint dates were known: history is only rebuilt from a start date
     if (embeddedPlan && !have.startDate) {
@@ -2190,17 +2350,20 @@ async function autoTrackCurrentVersion(tracked) {
   try {
     const project = embeddedTarget?.project ?? (await fetchActiveProjects()).find(p => p.name === mainViewProject);
     if (!project) return tracked;
-    const v = embeddedTarget?.version ?? (await fetchAllVersions(project.id)).find(v => v.name === name);
+    const v = embeddedTarget?.version ?? (await fetchAllVersions(project.id)).find(v => sameVersion(v.name, name));
     if (!v) return tracked;
     // First in the list: the background syncs tracked versions in order, so the
     // sprint the user is waiting on gets its snapshots before the others.
     const next = [{
       projectId: project.id, projectName: project.name,
       versionId: v.id,      versionName: v.name,
-      startDate: embeddedPlan?.start ?? v.startDate ?? null, endDate: embeddedPlan?.end ?? v.endDate ?? null,
+      // History is rebuilt from the version's own start (the planning Friday), which is
+      // also the baseline the chart measures the first visible day against
+      startDate: v.startDate ?? embeddedPlan?.start ?? null, endDate: v.endDate ?? embeddedPlan?.end ?? null,
     }, ...tracked];
     await chrome.storage.local.set({ [TRACKED_KEY]: next });
-    try { chrome.runtime.sendMessage({ type: 'sync-now' }); } catch { /* sw may be asleep */ }
+    embeddedSyncTried = true;   // one sync for the new version, not a second from renderAll
+    triggerSync();
     return next;
   } catch { return tracked; }
 }
@@ -2213,7 +2376,8 @@ async function renderAll() {
 
   // ── No versions tracked ───────────────────────────────────────────────────
   let tracked = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
-  if ((!tracked.length || EMBEDDED) && !autoTrackTried) {
+  // The current sprint's version is always tracked, so the chart always has it to show
+  if (!autoTrackTried) {
     autoTrackTried = true;
     tracked = await autoTrackCurrentVersion(tracked);
   }
@@ -2261,9 +2425,9 @@ async function renderAll() {
 
   if (!dateListenersSet && startInput) {
     const onChange = () => {
-      // Manual date edit → clear the sprint selector so it doesn't show stale selection
+      // Manual date edit → the range is now a custom one
       const fs = document.getElementById('filter-sprint');
-      if (fs) fs.value = '';
+      if (fs) fs.value = 'custom';
       sectionUpdaters.forEach(u=>u(startInput.value, endInput.value));
       if (embeddedTarget && startInput.value && endInput.value) saveEmbeddedPlan(startInput.value, endInput.value);
     };
@@ -2277,14 +2441,16 @@ async function renderAll() {
   sectionUpdaters      = [];
   sectionCanvasGetters = [];
 
-  if (EMBEDDED && embeddedTarget) {
-    // Nothing stored for this version yet: fetch its history now (rebuilt from the planned start)
-    const hasData = snapshots.some(s => s.backlogVersion === embeddedTarget.version.name);
-    if (!hasData) {
-      embeddedEmptyNote(noData);
-      const syncOn = (all.__blm_sync_burndown ?? true);
-      if (!embeddedSyncTried && syncOn) { embeddedSyncTried = true; triggerSync(); }
-    }
+  // The current version is always shown (the drawer's version in the drawer). Nothing
+  // stored for it yet: fetch its history now and say so, rather than showing other
+  // versions in its place.
+  const mainVer      = currentMainViewVersion();
+  const showMainOnly = (EMBEDDED || mainViewOnly) && !!mainVer;
+  if (showMainOnly && !snapshots.some(s => sameVersion(s.backlogVersion, mainVer))) {
+    emptyVersionNote(noData, mainVer);
+    noData.style.display = 'block';
+    if (!embeddedSyncTried && (all.__blm_sync_burndown ?? true)) { embeddedSyncTried = true; triggerSync(); }
+    return;
   }
   if (!snapshots.length) { noData.style.display='block'; return; }
   noData.style.display='none';
@@ -2297,25 +2463,18 @@ async function renderAll() {
   const byDetail     = groupDetail(all, DETAIL_PREFIX);
   const frag = document.createDocumentFragment();
 
-  // Main-view filter: when ON, render ONLY "Credit Utility <CurrentSprint>" — if a
-  // section for it exists among the current snapshots. If the user hasn't tracked
-  // that version yet, we silently fall back to rendering everything so they aren't
-  // left staring at a blank page.
-  const mainVer      = currentMainViewVersion();
-  if (EMBEDDED && !byVersion.has(mainVer)) {
-    if (embeddedTarget) embeddedEmptyNote(noData);
-    noData.style.display = 'block';
-    return;
-  }
-  const applyMainOnly = mainViewOnly && byVersion.has(mainVer);
+  // Main-view filter: when ON, render ONLY "<project> <CurrentSprint>". Without a known
+  // project (signed out, no membership) every version is rendered instead.
+  const applyMainOnly = showMainOnly;
   for (const [version, dateMap] of byVersion) {
-    if (applyMainOnly && version !== mainVer) continue;
+    if (applyMainOnly && !sameVersion(version, mainVer)) continue;
     const sourcesMap    = bySources.get(version)    ?? new Map();
     const movesMap      = byMoves.get(version)      ?? new Map();
     const throughputMap = byThroughput.get(version) ?? new Map();
     const flowRecord    = byFlow.get(version)       ?? null;
     const detailRecord  = byDetail.get(version)     ?? new Map();
-    const { el, update, getCanvas, isDoneShown, isSyncedToday } = buildBacklogSection(version, dateMap, sourcesMap, movesMap, throughputMap, flowRecord, detailRecord);
+    const { el, update, getCanvas, isDoneShown, isSyncedToday } = buildBacklogSection(version, dateMap, sourcesMap, movesMap, throughputMap, flowRecord, detailRecord, all.__blm_sync_meta ?? null, all[HIDE_FIRST_DAY_KEY] !== false,
+      tracked.find(t => sameVersion(t.versionName, version))?.startDate ?? null);
     sectionUpdaters.push(update);
     sectionCanvasGetters.push({ version, getCanvas, isDoneShown, isSyncedToday });
     frag.appendChild(el);
@@ -2336,6 +2495,13 @@ let mainViewProject = null; // one of the signed-in user's projects; null = unkn
 /** The version name we auto-focus when Main-view is on: "<project> <sprint>"
  *  using the same sprint math as the sprint selector, e.g. "Credit Utility 26.07.C".
  *  Null until the user's project is known. */
+/** Version names compare with runs of spaces collapsed: some OpenProject versions are named
+ *  "Credit Utility  26.12.C" (two spaces) while the sprint math builds "Credit Utility 26.12.C". */
+function sameVersion(a, b) {
+  const norm = v => String(v ?? '').replace(/s+/g, ' ').trim();
+  return !!a && !!b && norm(a) === norm(b);
+}
+
 function currentMainViewVersion() {
   if (embeddedTarget) return embeddedTarget.version.name;   // the drawer was opened for this version
   if (!mainViewProject) return null;
@@ -2345,10 +2511,11 @@ function currentMainViewVersion() {
 
 // ─── Sprint math (2-week sprints; anchor start: 2026-04-10 = "26.04.B") ───────
 //
-// Each sprint runs from its planning Friday through the NEXT planning Friday
-// (inclusive), so sprint N end == sprint N+1 start (the planning day overlap).
-// Example: 26.04.B = 2026-04-10 (Fri) → 2026-04-24 (Fri)
-//          26.05.A = 2026-04-24 (Fri) → 2026-05-08 (Fri)
+// A sprint starts on its planning Friday and ends on the Thursday 13 days later, as the
+// OpenProject versions do; the next Friday is the next sprint's planning day.  The name
+// still comes from the month of that next Friday.
+// Example: 26.04.B = 2026-04-10 (Fri) → 2026-04-23 (Thu)
+//          26.05.A = 2026-04-24 (Fri) → 2026-05-07 (Thu)
 
 const SPRINT_DAY_MS       = 86400000;
 const SPRINT_LEN_DAYS     = 14;
@@ -2385,7 +2552,7 @@ function sprintInfo(idx) {
   }
   const letter = String.fromCharCode(65 + (idx - first));
   const name = `${String(endY).slice(-2)}.${String(endM+1).padStart(2,'0')}.${letter}`;
-  return { idx, name, start: fmtDate(startMs), end: fmtDate(endMs) };
+  return { idx, name, start: fmtDate(startMs), end: fmtDate(endMs - SPRINT_DAY_MS) };
 }
 
 function populateSprintSelector() {
@@ -2393,14 +2560,17 @@ function populateSprintSelector() {
   // Current sprint + 9 previous = 10 total
   const sprints = Array.from({ length: 10 }, (_, i) => sprintInfo(currentIdx - i));
   const opts = sprints.map(s => `<option value="${s.start}|${s.end}|${s.name}">${s.name} (${s.start} → ${s.end})</option>`).join('');
+  const stepOpts = sprints.map(s => `<option value="${s.start}|${s.end}|${s.name}">${s.name} · ${s.start.slice(5)} → ${s.end.slice(5)}</option>`).join('');
 
   const filterSel = document.getElementById('filter-sprint');
   if (filterSel) {
     const prev = filterSel.value;
     const currentSprint = sprintInfo(sprintIndexForDate(todayStr()));
     const currentVal = `${currentSprint.start}|${currentSprint.end}|${currentSprint.name}`;
-    filterSel.innerHTML = '<option value="">— Sprint —</option>' + opts;
+    filterSel.innerHTML = stepOpts + '<option value="custom">Custom range…</option>';
     filterSel.value = prev || currentVal;
+    if (!filterSel.value) filterSel.value = 'custom';   // the range matches no sprint in the list
+    showCustomRange(filterSel.value === 'custom');
   }
 
   const exportSel = document.getElementById('export-sprint');
@@ -2648,10 +2818,15 @@ function toggleVersionPanel(forceOpen) {
   const panel    = document.getElementById('version-panel');
   const willOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
   panel.classList.toggle('open', willOpen);
-  if (willOpen) { loadVersionPanel(); loadPlanningSettings(); }
+  if (willOpen) { loadVersionPanel(); loadPlanningSettings(); document.getElementById('vp-search')?.focus(); }
 }
 
-// ─── Planning settings ────────────────────────────────────────────────────────
+document.getElementById('version-scrim').addEventListener('click', () => toggleVersionPanel(false));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('version-panel').classList.contains('open')) toggleVersionPanel(false);
+});
+
+// ─── Work package filter settings ─────────────────────────────────────────────
 
 const SETTINGS_KEY = '__blm_settings';
 
@@ -2696,82 +2871,13 @@ async function invalidateAllTrackedSnapshots() {
   if (toDelete.length) await chrome.storage.local.remove(toDelete);
 }
 
-// ── Planning settings load/save ───────────────────────────────────────────────
+// ── Settings load ─────────────────────────────────────────────────────────────
 
 async function loadPlanningSettings() {
-  const s   = await chrome.storage.local.get(SETTINGS_KEY);
-  const cfg = s[SETTINGS_KEY] ?? {};
-  const dailyEl   = document.getElementById('planning-daily-cutoff');
-  const cutoffEl  = document.getElementById('planning-cutoff');
-  const monCbEl   = document.getElementById('planning-monday-enabled');
-  const monTimeEl = document.getElementById('planning-monday-cutoff');
-  if (dailyEl)   dailyEl.value    = cfg.dailyCutoff     ?? '09:30';
-  if (cutoffEl)  cutoffEl.value   = cfg.planningCutoff  ?? '21:00';
-  if (monCbEl)   monCbEl.checked  = cfg.mondayEnabled   ?? false;
-  if (monTimeEl) { monTimeEl.value = cfg.mondayCutoff ?? '12:00'; monTimeEl.classList.toggle('visible', monCbEl?.checked ?? false); }
+  const cfg = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] ?? {};
   _excludeTypes = cfg.excludeTypes ?? ['Task'];
   renderTypeTags();
 }
-
-async function savePlanningSettings() {
-  const daily   = document.getElementById('planning-daily-cutoff')?.value   || '09:30';
-  const cutoff  = document.getElementById('planning-cutoff')?.value          || '21:00';
-  const monOn   = document.getElementById('planning-monday-enabled')?.checked ?? false;
-  const monTime = document.getElementById('planning-monday-cutoff')?.value   || '12:00';
-
-  const prev = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] ?? {};
-  await chrome.storage.local.set({
-    [SETTINGS_KEY]: { ...prev, dailyCutoff: daily, planningCutoff: cutoff, mondayEnabled: monOn, mondayCutoff: monTime, excludeTypes: _excludeTypes },
-  });
-
-  const dailyChanged     = daily  !== (prev.dailyCutoff    ?? '09:30');
-  const sprintEndChanged = cutoff !== (prev.planningCutoff ?? '21:00');
-  const mondayChanged    = monOn  !== (prev.mondayEnabled  ?? false)
-                        || (monOn && monTime !== (prev.mondayCutoff ?? '12:00'));
-
-  if (dailyChanged) {
-    // Daily cutoff affects every regular day — invalidate all tracked snapshots
-    await invalidateAllTrackedSnapshots();
-    triggerSync();
-  } else if (sprintEndChanged || mondayChanged) {
-    await invalidatePlanningSnapshots(sprintEndChanged, mondayChanged);
-    triggerSync();
-  }
-}
-
-/** Removes stored snapshots for dates whose cutoff time just changed so reconstruction re-creates them. */
-async function invalidatePlanningSnapshots(includeSprintEnd, includeMonday) {
-  const tracked       = (await chrome.storage.local.get(TRACKED_KEY))[TRACKED_KEY] ?? [];
-  const planningDates = [...new Set(
-    tracked.flatMap(v => [v.startDate, v.endDate]).filter(Boolean)
-  )];
-  const toDelete = [];
-
-  for (const d of planningDates) {
-    const monDate = nextMonday(d);
-    for (const v of tracked) {
-      if (includeSprintEnd) toDelete.push(`${d}__${v.versionName}`);
-      if (includeMonday)    toDelete.push(`${monDate}__${v.versionName}`);
-    }
-  }
-
-  if (toDelete.length) await chrome.storage.local.remove(toDelete);
-}
-
-function nextMonday(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  const daysToAdd = (8 - d.getUTCDay()) % 7 || 7; // days until next Monday
-  d.setUTCDate(d.getUTCDate() + daysToAdd);
-  return d.toISOString().slice(0, 10);
-}
-
-document.getElementById('planning-daily-cutoff').addEventListener('change', savePlanningSettings);
-document.getElementById('planning-cutoff').addEventListener('change', savePlanningSettings);
-document.getElementById('planning-monday-enabled').addEventListener('change', (e) => {
-  document.getElementById('planning-monday-cutoff').classList.toggle('visible', e.target.checked);
-  savePlanningSettings();
-});
-document.getElementById('planning-monday-cutoff').addEventListener('change', savePlanningSettings);
 
 document.getElementById('exclude-types-input').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ',') return;
@@ -2786,20 +2892,60 @@ document.getElementById('exclude-types-input').addEventListener('keydown', (e) =
 });
 
 async function loadVersionPanel() {
-  const body    = document.getElementById('version-panel-body');
-  const saveBtn = document.getElementById('btn-version-save');
-  const msg     = document.getElementById('version-panel-msg');
+  const trackingEl = document.getElementById('vp-tracking');
+  const body       = document.getElementById('version-panel-body');
+  const msg        = document.getElementById('version-panel-msg');
+  const search     = document.getElementById('vp-search');
 
-  body.innerHTML = '<div style="color:var(--muted);font-size:12px">Loading versions…</div>';
+  body.innerHTML = '<div class="vp-empty">Loading versions…</div>';
   document.getElementById('version-panel-projects').innerHTML = '';
-  saveBtn.disabled = true;
   msg.textContent  = '';
   msg.className    = 'version-panel-msg';
 
-  const stored      = await chrome.storage.local.get([TRACKED_KEY, PROJECT_FILTER_KEY]);
-  const tracked     = stored[TRACKED_KEY] ?? [];
-  const trackedIds  = new Set(tracked.map(v => v.versionId));
-  const trackedById = new Map(tracked.map(v => [v.versionId, v]));
+  const stored = await chrome.storage.local.get([TRACKED_KEY, PROJECT_FILTER_KEY]);
+  let tracked  = stored[TRACKED_KEY] ?? [];
+  const today  = todayStr();
+  const current = currentMainViewVersion();
+
+  // Changes save at once: every click writes __blm_tracked and redraws the lists
+  const saveTracked = async (next) => {
+    tracked = next;
+    await chrome.storage.local.set({ [TRACKED_KEY]: next });
+    renderTracking();
+    renderAvailable();
+  };
+
+  const statusLine = (v) => {
+    const range = v.startDate ? `${v.startDate.slice(5)} → ${(v.endDate ?? '?').slice(5)}` : 'no dates';
+    if (sameVersion(v.versionName, current)) return `${range} · current sprint`;
+    if (v.endDate && v.endDate < today) return `${range} · ended, kept until ${addDays(v.endDate, 7).slice(5)}`;
+    return range;
+  };
+
+  function renderTracking() {
+    document.getElementById('vp-tracking-label').textContent = `Tracking · ${tracked.length}`;
+    trackingEl.innerHTML = '';
+    if (!tracked.length) { trackingEl.innerHTML = '<div class="vp-empty">No versions tracked yet. Add one below.</div>'; return; }
+    for (const v of tracked) {
+      const row = document.createElement('div'); row.className = 'vp-row';
+      const name = document.createElement('div'); name.className = 'vp-name';
+      name.textContent = v.versionName;
+      const sub = document.createElement('small'); sub.textContent = statusLine(v); name.appendChild(sub);
+      row.appendChild(name);
+      if (sameVersion(v.versionName, current)) {
+        const lock = document.createElement('span'); lock.className = 'vp-lock'; lock.textContent = 'always shown';
+        lock.title = 'The current sprint is tracked automatically';
+        row.appendChild(lock);
+      } else {
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'vp-icon'; x.textContent = '×';
+        x.title = `Stop tracking ${v.versionName}`; x.setAttribute('aria-label', x.title);
+        x.addEventListener('click', async () => { await saveTracked(tracked.filter(t => t.versionId !== v.versionId)); renderAll(); });
+        row.appendChild(x);
+      }
+      trackingEl.appendChild(row);
+    }
+  }
+  renderTracking();
 
   let projects;
   try {
@@ -2816,161 +2962,94 @@ async function loadVersionPanel() {
   const results = await Promise.all(
     projects.map(p =>
       fetchAllVersions(p.id)
-        .then(versions => ({
-          project: p,
-          versions,
-          openVersions:   versions.filter(v => v.status === 'open'),
-          closedVersions: versions.filter(v => v.status !== 'open'),
-        }))
-        .catch(() => ({ project: p, versions: [], openVersions: [], closedVersions: [] }))
+        .then(versions => ({ project: p, versions }))
+        .catch(() => ({ project: p, versions: [] }))
     )
   );
-
   const projectsWithVers = results.filter(r => r.versions.length);
 
-  // Resolve selected projects: saved filter OR default (Credit Utility + Valiant)
+  // Selected projects: saved filter OR default (Credit Utility + Valiant)
   const savedFilter = stored[PROJECT_FILTER_KEY];
   let selectedProjects = new Set(
-    savedFilter
-      ?? projectsWithVers.filter(r => isDefaultProject(r.project.name)).map(r => r.project.id)
+    savedFilter ?? projectsWithVers.filter(r => isDefaultProject(r.project.name)).map(r => r.project.id)
   );
-
-  // Count total untracked closed versions (for the "Show closed" chip label)
-  const totalClosed = projectsWithVers.reduce(
-    (n, { closedVersions }) => n + closedVersions.filter(v => !trackedIds.has(v.id)).length,
-    0
-  );
-
-  // Track "show closed" state so chip toggle can reach it after body is built
   let showClosed = false;
 
-  // Render project filter chips
-  renderProjectChips(projectsWithVers, selectedProjects, totalClosed, (newSet) => {
+  renderProjectChips(projectsWithVers, selectedProjects, (newSet) => {
     selectedProjects = newSet;
     chrome.storage.local.set({ [PROJECT_FILTER_KEY]: [...newSet] });
-    // Show/hide project groups without re-rendering (preserves checkbox states)
-    for (const { project } of projectsWithVers) {
-      const g = body.querySelector(`.vp-group[data-project-id="${project.id}"]`);
-      if (g) g.style.display = newSet.has(project.id) ? '' : 'none';
-    }
-  }, () => {
-    showClosed = !showClosed;
-    body.querySelectorAll('.vp-closed').forEach(el => {
-      el.style.display = showClosed ? '' : 'none';
-    });
-  });
+    renderAvailable();
+  }, () => { showClosed = !showClosed; renderAvailable(); });
 
-  // Build version list (all groups rendered; non-selected ones hidden)
-  body.innerHTML = '';
-
-  // ── Tracking section: currently tracked versions pinned at top ──
-  if (tracked.length) {
-    const g = makeVersionGroup('Tracking', null);
-    for (const v of tracked)
-      g.appendChild(makeVersionRow(v.versionId, v.versionName, v.startDate, v.endDate, true));
-    body.appendChild(g);
-  }
-
-  // ── Per-project sections: untracked open + closed versions ──
-  for (const { project, openVersions, closedVersions } of projectsWithVers) {
-    const untrackedOpen   = openVersions.filter(v => !trackedIds.has(v.id));
-    const untrackedClosed = closedVersions.filter(v => !trackedIds.has(v.id));
-    if (!untrackedOpen.length && !untrackedClosed.length) continue;
-
-    const g = makeVersionGroup(project.name, project.id);
-    g.style.display = selectedProjects.has(project.id) ? '' : 'none';
-    for (const v of untrackedOpen)
-      g.appendChild(makeVersionRow(v.id, v.name, v.startDate, v.endDate, false, false));
-    for (const v of untrackedClosed)
-      g.appendChild(makeVersionRow(v.id, v.name, v.startDate, v.endDate, false, true));
-    body.appendChild(g);
-  }
-
-  if (!body.children.length)
-    body.innerHTML = '<div style="color:var(--muted);font-size:12px">No versions found.</div>';
-
-  saveBtn.disabled = false;
-  saveBtn.onclick  = async () => {
-    const newTracked = [];
-    for (const cb of body.querySelectorAll('input[type="checkbox"]:checked')) {
-      const versionId = Number(cb.dataset.versionId);
-      if (trackedById.has(versionId)) { newTracked.push(trackedById.get(versionId)); continue; }
-      for (const { project, openVersions, closedVersions } of projectsWithVers) {
-        const v = [...openVersions, ...closedVersions].find(v => v.id === versionId);
-        if (v) {
-          newTracked.push({
+  function renderAvailable() {
+    const q = search.value.trim().toLowerCase();
+    const trackedIds = new Set(tracked.map(t => t.versionId));
+    body.innerHTML = '';
+    for (const { project, versions } of projectsWithVers) {
+      if (!selectedProjects.has(project.id)) continue;
+      const list = versions.filter(v => !trackedIds.has(v.id)
+        && (showClosed || v.status === 'open')
+        && (!q || v.name.toLowerCase().includes(q)));
+      if (!list.length) continue;
+      const g = document.createElement('div'); g.className = 'vp-group';
+      const label = document.createElement('div'); label.className = 'vp-project-label'; label.textContent = project.name;
+      g.appendChild(label);
+      for (const v of list) {
+        const row = document.createElement('div'); row.className = 'vp-row' + (v.status === 'open' ? '' : ' vp-closed');
+        const name = document.createElement('div'); name.className = 'vp-name'; name.textContent = v.name;
+        const sub = document.createElement('small');
+        sub.textContent = `${v.startDate ? `${v.startDate.slice(5)} → ${(v.endDate ?? '?').slice(5)}` : 'no dates'} · ${v.status}`;
+        name.appendChild(sub);
+        const add = document.createElement('button'); add.type = 'button'; add.className = 'vp-add'; add.textContent = '+ Track';
+        add.addEventListener('click', async () => {
+          add.disabled = true;
+          await saveTracked([...tracked, {
             projectId: project.id, projectName: project.name,
             versionId: v.id,       versionName: v.name,
             startDate: v.startDate ?? null, endDate: v.endDate ?? null,
-          });
-          break;
-        }
+          }]);
+          triggerSync();   // fetch the new version's history now; the chart re-renders when it lands
+        });
+        row.append(name, add);
+        g.appendChild(row);
       }
+      body.appendChild(g);
     }
-    await chrome.storage.local.set({ [TRACKED_KEY]: newTracked });
-    showToast(`Saved — tracking ${newTracked.length} version(s)`, 'sync');
-    toggleVersionPanel(false);
-  };
+    if (!body.children.length)
+      body.innerHTML = `<div class="vp-empty">${q ? `No version matches "${q.replace(/[<&]/g, '')}".` : 'No more versions in the selected projects.'}</div>`;
+  }
+  search.oninput = renderAvailable;
+  renderAvailable();
 }
 
-function renderProjectChips(projectsWithVers, selectedProjects, totalClosed, onToggle, onToggleClosed) {
+function renderProjectChips(projectsWithVers, selectedProjects, onToggle, onToggleClosed) {
   const container = document.getElementById('version-panel-projects');
-  container.innerHTML = '<div class="vp-chips-label">Projects</div>';
-
-  const wrap = document.createElement('div');
-  wrap.className = 'vp-chips';
-
+  container.innerHTML = '';
   for (const { project } of projectsWithVers) {
     const chip = document.createElement('button');
-    chip.type      = 'button';
-    chip.className = 'vp-chip' + (selectedProjects.has(project.id) ? ' active' : '');
+    chip.type = 'button';
+    chip.className = 'vp-chip';
+    chip.setAttribute('aria-pressed', String(selectedProjects.has(project.id)));
     chip.textContent = project.name;
     chip.addEventListener('click', () => {
       const newSet = new Set(selectedProjects);
-      if (newSet.has(project.id)) newSet.delete(project.id);
-      else newSet.add(project.id);
-      chip.classList.toggle('active', newSet.has(project.id));
+      if (newSet.has(project.id)) newSet.delete(project.id); else newSet.add(project.id);
+      selectedProjects = newSet;
+      chip.setAttribute('aria-pressed', String(newSet.has(project.id)));
       onToggle(newSet);
     });
-    wrap.appendChild(chip);
+    container.appendChild(chip);
   }
-
-  if (totalClosed > 0) {
-    const sep = document.createElement('span'); sep.className = 'vp-chip-sep';
-    wrap.appendChild(sep);
-    const closedChip = document.createElement('button');
-    closedChip.type      = 'button';
-    closedChip.className = 'vp-chip vp-chip-closed';
-    closedChip.textContent = `Show closed (${totalClosed})`;
-    closedChip.addEventListener('click', () => {
-      closedChip.classList.toggle('active');
-      onToggleClosed();
-    });
-    wrap.appendChild(closedChip);
-  }
-
-  container.appendChild(wrap);
-}
-
-function makeVersionGroup(title, projectId) {
-  const g = document.createElement('div');
-  g.className = 'vp-group';
-  if (projectId != null) g.dataset.projectId = projectId;
-  g.innerHTML = `<div class="vp-project-label">${title}</div>`;
-  return g;
-}
-
-function makeVersionRow(versionId, name, startDate, endDate, checked, isClosed = false) {
-  const label = document.createElement('label');
-  label.className = 'vp-version-row' + (isClosed ? ' vp-closed' : '');
-  if (isClosed) label.style.display = 'none';
-  const fmt   = iso => iso ? iso.slice(5).replace('-', '/') : '';
-  const dates = startDate ? `${fmt(startDate)} – ${fmt(endDate)}` : '';
-  label.innerHTML =
-    `<input type="checkbox" data-version-id="${versionId}" ${checked ? 'checked' : ''}>` +
-    `<span class="vp-version-name">${name}</span>` +
-    (dates ? `<span class="vp-version-dates">${dates}</span>` : '');
-  return label;
+  const closedChip = document.createElement('button');
+  closedChip.type = 'button';
+  closedChip.className = 'vp-chip vp-chip-closed';
+  closedChip.setAttribute('aria-pressed', 'false');
+  closedChip.textContent = 'Show closed';
+  closedChip.addEventListener('click', () => {
+    closedChip.setAttribute('aria-pressed', String(closedChip.getAttribute('aria-pressed') !== 'true'));
+    onToggleClosed();
+  });
+  container.appendChild(closedChip);
 }
 
 document.getElementById('btn-configure-versions').addEventListener('click', () => {
@@ -2989,12 +3068,21 @@ document.addEventListener('click', e => {
 
 // ─── Storage change listener (sync toast + live refresh) ──────────────────────
 
+let liveRenderTimer = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const [key, { oldValue, newValue }] of Object.entries(changes)) {
     if (key === '__blm_fetch_progress' && isSyncing && newValue) {
       const { done, total, version } = newValue;
       setProgressFill(done, total, `${version}: fetching activities ${done} / ${total}`);
+    }
+    // Today's snapshot or burn detail changed (hourly sync, or the detail panel fetching today's
+    // stories): redraw so the chart and the open detail show the same numbers.
+    const base = key.startsWith(DETAIL_PREFIX) ? key.slice(DETAIL_PREFIX.length) : key;
+    if (DATE_KEY_PATTERN.test(base) && base.startsWith(todayStr()) && oldValue !== undefined && !isSyncing) {
+      clearTimeout(liveRenderTimer);
+      liveRenderTimer = setTimeout(renderAll, 300);
+      continue;
     }
     if (DATE_KEY_PATTERN.test(key) && !oldValue && newValue) {
       if (isSyncing) {
@@ -3072,14 +3160,33 @@ document.getElementById('export-sprint').addEventListener('change', (ev) => {
   exportSprint(v);
   ev.target.value = '';
 });
-document.getElementById('filter-sprint').addEventListener('change', (ev) => {
-  const v = ev.target.value;
-  if (!v) return;
+/** Shows the two date inputs ("Custom range…" in the sprint menu, or always in the drawer). */
+function showCustomRange(on) {
+  document.getElementById('tb-range').classList.toggle('show', on);
+}
+
+function applySprint(v) {
+  showCustomRange(v === 'custom');
+  if (!v || v === 'custom') { if (v === 'custom') startInput?.focus(); return; }
   const [start, end] = v.split('|');
   startInput.value = start;
   endInput.value   = end;
   sectionUpdaters.forEach(u => u(start, end));
-});
+}
+document.getElementById('filter-sprint').addEventListener('change', (ev) => applySprint(ev.target.value));
+
+// ‹ older sprint · newer sprint ›  (the menu lists the current sprint first, then older ones)
+function stepSprint(dir) {
+  const sel  = document.getElementById('filter-sprint');
+  const opts = [...sel.options].filter(o => o.value && o.value !== 'custom');
+  const i    = opts.findIndex(o => o.value === sel.value);
+  const next = opts[i < 0 ? 0 : i + dir];
+  if (!next) return;
+  sel.value = next.value;
+  applySprint(next.value);
+}
+document.getElementById('btn-sprint-prev').addEventListener('click', () => stepSprint(1));
+document.getElementById('btn-sprint-next').addEventListener('click', () => stepSprint(-1));
 document.getElementById('btn-clear').addEventListener('click', clearAll);
 
 // Main-view toggle: focus the dashboard on "<project> <CurrentSprint>" only. The
@@ -3110,7 +3217,7 @@ const mainViewReady = new Promise(r => { markMainViewReady = r; });
   const all = await chrome.storage.local.get(null);
   const versions = new Set(Object.keys(all).map(k => /^\d{4}-\d\d-\d\d__(.+)$/.exec(k)?.[1]).filter(Boolean));
   const picked = projects.includes(saved) ? saved
-    : [...assigned, ...projects].find(p => versions.has(`${p} ${s.name}`)) ?? assigned[0] ?? projects[0] ?? guess;
+    : [...assigned, ...projects].find(p => [...versions].some(v => sameVersion(v, `${p} ${s.name}`))) ?? assigned[0] ?? projects[0] ?? guess;
   if (picked) chrome.storage.local.set({ [MAIN_VIEW_LAST_KEY]: picked });
   const changed = picked !== mainViewProject;
   mainViewProject = picked;

@@ -8,11 +8,15 @@ though OpenProject itself doesn't retain it.
 
 - **Daily snapshots** — extracts work-package state from tracked backlog/version
   pages and stores one snapshot per day in `chrome.storage.local`.
-- **Automatic sync** — an hourly alarm keeps today's snapshot fresh; a midnight
-  alarm reconstructs any days that were missed (browser closed, no sync that day)
-  by replaying each tracked version's activity feed.
+- **Automatic sync** — an hourly alarm keeps today's snapshot fresh; just after
+  midnight ICT an alarm locks every finished day at its end-of-day state (23:59 ICT)
+  by replaying each tracked version's activity feed, which also fills days that
+  were missed (browser closed, no sync that day).
 - **Burndown viewer** — a standalone page (`viewer.html`) charts stored snapshots
-  over time per tracked version.
+  over time; it always shows the current sprint's version (tracked automatically).
+  Each date is the start of that day, so a segment is one day's progress; today
+  is a dashed live point. A pace strip shows what is left and the days left, a day strip
+  under the chart opens each day's stories, and Versions is a side sheet.
 - **Burndown button** — "Show burndown chart" next to + Create on work-package
   lists opens the current sprint's burndown in a drawer over the page and starts
   tracking that sprint; on by default, switch in Settings.

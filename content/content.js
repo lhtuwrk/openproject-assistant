@@ -199,8 +199,13 @@ function ensureBurndownButton() {
   btn.type = 'button';
   btn.className = 'button';
   btn.textContent = 'Show burndown chart';
-  btn.addEventListener('click', () => globalThis.blmOpenDrawer?.(
-    chrome.runtime.getURL('pages/viewer.html') + '?' + burndownDrawerParams(), 'Burndown chart', '1100px'));
+  btn.addEventListener('click', () => {
+    // The extension was reloaded or updated while this tab stayed open: this script is
+    // orphaned and chrome.* throws. Reloading the page brings in the current script.
+    if (!chrome.runtime?.id) { location.reload(); return; }
+    globalThis.blmOpenDrawer?.(
+      chrome.runtime.getURL('pages/viewer.html') + '?' + burndownDrawerParams(), 'Burndown chart', '1100px');
+  });
   item.append(btn);
   anchor.before(item);
 }

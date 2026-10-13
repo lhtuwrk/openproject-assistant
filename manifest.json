@@ -46,9 +46,13 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["pages/sidepanel.html", "pages/viewer.html"],
+      "resources": ["pages/sidepanel.html"],
       "matches": ["http://*/*", "https://*/*"],
       "use_dynamic_url": true
+    },
+    {
+      "resources": ["pages/viewer.html"],
+      "matches": ["http://*/*", "https://*/*"]
     }
   ],
 

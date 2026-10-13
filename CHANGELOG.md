@@ -3,6 +3,30 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- Burndown: each day counts from 00:00 to 23:59 ICT and is locked when it ends; today is live. The cutoff time settings are gone, and stored days of tracked versions are rebuilt once on update.
+- Burndown: each date on the chart is the start of that day, so the segment to the next date is that day's progress; today is a dashed live point. Clicking a segment names the day(s) it covers.
+- Burndown: the chart covers the whole version, from its first day; a version's start and end dates are taken from OpenProject.
+- Burndown: the current sprint's version is always tracked and shown, also when other versions are tracked.
+- Burndown: a loading state (spinner and placeholder tiles) shows while the page or the drawer gathers its data.
+- Burndown drawer: shows the same dates as the page; plans saved with the old Monday start move to the version's first day, which "Hide first day" then hides.
+- Burndown: the Ideal line starts from what was left when the sprint's work started, instead of from today's total scope.
+- Burndown: a sprint runs to its version's last working day (Thursday), as in OpenProject, instead of the next planning Friday.
+- Burndown redesign: a pace strip (remaining, burned today, days left); Done statuses and weekend days in menus on one line; the legend's Done chip shows the Done line; a day strip under the chart; clicking a day opens its burned, scope and status-move detail full width below; Snapshot table, CFD and Flow open as rows under the chart.
+- Burndown: the chart leaves out the version's first day (the planning day) by default; Days menu → Hide first day turns it back on (remembered). The menu also holds the weekend days.
+- Burndown page bar: a sprint stepper (‹ sprint ›, Custom range… for any dates) and a Main view switch.
+- Versions open as a side sheet: tracked versions (the current sprint marked always shown), search, project filter, closed versions and work package types; changes save at once.
+
+### Fixed
+- "Show burndown chart" on a backlog tab left open while the extension was updated reloads the page instead of failing.
+- Burndown: the chart redraws when today's numbers change (hourly sync, or opening today's stories), so the burned count matches the stories listed; the open day stays open.
+- Burndown day detail lists one story per row, so story titles show in full.
+- Popup: Burndown opens again; Chrome blocked its page ("ERR_BLOCKED_BY_CLIENT") because the drawer had made it reachable only through a per-session address.
+- Popup: Burndown, Time log and Planning reuse only a tab where the page is running; tabs left on Chrome's "blocked" page after the extension was reloaded are closed and the page opens in a new tab.
+- The current sprint is found when its version name has a double space (e.g. "Credit Utility  26.12.C").
+
 ## [1.5.5]
 
 ### Added

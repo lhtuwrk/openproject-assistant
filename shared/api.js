@@ -66,6 +66,15 @@ export async function fetchOpenVersions(projectId) {
 }
 
 /**
+ * Returns one version by id (its name, status, startDate and endDate).
+ * @param {number|string} versionId
+ * @returns {Promise<Object>}
+ */
+export async function fetchVersion(versionId) {
+  return apiFetch(`/api/v3/versions/${versionId}`);
+}
+
+/**
  * Returns ALL versions for the given project regardless of status
  * (open, locked, closed).
  * @param {number|string} projectId

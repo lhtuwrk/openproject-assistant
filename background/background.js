@@ -6,10 +6,14 @@
 //                               Fetches today's work-package state for every
 //                               version the user has selected to track.
 //
-//  2. reconstructMissingDays() — fires at midnight and on startup.
+//  2. reconstructMissingDays() — fires just after midnight ICT and on startup.
 //                               Walks each tracked version's activity feeds to
-//                               recreate snapshots for any dates that were
-//                               missed (browser closed, no sync that day, etc.).
+//                               lock every finished day at its end-of-day state
+//                               (23:59:59 ICT) and to refresh today's live
+//                               snapshot together with its burn detail.
+//
+// A day's progress runs from the start of the day to the end of the day in ICT,
+// whatever the machine's timezone, so every install computes the same numbers.
 //
 // Tracked versions are stored in chrome.storage.local under __blm_tracked as
 //   [{ projectId, versionId, versionName, projectName, startDate, endDate }]
@@ -20,6 +24,7 @@ import {
   fetchWorkPackagesByVersion,
   fetchWorkPackageActivities,
   fetchWorkPackage,
+  fetchVersion,
   aggregateWorkPackages,
 } from '../shared/api.js';
 import { setupReminder } from './reminder.js';
@@ -45,13 +50,23 @@ async function burndownEnabled() {
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
+const ICT_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Today's date in ICT (UTC+7) as YYYY-MM-DD. */
 function todayStr() {
-  const n = new Date();
-  return [
-    n.getFullYear(),
-    String(n.getMonth() + 1).padStart(2, '0'),
-    String(n.getDate()).padStart(2, '0'),
-  ].join('-');
+  return new Date(Date.now() + ICT_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** Epoch ms of the last moment of dateStr in ICT: the state a finished day is locked at. */
+function endOfDayMs(dateStr) {
+  return new Date(`${dateStr}T23:59:59.999+07:00`).getTime();
+}
+
+/** The calendar day before dateStr. */
+function dayBefore(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 /** All dates from startDate to endDate inclusive as YYYY-MM-DD strings. */
@@ -66,14 +81,9 @@ function datesInRange(startDate, endDate) {
   return dates;
 }
 
-/** Milliseconds until the next 6 AM in local time.
- *  At 0:00 AM the day has just started and yesterday's activities may not
- *  all be committed yet; 6:00 AM gives a safe buffer. */
-function msUntilSixAM() {
-  const now    = new Date();
-  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 0, 0, 0);
-  if (target <= now) target.setDate(target.getDate() + 1); // already past 6 AM
-  return target.getTime() - now.getTime();
+/** Milliseconds until 00:05 ICT tomorrow, just after the previous day has ended. */
+function msUntilNextIctDay() {
+  return endOfDayMs(todayStr()) + 1 + 5 * 60 * 1000 - Date.now();
 }
 
 // ─── Storage helpers ──────────────────────────────────────────────────────────
@@ -86,7 +96,7 @@ const DETAIL_PREFIX = '__blm_sc__';
  * statusChanges (burn-detail) are stored under a separate DETAIL_PREFIX key.
  *
  * Overwrite rules:
- *  'api'          – overwrites an existing 'api' snapshot (keeps data fresh until cutoff).
+ *  'api'          – overwrites an existing 'api' snapshot (today stays live until the day ends).
  *  'reconstructed'– upgrades an 'api' snapshot to the accurate historical version.
  *  Either source  – never overwrites 'reconstructed' or 'csv'.
  * Returns true when the core snapshot was written.
@@ -121,6 +131,29 @@ async function saveSnapshot(storageKey, versionName, statuses, source = 'api', m
 async function getTracked() {
   const d = await chrome.storage.local.get(TRACKED_KEY);
   return d[TRACKED_KEY] ?? [];
+}
+
+/**
+ * Takes a tracked version's start and end dates from OpenProject.  Entries tracked from
+ * the drawer used to store the Monday after the planning Friday, which left the first
+ * days without history.  Updates v in place and in storage; keeps it as is on failure.
+ */
+async function refreshVersionDates(v) {
+  try {
+    const { startDate = null, endDate = null } = await fetchVersion(v.versionId);
+    if ((!startDate || startDate === v.startDate) && (!endDate || endDate === v.endDate)) return;
+    // The old first day was built with no day before it, so its burn detail is empty: rebuild it
+    const oldFirst = v.startDate && `${v.startDate}__${v.versionName}`;
+    if (oldFirst && startDate && startDate !== v.startDate) {
+      const snap = (await chrome.storage.local.get(oldFirst))[oldFirst];
+      if (snap?.source !== 'csv') await chrome.storage.local.remove([oldFirst, DETAIL_PREFIX + oldFirst]);
+    }
+    v.startDate = startDate ?? v.startDate;
+    v.endDate   = endDate   ?? v.endDate;
+    const tracked = await getTracked();   // re-read: the list may have changed meanwhile
+    await chrome.storage.local.set({ [TRACKED_KEY]: tracked.map(t =>
+      t.versionId === v.versionId ? { ...t, startDate: v.startDate, endDate: v.endDate } : t) });
+  } catch { /* offline or no access: keep the stored dates */ }
 }
 
 // ─── Membership ledger ─────────────────────────────────────────────────────────
@@ -167,53 +200,54 @@ async function updateMemberLedger(versionName, currentWps, dateStr) {
   return Object.keys(ledger.departed).map(Number);
 }
 
-// ─── Planning-day cutoff helpers ──────────────────────────────────────────────
+// ─── Settings ─────────────────────────────────────────────────────────────────
 
-/**
- * Returns the ICT cutoff time string ("HH:MM") for a given date.
- *
- * Rules (checked in order):
- *  1. If the date is a sprint-end date for any tracked version → use planningCutoff
- *  2. If mondayEnabled AND the date is the Monday after a sprint-end → use mondayCutoff
- *  3. Otherwise → "06:00" (normal business-day opening)
- */
-function cutoffTimeForDate(dateStr, planningDates, settings) {
-  if (planningDates.has(dateStr)) return settings.planningCutoff ?? '21:00';
-  if (settings.mondayEnabled) {
-    const dt = new Date(dateStr + 'T12:00:00Z');
-    if (dt.getUTCDay() === 1) { // Monday
-      const fri = new Date(dt);
-      fri.setUTCDate(dt.getUTCDate() - 3);
-      if (planningDates.has(fri.toISOString().slice(0, 10)))
-        return settings.mondayCutoff ?? '12:00';
-    }
+async function loadSettings() {
+  const s = await chrome.storage.local.get('__blm_settings');
+  return { excludeTypes: ['Task'], ...(s.__blm_settings ?? {}) };
+}
+
+/** Same signature the viewer uses to tell "statuses changed" from "nothing changed". */
+function statusesSig(statuses) {
+  return (statuses ?? []).map(x => `${x.status}:${x.numOfStory}:${x.point}`).sort().join('|');
+}
+
+// ─── One-time switch from cutoff times to end-of-day snapshots ───────────────
+//
+// Snapshots used to be locked at configurable cutoff times (09:30, 21:00, Monday
+// 12:00…).  Days are now locked at 23:59:59 ICT, so the old api/reconstructed
+// snapshots of tracked versions are dropped once and rebuilt from activity.
+// CSV/JSON imports are kept: they can't be rebuilt.  v2: history also starts the day
+// before the version, so the first day gets its burn detail; rebuild once more.
+
+const SNAPSHOT_MODE_KEY = '__blm_snapshot_mode';
+const SNAPSHOT_MODE     = 'end-of-day-v2';
+
+async function migrateToEndOfDay() {
+  if ((await chrome.storage.local.get(SNAPSHOT_MODE_KEY))[SNAPSHOT_MODE_KEY] === SNAPSHOT_MODE) return;
+  const tracked = new Set((await getTracked()).map(v => v.versionName));
+  const all     = await chrome.storage.local.get(null);
+  const drop    = [];
+  for (const [key, snap] of Object.entries(all)) {
+    if (!/^\d{4}-\d{2}-\d{2}__/.test(key) || !tracked.has(versionOfSnapshotKey(key))) continue;
+    if (snap?.source === 'csv' || snap?.source === 'json') continue;
+    drop.push(key, DETAIL_PREFIX + key);
   }
-  return settings.dailyCutoff ?? '06:00';
-}
-
-function cutoffMsForDate(dateStr, planningDates, settings) {
-  const t = cutoffTimeForDate(dateStr, planningDates, settings);
-  return new Date(`${dateStr}T${t}:00+07:00`).getTime();
-}
-
-async function loadPlanningContext() {
-  const tracked       = await getTracked();
-  // Both sprint-start and sprint-end Fridays get the planning cutoff
-  const planningDates = new Set(
-    tracked.flatMap(v => [v.startDate, v.endDate]).filter(Boolean)
-  );
-  const s        = await chrome.storage.local.get('__blm_settings');
-  const settings = { planningCutoff: '21:00', mondayEnabled: false, mondayCutoff: '12:00',
-                     dailyCutoff: '09:30', excludeTypes: ['Task'],
-                     ...(s.__blm_settings ?? {}) };
-  return { tracked, planningDates, settings };
+  if (drop.length) await chrome.storage.local.remove(drop);
+  await chrome.storage.local.set({ [SNAPSHOT_MODE_KEY]: SNAPSHOT_MODE });
+  const { __blm_settings: cfg } = await chrome.storage.local.get('__blm_settings');
+  if (cfg) {
+    const { dailyCutoff, planningCutoff, mondayEnabled, mondayCutoff, ...rest } = cfg;
+    await chrome.storage.local.set({ __blm_settings: rest });
+  }
 }
 
 // ─── Job 1: sync today's snapshot ────────────────────────────────────────────
 
 async function syncTracked() {
   if (!(await burndownEnabled())) return;
-  const { tracked, planningDates, settings } = await loadPlanningContext();
+  const tracked  = await getTracked();
+  const settings = await loadSettings();
   if (!tracked.length) return;
 
   await chrome.storage.local.set({
@@ -222,31 +256,28 @@ async function syncTracked() {
 
   const today = todayStr();
 
-  // After today's daily cutoff, reconstruction owns today's slot (it locks the
-  // snapshot at the exact cutoff state).  Live sync must not overwrite it.
-  const todayCutoffMs = cutoffMsForDate(today, planningDates, settings);
-  const pastCutoff    = Date.now() >= todayCutoffMs;
-
   let saved = 0, skipped = 0, errors = 0;
 
   try {
     for (const v of tracked) {
-      const key = `${today}__${v.versionName}`;
-
-      // After the daily cutoff, reconstruction owns today's slot — skip live sync.
-      if (pastCutoff) { skipped++; continue; }
-
-      // Before the cutoff: live sync may overwrite a previous api snapshot so the
+      // Today stays live until it ends: overwrite the previous api snapshot so the
       // chart stays fresh.  saveSnapshot() protects csv/reconstructed automatically.
-      const existing = await chrome.storage.local.get(key);
-      if (existing[key]?.backlogVersion && existing[key]?.source !== 'api') { skipped++; continue; }
+      const key      = `${today}__${v.versionName}`;
+      const existing = (await chrome.storage.local.get(key))[key];
+      if (existing?.backlogVersion && existing.source !== 'api') { skipped++; continue; }
 
       try {
         const wps      = (await fetchWorkPackagesByVersion(v.projectId, v.versionId)).filter(w => wpIncluded(w, settings));
         if (!wps.length) continue;
         await updateMemberLedger(v.versionName, wps, today);   // record membership for move-out tracking
         const statuses = aggregateWorkPackages(wps);
-        if (await saveSnapshot(key, v.versionName, statuses, 'api')) saved++;
+        if (await saveSnapshot(key, v.versionName, statuses, 'api')) {
+          saved++;
+          // This light sync doesn't replay activity, so a burn detail computed for an
+          // older state of today no longer matches it: drop it, the chart falls back.
+          if (statusesSig(existing?.statuses) !== statusesSig(statuses))
+            await chrome.storage.local.remove(DETAIL_PREFIX + key);
+        }
       } catch { errors++; }
     }
 
@@ -285,11 +316,11 @@ function normalizeVer(name) {
 }
 
 /**
- * Rolls back a WP to its full state at targetDateStr.
+ * Rolls back a WP to its full state at the end of targetDateStr (ICT), or now for today.
  * Returns { status, points, version } or null if the WP didn't exist yet.
  */
-function wpRawStateAtDate(wp, activities, targetDateStr, planningDates, settings) {
-  const cutoff = cutoffMsForDate(targetDateStr, planningDates, settings);
+function wpRawStateAtDate(wp, activities, targetDateStr) {
+  const cutoff = Math.min(endOfDayMs(targetDateStr), Date.now());
 
   if (new Date(wp.createdAt).getTime() > cutoff) return null;
 
@@ -333,13 +364,6 @@ function statusEnteredDate(wp, activities) {
   return entered;
 }
 
-/** Returns { status, points } if the WP was in targetVersionName at targetDateStr, else null. */
-function wpStateAtDate(wp, activities, targetDateStr, targetVersionName, planningDates, settings) {
-  const raw = wpRawStateAtDate(wp, activities, targetDateStr, planningDates, settings);
-  if (!raw || raw.version !== normalizeVer(targetVersionName)) return null;
-  return { status: raw.status, points: raw.points };
-}
-
 /** Aggregates reconstructed WP states for a single date into the storage shape. */
 function buildSnapshotFromStates(states) {
   const map = new Map();
@@ -373,7 +397,8 @@ async function batchFetchActivities(wpIds, batchSize = 10, onProgress) {
 
 async function reconstructMissingDays() {
   if (!(await burndownEnabled())) return;
-  const { tracked, planningDates, settings } = await loadPlanningContext();
+  const tracked  = await getTracked();
+  const settings = await loadSettings();
   if (!tracked.length) return;
 
   await chrome.storage.local.set({
@@ -384,23 +409,21 @@ async function reconstructMissingDays() {
   let reconstructed = 0;
 
   for (const v of tracked) {
+    await refreshVersionDates(v);
     if (!v.startDate) continue;
 
+    // From the day before the start: the chart's first point is the state at the start
+    // of the first day, i.e. the end of the day before
     const rangeEnd  = (v.endDate && v.endDate < today) ? v.endDate : today;
-    const allDates  = datesInRange(v.startDate, rangeEnd);
+    const allDates  = datesInRange(dayBefore(v.startDate), rangeEnd);
 
-    // Dates to reconstruct: cutoff has passed AND either no snapshot or only a
-    // live 'api' snapshot.  Reconstruction produces the accurate historical state
-    // locked at the cutoff time, which upgrades the live approximation.
-    // This includes today once its daily cutoff (09:30 ICT) has passed — that
-    // locks the chart at the standup-time state, so only work completed before
-    // the cutoff counts toward "today's" burned points.
-    const now       = Date.now();
+    // Dates to rebuild: every finished day with no snapshot or only a live 'api' one
+    // (it is locked at its end-of-day state), plus today, which is refreshed as a
+    // live 'api' snapshot together with its burn detail.
     const all       = await chrome.storage.local.get(null);
     const missing   = allDates.filter(d => {
       const existing = all[`${d}__${v.versionName}`];
-      if (existing?.source === 'reconstructed' || existing?.source === 'csv') return false;
-      return cutoffMsForDate(d, planningDates, settings) <= now;
+      return existing?.source !== 'reconstructed' && existing?.source !== 'csv';
     });
     if (!missing.length) continue;
 
@@ -454,12 +477,12 @@ async function reconstructMissingDays() {
           const wp   = wps[i];
           const acts = activities[i] ?? [];
 
-          const curr  = wpRawStateAtDate(wp, acts, date, planningDates, settings);
+          const curr  = wpRawStateAtDate(wp, acts, date);
           const inNow = curr?.version === normTarget;
           if (inNow) states.push({ status: curr.status, points: curr.points });
 
           if (prevDate) {
-            const prev   = wpRawStateAtDate(wp, acts, prevDate, planningDates, settings);
+            const prev   = wpRawStateAtDate(wp, acts, prevDate);
             const inPrev = prev?.version === normTarget;
             const label  = wp.subject ?? `#${wp.id}`;
             const wpType = wp._links?.type?.title ?? '';
@@ -485,7 +508,9 @@ async function reconstructMissingDays() {
         // Always include statusChanges (even []) so the detail key is written and
         // showBurnedDetail can distinguish "tracking ran, nothing burned" from "never tracked".
         meta.statusChanges = statusChanges;
-        if (await saveSnapshot(key, v.versionName, statuses, 'reconstructed', meta)) reconstructed++;
+        // Today hasn't ended: it stays a live 'api' snapshot that later syncs may refresh
+        const source   = date === today ? 'api' : 'reconstructed';
+        if (await saveSnapshot(key, v.versionName, statuses, source, meta)) reconstructed++;
       }
 
     } catch {
@@ -601,7 +626,7 @@ chrome.permissions.onRemoved.addListener(() => registerHostScripts());
 function setupAlarms() {
   chrome.alarms.create(ALARM_SYNC, { periodInMinutes: 60 });
   chrome.alarms.create(ALARM_RECONSTRUCT, {
-    when: Date.now() + msUntilSixAM(),
+    when: Date.now() + msUntilNextIctDay(),
     periodInMinutes: 1440,
   });
 }
@@ -611,6 +636,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await registerHostScripts();
   if (!(await getHost())) chrome.tabs.create({ url: SETUP_URL });   // first run: pick the backlog host
   await cleanupExpiredSprints();  // drop long-expired sprints before doing any work
+  await migrateToEndOfDay();       // once: drop snapshots locked at the old cutoff times
   await reconstructMissingDays(); // lock historical snapshots first
   syncTracked();                  // then live-sync today (always runs, never locked)
 });
@@ -618,6 +644,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   await registerHostScripts();
   await cleanupExpiredSprints();  // once per browser session
+  await migrateToEndOfDay();
   await reconstructMissingDays(); // lock historical snapshots
   syncTracked();                  // live-sync today
 });
@@ -625,7 +652,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_SYNC)        syncTracked();
   if (alarm.name === ALARM_RECONSTRUCT) {
-    await cleanupExpiredSprints();      // daily 06:00 ICT purge
+    await cleanupExpiredSprints();      // daily purge, just after midnight ICT
     reconstructMissingDays();
   }
 });
@@ -637,7 +664,7 @@ setupReminder();
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'sync-now') {
     sendResponse({ started: true });
-    // Reconstruction first so today's 06:00 snapshot is in place before live sync checks it
+    // Reconstruction refreshes today with its burn detail; live sync then covers versions without a start date
     reconstructMissingDays().then(() => syncTracked());
   }
 });
