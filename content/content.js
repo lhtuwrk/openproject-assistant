@@ -121,6 +121,8 @@ if (typeof window.navigation !== 'undefined') {
 //     yellow segment = share of in-progress subtasks, drawn after the native fill
 //     hover          = bar lifts, then after a short delay a popover lists the
 //                      subtasks (done / in progress / to do)
+//  When the list's columns leave Progress out, the same bar and count are drawn as
+//  a small meter at the right end of the Subject cell instead (never both).
 //  Results are cached per work-package id and re-applied as OpenProject virtualises
 //  rows on scroll / group expand / query switch.
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -145,7 +147,9 @@ let subtaskBarEnabled = true;
 /** Removes every decoration the feature has left on native progress bars. */
 function tearDownBars() {
   for (const bar of document.querySelectorAll('.blm-native-bar')) unhostBar(bar);
+  for (const meter of document.querySelectorAll('.blm-meter')) removeMeter(meter);
   clearTimeout(popShowTimer);
+  popPinned = false;
   document.querySelector('.blm-pop')?.classList.remove('show');
 }
 
@@ -357,6 +361,36 @@ function ensureBarStyles() {
       font-size:9px; font-weight:700; letter-spacing:.02em; color:#24292f;
       font-variant-numeric:tabular-nums; white-space:nowrap; }
 
+    /* Meter in the Subject cell, used when the list has no Progress column. A fixed
+       slot on the cell's right edge, so the bars line up from row to row. Colours
+       derive from the cell's text colour, so every skin and dark mode fits. The
+       html + button prefix outranks the skins' "td.subject *" colour/weight rules. */
+    td.blm-meter-cell { position:relative !important; padding-right:112px !important; }
+    html td.subject > button.blm-meter { position:absolute; top:0; bottom:0; right:8px;
+      margin:auto 0; box-sizing:border-box; width:96px; height:22px; padding:0 6px;
+      display:inline-flex; align-items:center; gap:6px; border:0; border-radius:4px;
+      background:transparent; color:inherit; font:inherit; font-size:11px; font-weight:600;
+      line-height:1; cursor:pointer; transition:background-color .14s ease-out; }
+    html td.subject > button.blm-meter:hover,
+    html td.subject > button.blm-meter[aria-expanded="true"] {
+      background:color-mix(in srgb, currentColor 8%, transparent); }
+    html td.subject > button.blm-meter:active { translate:0 1px; }
+    html td.subject > button.blm-meter:focus-visible {
+      outline:2px solid var(--jx-focus, var(--g-focus, #1a67a3)); outline-offset:0; }
+    html td.subject > button.blm-meter > .blm-meter-track { position:relative; flex:none;
+      width:36px; height:6px; border-radius:3px; overflow:hidden;
+      background:color-mix(in srgb, currentColor 14%, transparent); }
+    html td.subject > button.blm-meter > .blm-meter-track > span { position:absolute; top:0; bottom:0; }
+    html td.subject > button.blm-meter .blm-meter-done { left:0; background:#2ea44f; }
+    html td.subject > button.blm-meter .blm-meter-prog { background:#f2c94c; }
+    html td.subject > button.blm-meter > .blm-meter-n { opacity:.75; font-weight:600;
+      font-variant-numeric:tabular-nums; white-space:nowrap; }
+    html td.subject > button.blm-meter[data-state="done"] > .blm-meter-n { opacity:1;
+      color:var(--jx-done-fg, var(--g-chip-done-fg, #116329)); }
+    html td.subject > button.blm-meter > .blm-warn { margin-left:-2px; font-weight:700; color:#c28a3a; }
+    html td.subject > button.blm-meter > .blm-warn[hidden] { display:none; }
+    @media (prefers-reduced-motion: reduce) { html td.subject > button.blm-meter { transition:none; } }
+
     .blm-pop { position:fixed; z-index:2147483647; max-width:420px; min-width:260px;
       background:#ffffff; color:#1f2328; border:1px solid #d0d7de; border-radius:8px;
       box-shadow:0 6px 20px rgba(0,0,0,.15); padding:10px 12px; font-size:12px;
@@ -467,9 +501,96 @@ function unhostBar(bar) {
  *   - the whole component becomes the hover target for the subtask popover
  * Nothing is written to the work package.
  */
-function paintNativeProgress(row, stats) {
+function paintRowProgress(row, stats) {
   const bar = nativeProgressBar(row);
   if (bar) paintBar(bar, stats);
+  paintMeter(row, stats);
+}
+
+/** The row's Progress (%) cell; present whenever the list shows that column. */
+const PCT_CELL_SEL = ':scope > td.percentageDone, :scope > td[class*="percentageDone"]';
+
+/** Done subtasks still below 100% — they keep OpenProject's own Progress low. */
+const staleDone = (stats) => (stats.children ?? []).filter(k => k.bucket === 'done' && k.pct < 100);
+
+/**
+ * The Subject-cell meter for lists without a Progress column: status bar, a
+ * "<done>/<total>" count and the orange "!" when done subtasks are still below 100%.
+ * A real button, so it opens the same popover from the keyboard. Removed again when
+ * the row has a Progress cell (the bar is drawn there) or no subtasks.
+ */
+function paintMeter(row, stats) {
+  const cell  = row.querySelector(':scope > td.subject');
+  const meter = cell?.querySelector(':scope > .blm-meter');
+  if (!cell || !stats?.total || row.querySelector(PCT_CELL_SEL)) {
+    if (meter) removeMeter(meter);
+    return;
+  }
+
+  ensureBarStyles();
+  const m = meter ?? buildMeter();
+  cell.classList.add('blm-meter-cell');
+  if (m.parentElement !== cell || cell.lastElementChild !== m) cell.appendChild(m);
+  m._stats = stats;
+
+  const stale = staleDone(stats).length;
+  const sig = [stats.done, stats.inProgress, stats.total, stale].join('|');
+  if (m.dataset.sig === sig) return;
+  m.dataset.sig = sig;
+
+  const donePct = (stats.done / stats.total) * 100;
+  m.querySelector('.blm-meter-done').style.width = `${donePct}%`;
+  const prog = m.querySelector('.blm-meter-prog');
+  prog.style.left  = `${donePct}%`;
+  prog.style.width = `${(stats.inProgress / stats.total) * 100}%`;
+  m.querySelector('.blm-meter-n').textContent = `${stats.done}/${stats.total}`;
+  m.querySelector('.blm-warn').hidden = !stale;
+  m.dataset.state = stats.done === stats.total ? 'done' : '';
+
+  const n = stats.total;
+  m.setAttribute('aria-label', `${stats.done} of ${n} subtask${n === 1 ? '' : 's'} done`
+    + (stats.inProgress ? `, ${stats.inProgress} in progress` : '')
+    + (stale ? `. ${stale} done subtask${stale === 1 ? ' is' : 's are'} still below 100%` : ''));
+
+  if (popEl?._anchor === m && popEl.classList.contains('show') && popEl._stats !== stats) {
+    popEl.innerHTML = renderPopover(stats, undefined);
+    popEl._stats = stats;
+  }
+}
+
+function buildMeter() {
+  const m = document.createElement('button');
+  m.type = 'button';
+  m.className = 'blm-meter';
+  m.setAttribute('aria-expanded', 'false');
+  m.innerHTML = '<span class="blm-meter-track"><span class="blm-meter-done"></span>'
+    + '<span class="blm-meter-prog"></span></span><span class="blm-meter-n"></span>'
+    + '<span class="blm-warn" aria-hidden="true" hidden>!</span>';
+  // OpenProject's table reacts to clicks and keys on its rows (select, open, inline
+  // edit); the meter keeps them to itself.
+  m.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (popPinned && popEl?._anchor === m) { closePopover(); return; }
+    showPopoverFor(m);
+    popPinned = true;
+  });
+  m.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape' && popEl?._anchor === m) { e.preventDefault(); closePopover(); }
+  });
+  for (const type of ['mousedown', 'dblclick', 'keyup']) m.addEventListener(type, e => e.stopPropagation());
+  m.addEventListener('focusin', () => { if (m.matches(':focus-visible')) showPopoverFor(m); });
+  m.addEventListener('focusout', (e) => {
+    if (!popPinned && !popEl?.contains(e.relatedTarget)) hidePopover();
+  });
+  return m;
+}
+
+function removeMeter(meter) {
+  if (popEl?._anchor === meter) closePopover();
+  meter.parentElement?.classList.remove('blm-meter-cell');
+  meter.remove();
 }
 
 function paintBar(bar, stats) {
@@ -560,12 +681,7 @@ function ensurePopover() {
 
 /** Explains why OpenProject's % differs from the status-based bar, if it does. */
 function renderMismatchNote(stats, nativePct) {
-  if (nativePct === undefined) return '';
-  const statusPct = Math.round((stats.done / stats.total) * 100);
-  const native    = Math.round(nativePct);
-  if (Math.abs(statusPct - native) < MISMATCH_TOLERANCE) return '';
-
-  const stale = (stats.children ?? []).filter(k => k.bucket === 'done' && k.pct < 100);
+  const stale = staleDone(stats);
   // OpenProject averages each subtask's own Progress, so a subtask resolved without
   // setting it to 100% keeps pulling the parent's number down.
   const why = stale.length
@@ -576,6 +692,17 @@ function renderMismatchNote(stats, nativePct) {
        title="Sets Progress to 100% on every done subtask below 100%, so OpenProject recalculates this one">Recalculate</button>
        <span class="blm-fix-msg"></span></div>`
     : '';
+
+  // Subject-cell meter: OpenProject's own % isn't on the page, only the subtasks are.
+  if (nativePct === undefined) {
+    return stale.length
+      ? `<div class="blm-pop-note">${why} OpenProject's Progress for this one is lower than its statuses show.${fix}</div>`
+      : '';
+  }
+
+  const statusPct = Math.round((stats.done / stats.total) * 100);
+  const native    = Math.round(nativePct);
+  if (Math.abs(statusPct - native) < MISMATCH_TOLERANCE) return '';
   return `<div class="blm-pop-note">OpenProject <b>${native}%</b> · by status
     <b>${statusPct}%</b>. ${why}${fix}</div>`;
 }
@@ -629,6 +756,11 @@ function showPopoverFor(bar) {
   if (!stats || !stats.total) return;
   const pop = ensurePopover();
   clearTimeout(popHideTimer);
+  if (pop._anchor !== bar) {
+    popPinned = false;
+    pop._anchor?.setAttribute?.('aria-expanded', 'false');
+  }
+  if (bar.classList.contains('blm-meter')) bar.setAttribute('aria-expanded', 'true');
   pop.innerHTML = renderPopover(stats, bar._nativePct);
   pop._anchor = bar;
   pop._stats  = stats;
@@ -642,14 +774,36 @@ function showPopoverFor(bar) {
 /** Grace period so the mouse can travel from the bar into the popover. */
 const POP_HIDE_GRACE_MS = 200;
 
+/** Set by clicking a Subject-cell meter: the popover then stays until closed. */
+let popPinned = false;
+
 function hidePopover() {
-  if (!popEl) return;
+  if (!popEl || popPinned) return;
   clearTimeout(popHideTimer);
-  popHideTimer = setTimeout(() => {
-    popEl.classList.remove('show');
-    popEl._anchor = null;
-  }, POP_HIDE_GRACE_MS);
+  popHideTimer = setTimeout(closePopover, POP_HIDE_GRACE_MS);
 }
+
+function closePopover() {
+  popPinned = false;
+  clearTimeout(popHideTimer);
+  if (!popEl) return;
+  popEl.classList.remove('show');
+  if (popEl._anchor?.classList.contains('blm-meter')) popEl._anchor.setAttribute('aria-expanded', 'false');
+  popEl._anchor = null;
+}
+
+// A pinned popover closes on a click outside it and its meter, or on Escape.
+document.addEventListener('mousedown', (e) => {
+  if (!popPinned || popEl?.contains(e.target) || popEl?._anchor?.contains(e.target)) return;
+  closePopover();
+}, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !popPinned) return;
+  const anchor   = popEl?._anchor;
+  const wasInPop = popEl?.contains(document.activeElement);
+  closePopover();
+  if (wasInPop) anchor?.focus();
+});
 
 // ─── "Set 100%" fix button (writes to OpenProject) ──────────────────────────────
 
@@ -683,7 +837,7 @@ document.addEventListener('click', async (e) => {
   if (!btn || !popEl?._anchor) return;
   const stats = popEl._anchor._stats;
   const msg   = btn.parentElement.querySelector('.blm-fix-msg');
-  const stale = (stats?.children ?? []).filter(k => k.bucket === 'done' && k.pct < 100);
+  const stale = stats ? staleDone(stats) : [];
 
   btn.disabled = true;
   const failed = [];
@@ -701,6 +855,7 @@ document.addEventListener('click', async (e) => {
 
   if (!failed.length) {
     stats.recalculated = true;                     // no button on the next hover
+    scheduleDecorate();                            // a Subject-cell meter drops its "!"
     btn.remove();
     msg.innerHTML = `✓ Set ${fixed} subtask${fixed === 1 ? '' : 's'} to 100% · <a href="#" class="blm-reload">Reload</a>`;
     return;
@@ -791,13 +946,14 @@ window.addEventListener('message', (e) => {
 // lifts immediately (CSS); the popover follows after POP_DELAY_MS so skimming the
 // column with the mouse doesn't flash popovers.
 const POP_DELAY_MS = 500;
+const POP_HOST_SEL = '.blm-native-host, .blm-meter';
 let popShowTimer = null;
 
 document.addEventListener('mouseover', (e) => {
   // Inside the popover (e.g. to scroll or click a subtask): keep it open.
   if (e.target.closest?.('.blm-pop')) { clearTimeout(popHideTimer); return; }
 
-  const bar = e.target.closest?.('.blm-native-host');
+  const bar = e.target.closest?.(POP_HOST_SEL);
   if (!bar || bar.contains(e.relatedTarget)) return;
   clearTimeout(popShowTimer);
   if (popEl?._anchor === bar && popEl.classList.contains('show')) {
@@ -807,7 +963,7 @@ document.addEventListener('mouseover', (e) => {
   popShowTimer = setTimeout(() => { if (bar.isConnected) showPopoverFor(bar); }, POP_DELAY_MS);
 });
 document.addEventListener('mouseout', (e) => {
-  const from = e.target.closest?.('.blm-pop') ?? e.target.closest?.('.blm-native-host');
+  const from = e.target.closest?.('.blm-pop') ?? e.target.closest?.(POP_HOST_SEL);
   if (!from || from.contains(e.relatedTarget)) return;
   clearTimeout(popShowTimer);
   hidePopover();
@@ -817,10 +973,9 @@ document.addEventListener('mouseout', (e) => {
 //
 // Two independent passes so the fetch never gates layout:
 //
-//   Phase 1 — reserveSlots(): fires SYNCHRONOUSLY on every row change. Reserves the
-//             fixed-width slot in every subject cell so the subject column is aligned
-//             the instant rows appear. Idempotent, no network, cheap DOM writes only.
-//             Also applies data to rows whose id is already in the cache (no re-fetch).
+//   Phase 1 — reserveSlots(): fires SYNCHRONOUSLY on every row change. Re-applies
+//             cached stats (Progress bar or Subject-cell meter) the instant rows
+//             appear. Idempotent, no network, cheap DOM writes only.
 //
 //   Phase 2 — refreshData(): runs in the background at idle time. Fetches child
 //             stats for uncached ids, then patches the matching rows in place. Never
@@ -840,7 +995,7 @@ function reserveSlots() {
   for (const [id, row] of collectRows()) {
     if (rowType(row) === 'task') continue;              // tasks have no children
     const cached = childStatsCache.get(id);
-    if (cached) paintNativeProgress(row, cached);
+    if (cached) paintRowProgress(row, cached);
   }
 }
 
@@ -877,7 +1032,7 @@ function refreshData() {
       const stats = fetched.get(id) ?? { total: 0, done: 0, inProgress: 0, other: 0, children: [] };
       childStatsCache.set(id, stats);
       const row = collectRows().get(id);
-      if (row) paintNativeProgress(row, stats);
+      if (row) paintRowProgress(row, stats);
     }
   };
 

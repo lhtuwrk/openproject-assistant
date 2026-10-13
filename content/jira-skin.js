@@ -3600,6 +3600,9 @@ ${D} .blm-native-bar > .blm-native-prog { background: #f9e2af; }
 ${D} .blm-native-bar > .blm-count { color: var(--jx-text); text-shadow: 0 0 2px #11111b, 0 0 4px #11111b; }
 ${D} .blm-native-host:hover > .blm-native-bar { border-color: var(--jx-focus) !important; box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2); }
 ${D} .blm-warn { background: rgba(249, 226, 175, 0.12); border-color: rgba(249, 226, 175, 0.4); color: #f9e2af; }
+${D} td.subject > button.blm-meter .blm-meter-done { background: #a6e3a1; }
+${D} td.subject > button.blm-meter .blm-meter-prog { background: #f9e2af; }
+${D} td.subject > button.blm-meter > .blm-warn { color: #f9e2af; }
 ${D} .blm-pop { background: var(--jx-surface-raised); color: var(--jx-text); border-color: var(--jx-border); box-shadow: 0 10px 30px rgba(17, 17, 27, 0.65); }
 ${D} .blm-pop-head { color: var(--jx-text-subtlest); border-bottom-color: var(--jx-border); }
 ${D} .blm-pop-head .dot.other { background: #585b70; }
