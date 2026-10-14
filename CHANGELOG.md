@@ -3,7 +3,10 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.6.0] - 2026-10-14
+
+### Added
+- Planning: the facilitator can edit how stories are grouped into levels (labels, priority, type, status, assignee), add or remove levels, and choose how stories are sorted inside a level (priority then label order, story points, or ticket number).
 
 ### Changed
 - Burndown: each day counts from 00:00 to 23:59 ICT and is locked when it ends; today is live. The cutoff time settings are gone, and stored days of tracked versions are rebuilt once on update.
@@ -26,11 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Popup: Burndown opens again; Chrome blocked its page ("ERR_BLOCKED_BY_CLIENT") because the drawer had made it reachable only through a per-session address.
 - Popup: Burndown, Time log and Planning reuse only a tab where the page is running; tabs left on Chrome's "blocked" page after the extension was reloaded are closed and the page opens in a new tab.
 - The current sprint is found when its version name has a double space (e.g. "Credit Utility  26.12.C").
-
-## [1.5.5]
-
-### Added
-- Planning: the facilitator can edit how stories are grouped into levels (labels, priority, type, status, assignee), add or remove levels, and choose how stories are sorted inside a level (priority then label order, story points, or ticket number).
 
 ## [1.5.4] - 2026-10-06
 
