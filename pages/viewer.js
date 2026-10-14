@@ -303,9 +303,9 @@ function buildTable(dateMap, start, end, onDeleteDate, sourcesMap = new Map(), m
 // ─── Burndown chart ───────────────────────────────────────────────────────────
 
 /** Returns a "nice" Y-axis step (1/2/5 × power-of-10) targeting ~6 grid lines. */
-function niceStep(maxVal) {
+function niceStep(maxVal, ticks = 6) {
   if (maxVal <= 0) return 5;
-  const raw  = maxVal / 6;
+  const raw  = maxVal / ticks;
   const mag  = Math.pow(10, Math.floor(Math.log10(raw)));
   const norm = raw / mag;
   const nice = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
@@ -477,7 +477,7 @@ function getChartColors() {
  */
 function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, notSyncedToday = false, cells = [], hover = -1, selected = -1 }) {
   const C = getChartColors();
-  const PLOT_H = 300, STRIP_H = cells.length ? 48 : 0;
+  const PLOT_H = 520, STRIP_H = cells.length ? 48 : 0;
   const W = Math.max(Math.min(canvas.parentElement.clientWidth || 800, 1400), 320), H = PLOT_H + STRIP_H, dpr = window.devicePixelRatio || 1;
   canvas.style.width = W+'px'; canvas.style.height = H+'px';
   canvas.width = W*dpr; canvas.height = H*dpr;
@@ -487,7 +487,8 @@ function drawBurndownChart(canvas, { xDates, actual, doneActual, ideal, maxY, no
   const CW = W-PAD.left-PAD.right, CH = PLOT_H-PAD.top-PAD.bottom;
 
   const rawMax = maxY > 0 ? maxY : 1;
-  const step   = niceStep(rawMax);
+  // A grid row about every 40px, so a change of a few points shows as a visible turn of the line.
+  const step   = niceStep(rawMax, Math.max(6, Math.round(CH / 40)));
   const top    = Math.ceil(rawMax / step) * step || step;
 
   const n   = xDates.length;

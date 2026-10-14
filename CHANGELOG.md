@@ -5,7 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.1]
 
-## [1.6.0] - 2026-10-14 - 2026-10-14
+### Changed
+- Burndown: the chart is taller with a grid line every few points, so a change of a few points shows as a clear turn of the line.
+
+### Fixed
+- Burndown drawer: the sidebar resize bar no longer shows over the chart (the drawer has no sidebar).
+
+## [1.6.0] - 2026-10-14
 
 ### Added
 - Planning: the facilitator can edit how stories are grouped into levels (labels, priority, type, status, assignee), add or remove levels, and choose how stories are sorted inside a level (priority then label order, story points, or ticket number).
