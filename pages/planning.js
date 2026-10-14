@@ -401,7 +401,20 @@ const remainingMs = key => budgetMs(key) - elapsedMs(key);
 /** Time saved (or overspent) on the levels already behind you; an empty level you skip banks its whole budget. */
 function bankMs() {
   const done = s.phase === 'loot' ? s.level + 1 : s.level;
-  return LEVELS.slice(0, done).reduce((t, l) => t + remainingMs(l.key), 0);
+  const behind = LEVELS.slice(0, done).reduce((t, l) => t + remainingMs(l.key), 0);
+  // The level being played adds nothing until it is finished, but time over its budget is already spent.
+  const now = s.phase === 'play' && !s.intro && curLevel() ? Math.min(0, remainingMs(curLevel().key)) : 0;
+  return behind + now;
+}
+
+/** Repaints the time bank in the top bar (every tick, with the clocks). */
+function paintBank() {
+  const el = document.querySelector('[data-role="bank"]');
+  if (!el) return;
+  const bank = bankMs();
+  const text = signedClock(bank);
+  if (el.textContent !== text) el.textContent = text;
+  el.classList.toggle('warn-text', bank < 0);
 }
 
 function pause() {
@@ -1364,7 +1377,7 @@ function renderBar() {
     <span><b>${esc(s.projectName)}</b> → <b>${esc(s.versionName)}</b></span>
     ${s.phase === 'play' ? `<span>${lv.isBreak ? 'Break' : `Level ${playNo} of ${PLAY_LEVELS.length}`}</span>` : ''}
     <span>Planned <b class="num">${done} / ${all.length}</b></span>
-    <span>Time bank <b class="num">${signedClock(bankMs())}</b></span>`;
+    <span>Time bank <b class="num${bankMs() < 0 ? ' warn-text' : ''}" data-role="bank">${signedClock(bankMs())}</b></span>`;
   const allBtn = `<button data-act="all"${rt.view === 'all' ? ' aria-pressed="true"' : ''}>${rt.view === 'all' ? 'Close view all' : 'View all'} <kbd>V</kbd></button>`;
   actions.innerHTML = s.phase === 'play'
     ? `${allBtn}
@@ -2719,6 +2732,7 @@ setInterval(() => {
     t.className = `timer ${rem < 0 ? 'over' : rem < 5 * 60000 ? 'low' : ''}`;
     document.querySelector('[data-role="meter"]')?.style.setProperty('--fill', Math.min(1, elapsedMs(key) / (budgetMs(key) || 1)));
   }
+  paintBank();
   const shouldShow = !curLevel().isBreak && !s.overtimeOk[key] && remainingMs(key) < 0 && !!currentCard();
   if (shouldShow !== rt.timeUp) renderBanner();
 }, 500);

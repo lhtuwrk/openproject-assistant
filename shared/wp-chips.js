@@ -41,6 +41,7 @@
 .blm-chip-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .blm-chip[data-state="wait"] .blm-chip-t { opacity: .5; }
 .blm-chip[data-state="plain"] { height: auto; padding: 0; border: 0; background: none; }
+.blm-chip[hidden], [data-blm-dup][hidden] { display: none !important; }
 `;
 
   let styled = false;
@@ -56,7 +57,9 @@
   const wpIdOf = href => /\/work_packages\/(\d+)(?:[/?#]|$)/.exec(href ?? '')?.[1] ?? null;
   // "#123" that stands alone: not part of a word, a URL fragment, an entity or a longer number.
   const REF = /(^|[^\w&/#])#(\d{3,8})(?![\w])/g;
-  const SKIP = 'a, code, pre, button, textarea, input, select, script, style, .blm-chip';
+  const SKIP = 'a, code, pre, button, textarea, input, select, script, style, .blm-chip, [contenteditable], .ck-editor';
+  // The rich text editor works on its own DOM: never touch it.
+  const IN_EDITOR = '[contenteditable], .ck-editor, .ck-content, textarea';
 
   /** Gives a chip its content: placeholder first, then the loaded details. */
   function fill(el, id, info) {
@@ -85,6 +88,7 @@
       t.className = 'blm-chip-t';
       t.textContent = info.subject;
       el.append(t);
+      el.dataset.subject = info.subject;
       el.title = [info.type, `#${id}`, info.status && `· ${info.status}`, '—', info.subject].filter(Boolean).join(' ');
     }
   }
@@ -93,10 +97,11 @@
    * Rewrites `root` in place. opts: { origin, info(id), newTab } — origin builds the link of a plain "#123".
    */
   function transform(root, { origin = '', info, newTab = true } = {}) {
+    if (root.closest?.(IN_EDITOR)) return;
     // 1. Links to work packages ("#123", a bare URL, or OpenProject's own macro link) and chips made before.
     for (const a of root.querySelectorAll('a[href*="/work_packages/"], a.blm-chip')) {
       const id = a.dataset.wp ?? wpIdOf(a.getAttribute('href'));
-      if (!id) continue;
+      if (!id || a.closest(IN_EDITOR)) continue;
       const text = a.textContent.trim();
       const ours = a.classList.contains('blm-chip');
       if (!ours && !a.classList.contains('work_package') && !/^#?\d+$/.test(text) && !/^[^:]{1,40}#\d+/.test(text) && !/\/work_packages\/\d+/.test(text)) continue;   // a link with its own words stays
@@ -131,5 +136,31 @@
     }
   }
 
-  window.blmChips = { transform, installStyles, css, wpIdOf };
+  /** The same reference twice in a row (OpenProject can render a link and its title next to each other)
+   *  is one chip: the repeat, or a bold copy of the title right after it, is hidden. */
+  function dedupe(root) {
+    const chips = [...root.querySelectorAll('a.blm-chip[data-wp]')].filter(c => !c.hidden && c.dataset.state !== 'plain');
+    for (let i = 0; i < chips.length; i++) {
+      const a = chips[i];
+      if (a.hidden) continue;
+      // the element right after it (skipping blanks) that only repeats its title
+      let n = a.nextSibling;
+      while (n && n.nodeType === 3 && !n.nodeValue.trim()) n = n.nextSibling;
+      if (n?.nodeType === 1 && /^(STRONG|B|EM|SPAN)$/.test(n.tagName) && a.dataset.subject && n.textContent.trim() === a.dataset.subject) {
+        n.hidden = true; n.dataset.blmDup = '1';
+        continue;
+      }
+      const b = chips[i + 1];
+      if (!b || b.dataset.wp !== a.dataset.wp) continue;
+      const gap = document.createRange();
+      gap.setStartAfter(a);
+      gap.setEndBefore(b);
+      if (gap.toString().replace(/[\s,;:.\-–—]/g, '')) continue;   // real words between them: two references
+      const wrap = b.parentElement;
+      const target = wrap && wrap !== root && wrap.childNodes.length === 1 && /^(STRONG|B|EM|SPAN)$/.test(wrap.tagName) ? wrap : b;
+      target.hidden = true; target.dataset.blmDup = '1';
+    }
+  }
+
+  window.blmChips = { transform: (root, opts) => { transform(root, opts); dedupe(root); }, installStyles, css, wpIdOf };
 })();

@@ -29,6 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Popup: Burndown opens again; Chrome blocked its page ("ERR_BLOCKED_BY_CLIENT") because the drawer had made it reachable only through a per-session address.
 - Popup: Burndown, Time log and Planning reuse only a tab where the page is running; tabs left on Chrome's "blocked" page after the extension was reloaded are closed and the page opens in a new tab.
 - The current sprint is found when its version name has a double space (e.g. "Credit Utility  26.12.C").
+- Planning: the time bank in the top bar counts down live and turns red once the current level runs over its budget.
+- #123 chips: a reference OpenProject shows twice in a row (link plus its title) shows as one chip, and text being edited in the rich text editor is no longer turned into chips.
 
 ## [1.5.4] - 2026-10-06
 
