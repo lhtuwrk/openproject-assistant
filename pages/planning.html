@@ -399,10 +399,12 @@
     .cl-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
     .cl-head a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .cl-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 0; }
-    .cl-main { display: grid; align-content: start; gap: var(--space-sm); padding: var(--space-lg); overflow-y: auto; min-height: 0; }
+    .cl-main { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: var(--space-sm); padding: var(--space-lg) var(--space-lg) 0; min-height: 0; }
+    .cl-panel { overflow-y: auto; min-height: 0; padding-bottom: var(--space-lg); }
+    .cl-go { font-size: var(--text-sm); color: var(--accent); padding-inline: var(--space-xs); }
     .cl-side { display: grid; align-content: start; gap: var(--space-sm); padding: var(--space-lg); border-inline-start: 1px solid var(--border); overflow-y: auto; min-height: 0; background: var(--bg, transparent); }
     .cl-side .fld b { white-space: normal; overflow-wrap: anywhere; }
-    .cl-title.ctrl { width: 100%; height: auto; padding: var(--space-xs) var(--space-sm); resize: none; font-size: var(--text-2xl); font-weight: 650; letter-spacing: -0.02em; line-height: 1.25; }
+    .cl-title.ctrl { width: 100%; height: auto; max-height: 30vh; padding: var(--space-xs) var(--space-sm); resize: none; overflow-y: auto; font-size: var(--text-2xl); font-weight: 650; letter-spacing: -0.02em; line-height: 1.3; }
     .cl-desc { min-height: 280px; padding: var(--space-sm); border: 1px solid var(--border); border-radius: var(--radius-md); outline: none; }
     .cl-desc:focus { border-color: var(--accent); }
     .cl-desc:empty::before { content: attr(data-placeholder); color: var(--muted); }
@@ -423,7 +425,8 @@
     .dlg-note { font-size: var(--text-xs); }
     @media (max-width: 860px) {
       .cl-body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
-      .cl-main, .cl-side { overflow: visible; }
+      .cl-main { grid-template-rows: auto auto auto; }
+      .cl-main, .cl-side, .cl-panel { overflow: visible; }
       .cl-side { border-inline-start: none; border-top: 1px solid var(--border); }
       .sug-row.cl-row { grid-template-columns: auto minmax(0, 1fr) 28px; }
       .cl-row .ctrl[data-cl="assignee"] { grid-column: 2; }

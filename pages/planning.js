@@ -1413,15 +1413,35 @@ function cloneRowsHtml() {
 function paintCloneRows() {
   const box = cloneEl?.querySelector('[data-role="cl-subs"]');
   if (box) box.innerHTML = cloneRowsHtml();
-  const tab = cloneEl?.querySelector('[data-ctab="subs"] .num');
+  paintCloneCount();
+}
+
+/** How many subtasks come with the copy: on the tab, above the list and in the footer. */
+function paintCloneCount() {
+  if (!cloneEl || !cl) return;
   const n = cl.rows.filter(r => r.on && r.title.trim()).length;
+  const what = n ? `${n} subtask${n === 1 ? '' : 's'} will be created with the copy` : 'No subtasks will be created';
+  const tab = cloneEl.querySelector('[data-ctab="subs"] .num');
   if (tab) tab.textContent = n ? String(n) : '';
+  const sum = cloneEl.querySelector('.cl-sum');
+  if (sum) sum.textContent = `${what}.`;
+  const go = cloneEl.querySelector('[data-cl-go]');
+  if (go) go.textContent = cl.tab === 'subs' ? what : `${what} · Edit`;
+}
+
+/** The title box grows with the title, so a long one is read whole. */
+function fitCloneTitle() {
+  const t = cloneEl?.querySelector('[name="subject"]');
+  if (!t) return;
+  t.style.height = 'auto';
+  t.style.height = `${t.scrollHeight + 2}px`;
 }
 
 function cloneTab(key) {
   cl.tab = key;
   for (const b of cloneEl.querySelectorAll('[data-ctab]')) b.setAttribute('aria-selected', String(b.dataset.ctab === key));
   for (const p of cloneEl.querySelectorAll('[data-cpanel]')) p.hidden = p.dataset.cpanel !== key;
+  paintCloneCount();
 }
 
 async function openClone(card) {
@@ -1460,7 +1480,7 @@ async function openClone(card) {
       </header>
       <div class="cl-body">
         <section class="cl-main">
-          <textarea class="ctrl cl-title" name="subject" rows="2" required aria-label="Subject of the copy">${esc(wp.subject ?? '')}</textarea>
+          <textarea class="ctrl cl-title" name="subject" rows="1" required aria-label="Subject of the copy">${esc(wp.subject ?? '')}</textarea>
           <div class="tabs" role="tablist">
             <button type="button" role="tab" class="tab" data-ctab="desc" aria-selected="true">Description</button>
             <button type="button" role="tab" class="tab" data-ctab="subs" aria-selected="false">Subtasks <span class="num muted"></span></button>
@@ -1481,6 +1501,7 @@ async function openClone(card) {
         </aside>
       </div>
       <footer class="cl-foot">
+        <button type="button" class="ghost cl-go" data-cl-go></button>
         <p class="card-error" role="alert" data-role="clone-err" hidden></p>
         <span class="spacer"></span>
         <span class="muted cl-hint">Ctrl+Enter clones</span>
@@ -1502,6 +1523,7 @@ async function openClone(card) {
     if (e.target.closest('[data-clone-cancel]') || e.target === dlg) return closeClone();   // Cancel, ✕, or a click on the backdrop
     const tab = e.target.closest('[data-ctab]');
     if (tab) return cloneTab(tab.dataset.ctab);
+    if (e.target.closest('[data-cl-go]')) { cloneTab('subs'); return dlg.querySelector('[data-cl="new"]')?.focus(); }
     const act = e.target.closest('[data-cl]')?.dataset;
     if (act?.cl === 'remove') { cl.rows.splice(Number(act.i), 1); return paintCloneRows(); }
     if (act?.cl === 'add') return addCloneRow();
@@ -1510,11 +1532,12 @@ async function openClone(card) {
   dlg.addEventListener('input', e => {
     const d = e.target.dataset;
     if (e.target.closest('.cl-desc')) cl.descDirty = true;
-    if (d?.cl === 'title' && cl.rows[d.i]) { cl.rows[d.i].title = e.target.value; paintCount(); }
+    if (e.target.name === 'subject') fitCloneTitle();
+    if (d?.cl === 'title' && cl.rows[d.i]) { cl.rows[d.i].title = e.target.value; paintCloneCount(); }
   });
   dlg.addEventListener('change', e => {
     const d = e.target.dataset, r = cl.rows[d?.i];
-    if (d?.cl === 'on' && r) { r.on = e.target.checked; paintCount(); }
+    if (d?.cl === 'on' && r) { r.on = e.target.checked; paintCloneCount(); }
     if (d?.cl === 'assignee' && r) r.assignee = e.target.value;
     if (e.target.name === 'type') {   // another kind of work: its own suggestions
       const name = e.target.selectedOptions[0]?.textContent;
@@ -1532,15 +1555,10 @@ async function openClone(card) {
   });
   form.addEventListener('submit', e => { e.preventDefault(); cloneStory(card.id, wp, new FormData(form)); });
   dlg.showModal();
+  fitCloneTitle();
   const subject = dlg.querySelector('[name="subject"]');
   subject.focus(); subject.select();
 
-  function paintCount() {
-    const n = cl.rows.filter(r => r.on && r.title.trim()).length;
-    const sum = dlg.querySelector('.cl-sum'), tab = dlg.querySelector('[data-ctab="subs"] .num');
-    if (sum) sum.textContent = n ? `${n} subtask${n === 1 ? '' : 's'} will be created with the copy.` : 'No subtasks will be created.';
-    if (tab) tab.textContent = n ? String(n) : '';
-  }
   function addCloneRow() {
     const input = dlg.querySelector('[data-cl="new"]');
     const title = input?.value.trim();
