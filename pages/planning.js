@@ -11,9 +11,10 @@
 import {
   fetchActiveProjects, fetchOpenVersions, fetchProjectWorkPackages, fetchWorkPackage,
   fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses,
-  fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchComments, postComment, fetchUserName,
-  fetchBacklogBlob, sprintCalendar,
+  fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchComments, postComment, updateComment,
+  fetchUserName, fetchBacklogBlob, sprintCalendar,
 } from '../shared/api.js';
+import { TEMPLATES_KEY, templateFor, defaultTemplate, fillTitle, kindOf } from './subtask-templates.js';
 import { cachedMe, refreshMe, initials, avatarHue, todayStr } from '../shared/me.js';
 
 const SESSION_KEY = '__blm_planning_session';
@@ -326,7 +327,11 @@ const rt = {
   commentDrafts: new Map(),    // wpId -> text typed but not posted
   commentBusy: new Set(),      // wpIds with a comment being posted
   commentErr: new Map(),       // wpId -> message of the last failed post
-  commentMentions: new Map(),  // wpId -> { name: href } of the people picked with @ in the draft
+  commentMentions: new Map(),  // draft key (wpId, or edit:<activityId>) -> { name: href } picked with @
+  commentEdit: null,           // { id: activityId, wp, orig, busy, err } while a posted comment is edited
+  templates: null,             // TEMPLATES_KEY contents, once read
+  sug: null,                   // { for, kind, rows: [{ on, title, assigneeHref }], open, busy, err }: suggested subtasks
+  tplEdit: null,               // { kind, rows: [{ title, assignee }] } while the subtask template is edited
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -687,39 +692,166 @@ async function writeField(wpId, field, href, parentId) {
   }
 }
 
-async function createSubtask(parentId) {
-  const sub = rt.sub;
-  const subject = sub.draft.trim();
-  if (!subject || sub.busy) return;
-  const d = details.get(parentId);
-  const parentAssignee = d?.wp?._links?.assignee?.href ?? null;
-  const assigneeHref = sub.assigneeHref === undefined ? parentAssignee : sub.assigneeHref;
-  const typeHref = sub.typeHref ?? defaultTypeHref();
+/** Creates one subtask of a story, in the sprint being planned, and lists it under the story. */
+async function addSubtask(parentId, subject, { typeHref, assigneeHref, versionHref = s.versionHref, projectHref } = {}) {
   const links = {
     parent:  { href: `/api/v3/work_packages/${parentId}` },
-    project: { href: `/api/v3/projects/${s.projectId}` },
+    project: { href: projectHref ?? `/api/v3/projects/${s.projectId}` },
   };
-  if (typeHref) links.type = { href: typeHref };
+  const type = typeHref ?? defaultTypeHref();
+  if (type) links.type = { href: type };
   if (assigneeHref) links.assignee = { href: assigneeHref };
-  if (s.versionHref) links.version = { href: s.versionHref };   // subtasks live in the sprint they're planned in
+  if (versionHref) links.version = { href: versionHref };   // subtasks live in the sprint they're planned in
+  const kid = await createWorkPackage({ subject, _links: links });
+  const live = details.get(parentId);
+  if (live?.kids) live.kids = [...live.kids, kid];
+  if (live) loadKidStatuses(parentId);
+  return kid;
+}
+
+async function createSubtask(parentId, sub = rt.sub, { refocus = true } = {}) {
+  const subject = sub.draft.trim();
+  if (!subject || sub.busy) return;
+  const parentAssignee = details.get(parentId)?.wp?._links?.assignee?.href ?? null;
   sub.busy = true; sub.err = ''; render();
+  let created = false;
   try {
-    const kid = await createWorkPackage({ subject, _links: links });
+    const kid = await addSubtask(parentId, subject, {
+      typeHref: sub.typeHref, assigneeHref: sub.assigneeHref === undefined ? parentAssignee : sub.assigneeHref,
+    });
     sub.draft = '';
-    const live = details.get(parentId);
-    if (live?.kids) live.kids = [...live.kids, kid];
-    if (live) loadKidStatuses(parentId);
+    created = true;
     announce(`Subtask #${kid.id} created`);
   } catch (err) {
     sub.err = err.message;
+    if (rt.sub !== sub) toast(`Couldn't create the subtask of #${parentId}: ${err.message}`);   // its story is no longer shown
   } finally {
     sub.busy = false;
     render();
-    if (rt.subFor === parentId) document.querySelector('[data-role="sub-subject"]')?.focus();
+    if (rt.subFor === parentId) {
+      const input = document.querySelector('[data-role="sub-subject"]');
+      // A repaint leaves a focused field alone, so the posted title would stay in the box.
+      if (input && created) input.value = '';
+      const at = document.activeElement;
+      if (input && refocus && (at === document.body || at?.dataset?.act === 'sub-create')) input.focus();   // ready for the next one
+    }
   }
 }
 
 const defaultTypeHref = () => (rt.types?.find(t => /^task$/i.test(t.name)) ?? rt.types?.[0])?.href ?? null;
+
+// ─── Suggested subtasks from the project's template ───────────────────────────
+
+const sameTitle = t => (t ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** The suggestions for a loaded story, built once per story; null when its type has no template kind. */
+function sugFor(id, d) {
+  const kind = kindOf(d.wp._links?.type?.title);
+  if (!kind || !rt.templates) return null;
+  if (rt.sug?.for === id && rt.sug.kind === kind) return rt.sug;
+  const story = { id, subject: d.wp.subject };
+  const have = new Set((d.kids ?? []).map(k => sameTitle(k.subject)));
+  const rows = templateFor(rt.templates, s.projectId, s.projectName, kind).map(l => {
+    const title = fillTitle(l.title, story);
+    // undefined: whoever has the story when the subtasks are created
+    return { on: !have.has(sameTitle(title)), title, assigneeHref: l.assignee === 'none' ? null : undefined };
+  });
+  rt.sug = { for: id, kind, rows, open: !d.kids?.length && rows.length > 0, busy: false, err: '' };
+  return rt.sug;
+}
+
+async function createSuggested(parentId) {
+  const sg = rt.sug;
+  if (!sg || sg.for !== parentId || sg.busy) return;
+  const todo = sg.rows.filter(r => r.on && r.title.trim());
+  if (!todo.length) return;
+  const parentAssignee = details.get(parentId)?.wp?._links?.assignee?.href ?? null;
+  sg.busy = true; sg.err = ''; render();
+  let made = 0;
+  for (const r of todo) {
+    try {
+      await addSubtask(parentId, r.title.trim(), { assigneeHref: r.assigneeHref === undefined ? parentAssignee : r.assigneeHref });
+      r.on = false; made++;
+    } catch (err) {
+      sg.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+      if (rt.sug !== sg) toast(`Couldn't create all the subtasks of #${parentId}: ${sg.err}`);   // its story is no longer shown
+      break;
+    }
+  }
+  sg.busy = false;
+  if (!sg.err) sg.open = false;
+  render();
+  announce(`${made} subtask${made === 1 ? '' : 's'} created on #${parentId}`);
+}
+
+function openTemplateEditor() {
+  const kind = rt.sug?.kind;
+  if (!kind) return;
+  rt.tplEdit = { kind, rows: templateFor(rt.templates, s.projectId, s.projectName, kind) };
+  render();
+  document.querySelector('[data-role="tpl-title"]')?.focus();
+}
+
+async function saveTemplate() {
+  const ed = rt.tplEdit;
+  if (!ed || !s.projectId) return;
+  const rows = ed.rows.map(r => ({ title: r.title.trim(), assignee: r.assignee === 'none' ? 'none' : 'parent' })).filter(r => r.title);
+  rt.templates = { ...rt.templates, [s.projectId]: { ...(rt.templates?.[s.projectId] ?? {}), [ed.kind]: rows } };
+  await chrome.storage.local.set({ [TEMPLATES_KEY]: rt.templates });
+  rt.tplEdit = null;
+  const wasOpen = rt.sug?.open;
+  rt.sug = null;   // rebuilt from the new lines
+  const id = detailId(), d = id && details.get(id);
+  if (d?.wp) { const sg = sugFor(id, d); if (sg && wasOpen) sg.open = true; }
+  render();
+  announce('Subtask template saved');
+}
+
+const KIND_NAME = { story: 'Story', bug: 'Bug' };
+
+function templateEditorHtml() {
+  const ed = rt.tplEdit;
+  const rows = ed.rows.map((r, i) => `<li class="tpl-row">
+      <input class="ctrl" data-role="tpl-title" data-i="${i}" data-id="tpl-${i}" value="${esc(r.title)}" placeholder="e.g. Implement {subject}" aria-label="Subtask ${i + 1}" />
+      <select class="ctrl" data-role="tpl-assignee" data-i="${i}" data-id="tpl-a${i}" aria-label="Assignee of subtask ${i + 1}">
+        <option value="parent"${r.assignee !== 'none' ? ' selected' : ''}>Story's assignee</option>
+        <option value="none"${r.assignee === 'none' ? ' selected' : ''}>Unassigned (second person)</option>
+      </select>
+      <button class="ghost" data-act="tpl-remove" data-i="${i}" aria-label="Remove subtask ${i + 1}">✕</button></li>`).join('');
+  return `<section class="sug" aria-label="Subtask template">
+      <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · {subject} is the story title, {id} its number</span></div>
+      ${rows ? `<ul class="sug-list">${rows}</ul>` : '<p class="text2">No lines: nothing will be suggested.</p>'}
+      <div class="sug-foot"><button class="ghost" data-act="tpl-add">+ Add a line</button>
+        ${defaultTemplate(s.projectName, ed.kind).length ? '<button class="ghost" data-act="tpl-reset">Reset to default</button>' : ''}
+        <span class="spacer"></span><button class="ghost" data-act="tpl-cancel">Cancel</button><button class="primary" data-act="tpl-save">Save template</button></div>
+    </section>`;
+}
+
+function suggestHtml(id, d) {
+  if (rt.tplEdit) return templateEditorHtml();
+  const sg = sugFor(id, d);
+  if (!sg) return '';
+  if (!sg.rows.length) return '<div class="sug-foot"><button class="ghost" data-act="tpl-edit">Set up a subtask template</button></div>';
+  if (!sg.open) return `<div class="sug-foot"><button class="ghost" data-act="sug-open">+ Add subtasks from the template</button></div>`;
+  const parent = d.wp._links?.assignee;
+  const rows = sg.rows.map((r, i) => {
+    const href = r.assigneeHref === undefined ? parent?.href ?? null : r.assigneeHref;
+    return `<li class="sug-row">
+      <input type="checkbox" data-role="sug-on" data-i="${i}" data-id="sug-on${i}"${r.on ? ' checked' : ''} aria-label="Create “${esc(r.title)}”" />
+      <input class="ctrl" data-role="sug-title" data-i="${i}" data-id="sug-${i}" value="${esc(r.title)}" aria-label="Title of suggested subtask ${i + 1}"${sg.busy ? ' readonly' : ''} />
+      ${assigneeSelect(`sug-${i}`, href, href === parent?.href ? parent?.title : '', null, { field: 'sug-assignee', label: `Assignee of suggested subtask ${i + 1}` })}
+    </li>`;
+  }).join('');
+  const n = sg.rows.filter(r => r.on && r.title.trim()).length;
+  return `<section class="sug" aria-label="Suggested subtasks">
+      <div class="sug-head"><b>Suggested subtasks</b><span class="muted">${KIND_NAME[sg.kind].toLowerCase()} template</span><span class="spacer"></span>
+        <button class="ghost" data-act="tpl-edit">Edit template</button></div>
+      <ul class="sug-list">${rows}</ul>
+      ${sg.err ? `<div class="card-error" role="alert">Couldn't create the subtasks: ${esc(sg.err)}</div>` : ''}
+      <div class="sug-foot"><span class="spacer"></span><button class="ghost" data-act="sug-close">Hide</button>
+        <button class="primary" data-act="sug-create" data-id="${esc(id)}"${!n || sg.busy ? ' disabled' : ''}${sg.busy ? ' aria-busy="true"' : ''}>${sg.busy ? 'Creating…' : `Create ${n} subtask${n === 1 ? '' : 's'}`}</button></div>
+    </section>`;
+}
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -1144,6 +1276,120 @@ function decide(card, d, extra = {}) {
   toast(`#${card.id} ${d === 'plan' ? 'planned' : extra.moved ? `deferred to ${extra.moved.name}` : 'deferred'}`, 'Undo', () => (s.history.at(-1) === card.id ? undo() : hideToast()));
 }
 
+/** The story's status as shown: the loaded one, else the card's. */
+const statusOf = id => details.get(id)?.wp?._links?.status?.title ?? rt.cards.get(id)?.status ?? '';
+/** A New or Reopened story isn't ready yet; planning one is asked about first. */
+const needsConfirm = id => /^(new|reopened)$/i.test(statusOf(id).trim());
+
+/** Planned: at once, or after a confirmation when the story is still New or Reopened (asking again confirms). */
+function askPlan(card) {
+  if (!needsConfirm(card.id) || (rt.ui.mode === 'confirm-plan' && rt.ui.id === card.id)) return decide(card, 'plan');
+  rt.ui = { mode: 'confirm-plan', id: card.id };
+  render();
+  document.querySelector('[data-act="plan-ok"]')?.focus();
+  announce(`#${card.id} is still ${statusOf(card.id)}. Plan it anyway?`);
+}
+
+/** The confirmation shown instead of the Planned button. */
+function confirmPlanHtml(id) {
+  const st = statusOf(id);
+  const msg = needsConfirm(id)
+    ? `#${esc(id)} is still <b>${esc(st)}</b>. Plan it anyway, or change its status first.`
+    : `#${esc(id)} is now <b>${esc(st)}</b>.`;
+  return `<div class="defer-row confirm-row" role="group" aria-label="Confirm planning #${esc(id)}">
+      <p class="confirm-msg">${msg}</p>
+      <button class="primary" data-act="plan-ok" data-id="${esc(id)}">${needsConfirm(id) ? 'Plan anyway' : 'Plan'}${rt.view === 'all' ? '' : ' <kbd>P</kbd>'}</button>
+      <button class="ghost" data-act="cancel">Cancel</button></div>`;
+}
+
+// ─── Clone a story ────────────────────────────────────────────────────────────
+// A copy with the same type, description, priority, label, assignee, parent and story
+// points, in this sprint or another version; status starts as the default (New).
+// Its subtasks can come along, unassigned. A clone in this sprint joins its level.
+
+function openClone(card) {
+  rt.ui = { mode: 'clone', id: card.id, subject: card.subject, kids: false, moveTo: null, busy: false, err: '' };
+  render();
+  const input = document.querySelector('[data-role="clone-subject"]');
+  if (input) { input.focus(); input.select(); }
+}
+
+function cloneHtml(card) {
+  const u = rt.ui;
+  const kids = details.get(card.id)?.kids;
+  const others = rt.versions.some(v => String(v.id) !== s.versionId);
+  return `<div class="defer-row clone-row" role="group" aria-label="Clone #${esc(card.id)}">
+      <input class="ctrl" data-role="clone-subject" value="${esc(u.subject)}" aria-label="Subject of the copy"${u.busy ? ' readonly' : ''} />
+      ${kids?.length ? `<label class="chk"><input type="checkbox" data-role="clone-kids"${u.kids ? ' checked' : ''} /> Copy its ${kids.length} subtask${kids.length === 1 ? '' : 's'}</label>` : ''}
+      ${others ? `<button type="button" class="pick ver-pick" data-pick="version" data-wp="${esc(card.id)}" aria-haspopup="listbox"
+        aria-expanded="${pickSt?.field === 'version' ? 'true' : 'false'}" aria-label="Version of the copy. Now: ${esc(u.moveTo?.name ?? 'this sprint')}"><span class="ver-k">Into</span><span class="nm">${esc(u.moveTo?.name ?? 'This sprint')}</span></button>` : ''}
+      ${u.err ? `<p class="card-error" role="alert">Couldn't clone: ${esc(u.err)}</p>` : ''}
+      <button class="primary" data-act="clone-ok" data-id="${esc(card.id)}"${u.busy ? ' aria-busy="true"' : ''}>${u.busy ? 'Cloning…' : 'Clone'}</button>
+      <button class="ghost" data-act="cancel"${u.busy ? ' disabled' : ''}>Cancel</button></div>`;
+}
+
+/** The copy's body: the original's fields, with the given subject and version. */
+function cloneBody(wp, subject, versionHref) {
+  const L = wp._links ?? {};
+  const href = l => (l?.href ? { href: l.href } : null);
+  const links = { project: href(L.project), type: href(L.type), priority: href(L.priority), version: versionHref ? { href: versionHref } : null,
+    assignee: href(L.assignee), parent: href(L.parent), category: href(L.category) };
+  const label = L[LABEL_FIELD];
+  if (Array.isArray(label)) links[LABEL_FIELD] = label.filter(l => l?.href).map(l => ({ href: l.href }));
+  else if (label?.href) links[LABEL_FIELD] = { href: label.href };
+  const body = { subject, _links: Object.fromEntries(Object.entries(links).filter(([, v]) => v)) };
+  if (wp.description?.raw) body.description = { raw: wp.description.raw };
+  if (typeof wp.storyPoints === 'number') body.storyPoints = wp.storyPoints;
+  const text = wp[LABEL_FIELD];
+  if (text != null && typeof text !== 'object') body[LABEL_FIELD] = text;
+  else if (text?.raw) body[LABEL_FIELD] = { raw: text.raw };
+  return body;
+}
+
+async function cloneStory(id) {
+  const u = rt.ui;
+  if (u.mode !== 'clone' || u.id !== id || u.busy) return;
+  const subject = (u.subject ?? '').trim();
+  if (!subject) { u.err = 'the copy needs a subject'; return render(); }
+  u.busy = true; u.err = ''; render();
+  try {
+    const wp = details.get(id)?.wp ?? await fetchWorkPackage(id);
+    const target = u.moveTo ?? { href: s.versionHref, name: s.versionName };
+    const copy = await createWorkPackage(cloneBody(wp, subject, target.href));
+    let failed = 0;
+    if (u.kids) {
+      const kids = details.get(id)?.kids ?? await fetchChildWorkPackages(id);
+      for (const k of kids) {
+        try {
+          await addSubtask(copy.id, k.subject ?? '', { typeHref: k._links?.type?.href, versionHref: target.href, projectHref: copy._links?.project?.href });
+        } catch { failed++; }
+      }
+    }
+    const here = !u.moveTo;
+    if (here) {
+      const c = toCard(copy);
+      rt.cards.set(c.id, c);
+      for (const l of PLAY_LEVELS) syncOrder(l.key);
+      save();
+    }
+    if (rt.ui === u) rt.ui = { mode: null };
+    render();
+    const what = `#${id} cloned as #${copy.id}${here ? '' : ` into ${target.name}`}${failed ? `; ${failed} subtask${failed === 1 ? '' : 's'} couldn't be copied` : ''}`;
+    announce(what);
+    toast(what, here ? 'Show it' : 'Open ↗', () => {
+      hideToast();
+      if (!here) return window.open(`${BACKLOG_URL}/work_packages/${copy.id}`, '_blank', 'noopener');
+      rt.view = 'all'; rt.selected = String(copy.id); render();
+    });
+  } catch (err) {
+    u.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+    if (rt.ui !== u) toast(`Couldn't clone #${id}: ${u.err}`);   // the tray was closed meanwhile
+  } finally {
+    u.busy = false;
+    render();
+  }
+}
+
 /** Next: the following story in the level (this one stays unplanned if it was). Previous: the one before. */
 function step(by) {
   const key = curLevel().key;
@@ -1321,6 +1567,7 @@ function render() {
   if (rt.subFor !== did) {   // a new story: fresh subtask draft, back to its description
     rt.subFor = did;
     rt.sub = { draft: '', typeHref: rt.sub.typeHref, assigneeHref: undefined, busy: false, err: '' };
+    rt.sug = null; rt.tplEdit = null;
     rt.tab = 'desc';
   }
   const scrollTop = document.querySelector('[data-role="all-list"]')?.scrollTop ?? 0;
@@ -1642,11 +1889,12 @@ function kidsHtml(id, d) {
       <select class="ctrl" data-role="sub-type" aria-label="Type of the new subtask">
         ${types.map(t => `<option value="${esc(t.href)}"${t.href === typeHref ? ' selected' : ''}>${esc(t.name)}</option>`).join('') || '<option value="">Task</option>'}
       </select>
-      <input class="ctrl" data-role="sub-subject" placeholder="New subtask, Enter creates it" aria-label="Subject of the new subtask" value="${esc(rt.sub.draft)}"${rt.sub.busy ? ' readonly aria-busy="true"' : ''} />
+      <input class="ctrl" data-role="sub-subject" placeholder="New subtask: Enter or clicking outside creates it" aria-label="Subject of the new subtask" value="${esc(rt.sub.draft)}"${rt.sub.busy ? ' readonly aria-busy="true"' : ''} />
       ${assigneeSelect('new', subAssignee, parentAssignee?.title, null, { field: 'sub-assignee', label: 'Assignee of the new subtask' })}
       <button class="primary" data-act="sub-create" data-id="${esc(id)}"${rt.sub.busy ? ' aria-busy="true"' : ''}>${rt.sub.busy ? 'Creating…' : 'Create'}</button>
     </div>
-    ${rt.sub.err ? `<div class="card-error" role="alert">Couldn't create the subtask: ${esc(rt.sub.err)}</div>` : ''}`;
+    ${rt.sub.err ? `<div class="card-error" role="alert">Couldn't create the subtask: ${esc(rt.sub.err)}</div>` : ''}
+    ${suggestHtml(id, d)}`;
 }
 
 function relationsHtml(id, d) {
@@ -1722,12 +1970,24 @@ function commentsHtml(id, d) {
   if (!d.comments) return `${composer}<p class="card-error">Couldn't load the comments.</p>`;
   if (!d.comments.length) return `${composer}<p class="text2">No comments yet.</p>`;
   const when = iso => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+  const ed = rt.commentEdit?.wp === id ? rt.commentEdit : null;
   const items = [...d.comments].reverse().map(a => {
     const user = a._links?.user ?? {};
     const who = authorName(user) ?? '…';
+    const aid = String(a.id);
+    const head = `<div class="c-head">${avatar(idOf(user.href), who, user.href)}<b>${esc(who)}</b><span class="muted">${esc(when(a.createdAt))}</span>
+      ${a._links?.update?.href && !ed ? `<button class="ghost c-edit" data-act="comment-edit" data-id="${esc(aid)}" data-wp="${esc(id)}" aria-label="Edit this comment">Edit</button>` : ''}</div>`;
+    if (ed?.id === aid) {
+      const draft = rt.commentDrafts.get(editKey(aid)) ?? '';
+      return `<li class="comment editing">${head}
+        <textarea class="ctrl" data-role="comment-edit" data-id="${esc(aid)}" rows="3" aria-label="Edit the comment (Ctrl+Enter or clicking outside saves, Esc cancels)"
+          value="${esc(draft)}"${ed.busy ? ' readonly aria-busy="true"' : ''}>${esc(draft)}</textarea>
+        <div class="comment-actions">${ed.err ? `<span class="card-error" role="alert">Couldn't save the comment: ${esc(ed.err)}</span>` : '<span class="muted c-hint">Clicking outside saves · Esc cancels</span>'}<span class="spacer"></span>
+          <button class="ghost" data-act="comment-edit-cancel"${ed.busy ? ' disabled' : ''}>Cancel</button>
+          <button class="primary" data-act="comment-edit-save"${ed.busy ? ' aria-busy="true"' : ''}>${ed.busy ? 'Saving…' : 'Save'}</button></div></li>`;
+    }
     a._safe ??= safeHtml(a.comment?.html || esc(a.comment?.raw ?? '').replace(/\n/g, '<br>'));
-    return `<li class="comment">
-      <div class="c-head">${avatar(idOf(user.href), who, user.href)}<b>${esc(who)}</b><span class="muted">${esc(when(a.createdAt))}</span></div>
+    return `<li class="comment">${head}
       <div class="rich">${withChips(a._safe)}</div></li>`;
   }).join('');
   return `${composer}<ul class="comments">${items}</ul>`;
@@ -1739,7 +1999,12 @@ function commentsHtml(id, d) {
 // becomes the mention tag OpenProject understands, so that person is notified.
 
 let mentionEl = null;
-let mentionSt = null;   // { wp, start, q, active, options }
+let mentionSt = null;   // { role, id, key, start, q, active, options }
+
+/** A comment box: the new-comment one, or one editing a posted comment. */
+const isCommentBox = t => t?.dataset?.role === 'comment' || t?.dataset?.role === 'comment-edit';
+/** Where a comment box keeps its draft and chosen mentions. */
+const draftKeyOf = ta => (ta.dataset.role === 'comment-edit' ? editKey(ta.dataset.id) : ta.dataset.id);
 
 function closeMention() { mentionEl?.remove(); mentionEl = null; mentionSt = null; }
 
@@ -1782,9 +2047,9 @@ function updateMention(ta) {
       const li = e.target.closest('[data-i]');
       if (li) chooseMention(Number(li.dataset.i));
     });
-    mentionSt = { wp: ta.dataset.id, start: t.start, q: t.q, active: 0, options: [] };
+    mentionSt = { active: 0, options: [] };
   }
-  Object.assign(mentionSt, { wp: ta.dataset.id, start: t.start, q: t.q });
+  Object.assign(mentionSt, { role: ta.dataset.role, id: ta.dataset.id, key: draftKeyOf(ta), start: t.start, q: t.q });
   mentionRows();
   const r = ta.getBoundingClientRect();
   const h = mentionEl.offsetHeight, below = innerHeight - r.bottom;
@@ -1796,17 +2061,17 @@ function updateMention(ta) {
 
 function chooseMention(i) {
   const p = mentionSt?.options[i];
-  const ta = document.querySelector(`[data-role="comment"][data-id="${CSS.escape(mentionSt?.wp ?? '')}"]`);
+  const ta = mentionSt && document.querySelector(`[data-role="${mentionSt.role}"][data-id="${CSS.escape(mentionSt.id ?? '')}"]`);
   if (!p || !ta) return closeMention();
   const caret = ta.selectionStart ?? ta.value.length;
   const before = ta.value.slice(0, mentionSt.start), after = ta.value.slice(caret);
   const insert = `@${p.name} `;
   ta.value = before + insert + after;
   ta.setSelectionRange(before.length + insert.length, before.length + insert.length);
-  const wp = mentionSt.wp;
-  rt.commentDrafts.set(wp, ta.value);
-  rt.commentMentions.set(wp, { ...(rt.commentMentions.get(wp) ?? {}), [p.name]: p.href });
-  document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(wp)}"]`)?.removeAttribute('disabled');
+  const key = mentionSt.key;
+  rt.commentDrafts.set(key, ta.value);
+  rt.commentMentions.set(key, { ...(rt.commentMentions.get(key) ?? {}), [p.name]: p.href });
+  if (mentionSt.role === 'comment') document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(key)}"]`)?.removeAttribute('disabled');
   closeMention();
   ta.focus();
 }
@@ -1824,14 +2089,14 @@ function withMentionTags(id, text) {
   });
 }
 
-document.addEventListener('input', e => { if (e.target.dataset?.role === 'comment') updateMention(e.target); });
-document.addEventListener('click', e => { if (e.target.dataset?.role === 'comment') updateMention(e.target); });
+document.addEventListener('input', e => { if (isCommentBox(e.target)) updateMention(e.target); });
+document.addEventListener('click', e => { if (isCommentBox(e.target)) updateMention(e.target); });
 document.addEventListener('keyup', e => {
-  if (e.target.dataset?.role === 'comment' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) updateMention(e.target);
+  if (isCommentBox(e.target) && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) updateMention(e.target);
 });
-document.addEventListener('focusout', e => { if (e.target.dataset?.role === 'comment') closeMention(); });
+document.addEventListener('focusout', e => { if (isCommentBox(e.target)) closeMention(); });
 document.addEventListener('keydown', e => {
-  if (!mentionEl || e.target.dataset?.role !== 'comment') return;
+  if (!mentionEl || !isCommentBox(e.target)) return;
   const n = mentionSt.options.length;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
@@ -1851,6 +2116,7 @@ async function addComment(id) {
   const raw = (rt.commentDrafts.get(id) ?? '').trim();
   if (!raw || rt.commentBusy.has(id)) return;
   rt.commentBusy.add(id); rt.commentErr.delete(id); render();
+  let posted = false;
   try {
     const saved = await postComment(id, withMentionTags(id, raw));
     const d = details.get(id);
@@ -1858,13 +2124,87 @@ async function addComment(id) {
     loadCommentAuthors([saved]);
     rt.commentDrafts.delete(id);
     rt.commentMentions.delete(id);
+    posted = true;
     announce(`Comment added to #${id}`);
   } catch (err) {
     rt.commentErr.set(id, err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message);
   } finally {
     rt.commentBusy.delete(id);
     render();
-    document.querySelector('[data-role="comment"]')?.focus();
+    const box = document.querySelector(`[data-role="comment"][data-id="${CSS.escape(id)}"]`);
+    if (box && posted) box.value = '';   // a repaint leaves a focused field alone
+    box?.focus();
+  }
+}
+
+// ─── Editing a comment ────────────────────────────────────────────────────────
+// Your own comments (OpenProject sends an `update` link with them) open in place.
+// Mention tags show as "@Name" while editing and become tags again on save, like a
+// new comment. Ctrl+Enter or clicking outside saves; Esc or Cancel drops the change.
+
+const editKey = activityId => `edit:${activityId}`;
+
+/** A comment's stored text with its mention tags turned back into "@Name", and who they name. */
+function editableText(raw) {
+  const mentions = {};
+  const text = (raw ?? '').replace(/<mention\b[^>]*>[\s\S]*?<\/mention>/g, tag => {
+    const t = document.createElement('template');
+    t.innerHTML = tag;
+    const m = t.content.firstElementChild;
+    const id = m?.getAttribute('data-id');
+    const name = (m?.textContent ?? '').replace(/^@/, '').trim();
+    if (!id || !name) return tag;
+    mentions[name] = `/api/v3/${m.getAttribute('data-type') === 'group' ? 'groups' : 'users'}/${id}`;
+    return `@${name}`;
+  });
+  return { text, mentions };
+}
+
+function startCommentEdit(wpId, activityId) {
+  const a = details.get(wpId)?.comments?.find(c => String(c.id) === String(activityId));
+  if (!a) return;
+  const { text, mentions } = editableText(a.comment?.raw);
+  const key = editKey(activityId);
+  rt.commentDrafts.set(key, text);
+  rt.commentMentions.set(key, mentions);
+  rt.commentEdit = { id: String(activityId), wp: wpId, orig: text, busy: false, err: '' };
+  render();
+  const ta = document.querySelector('[data-role="comment-edit"]');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+function cancelCommentEdit() {
+  const ed = rt.commentEdit;
+  if (!ed) return;
+  rt.commentDrafts.delete(editKey(ed.id));
+  rt.commentMentions.delete(editKey(ed.id));
+  rt.commentEdit = null;
+  closeMention();
+  render();
+}
+
+/** Saves the comment being edited; an unchanged one just closes. */
+async function saveCommentEdit() {
+  const ed = rt.commentEdit;
+  if (!ed || ed.busy) return;
+  const key = editKey(ed.id);
+  const raw = (rt.commentDrafts.get(key) ?? '').trim();
+  if (raw === ed.orig.trim()) return cancelCommentEdit();
+  if (!raw) { ed.err = "a comment can't be empty"; return render(); }
+  ed.busy = true; ed.err = ''; render();
+  try {
+    const saved = await updateComment(ed.id, withMentionTags(key, raw));
+    const d = details.get(ed.wp);
+    if (d?.comments) d.comments = d.comments.map(c => String(c.id) === ed.id ? saved : c);
+    rt.commentDrafts.delete(key);
+    rt.commentMentions.delete(key);
+    if (rt.commentEdit === ed) rt.commentEdit = null;
+    announce(`Comment on #${ed.wp} saved`);
+  } catch (err) {
+    ed.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+  } finally {
+    ed.busy = false;
+    render();
   }
 }
 
@@ -2019,7 +2359,9 @@ function storySideHtml(card) {
   const dec = s.decisions[card.id];
   const ids = levelIds(lv.key).filter(x => cardById(x));
   const pos = ids.indexOf(card.id) + 1;
-  const tray = rt.ui.mode === 'defer' ? `<div class="defer-row">
+  const tray = rt.ui.mode === 'confirm-plan' && rt.ui.id === card.id ? confirmPlanHtml(card.id)
+    : rt.ui.mode === 'clone' && rt.ui.id === card.id ? cloneHtml(card)
+    : rt.ui.mode === 'defer' ? `<div class="defer-row">
       <input class="ctrl" data-role="reason" placeholder="Why not this sprint? (optional)" aria-label="Reason to defer" />
       ${rt.versions.some(v => String(v.id) !== s.versionId) ? `<button type="button" class="pick ver-pick" data-pick="version" data-wp="${esc(card.id)}" aria-haspopup="listbox"
         aria-expanded="${pickSt?.field === 'version' ? 'true' : 'false'}" aria-label="Move the story to another version. Now: ${esc(rt.ui.moveTo?.name ?? 'stay in this sprint')}"><span class="ver-k">Move to</span><span class="nm">${esc(rt.ui.moveTo?.name ?? 'Stay in this sprint')}</span></button>` : ''}
@@ -2035,7 +2377,8 @@ function storySideHtml(card) {
   return `<aside class="story-side" aria-label="Plan this story">
     <section class="panel side-box lvl-${lvlCls(lv)}">
       ${cardClockHtml(card)}
-      ${tray || `<div class="card-actions">${actions}</div>`}
+      ${tray || `<div class="card-actions">${actions}</div>
+        <button class="ghost clone-btn" data-act="clone" data-id="${esc(card.id)}">Clone story</button>`}
       <nav class="card-nav" aria-label="Stories in this level">
         <button class="ghost" data-act="prev"${canStep(-1) ? '' : ' disabled'} aria-label="Previous story">← Prev</button>
         <span class="muted num card-pos">${pos} / ${ids.length}</span>
@@ -2162,8 +2505,11 @@ function allHtml() {
       <div class="card-actions">
         ${s.decisions[rt.selected]
           ? '<button data-act="reopen">Mark not planned</button>'
+          : rt.ui.mode === 'confirm-plan' && rt.ui.id === rt.selected ? confirmPlanHtml(rt.selected)
           : `<button class="primary" data-act="plan-sel">Planned</button><button data-act="defer-sel">Defer</button>${inPlay && currentCard()?.id !== rt.selected ? '<button data-act="play-now">Put it on the table</button>' : ''}`}
+        ${rt.ui.mode === 'clone' && rt.ui.id === rt.selected ? '' : `<button class="ghost" data-act="clone" data-id="${esc(rt.selected)}">Clone</button>`}
       </div>
+      ${rt.ui.mode === 'clone' && rt.ui.id === rt.selected ? cloneHtml(sel) : ''}
     </article>` : '';
   return `<div class="all">
     <section class="all-list-wrap">
@@ -2341,7 +2687,8 @@ async function onAction(act, el) {
     case 'next':     return nextLevel();
     case 'pause':    return togglePause();
     case 'keep':     s.overtimeOk[curLevel().key] = true; save(); return render();
-    case 'plan':     return card && decide(card, 'plan');
+    case 'plan':     return card && askPlan(card);
+    case 'plan-ok':  { const c = cardById(el?.dataset.id ?? rt.ui.id); return c && decide(c, 'plan'); }
     case 'defer':    return card && openDefer();
     case 'skip':     return card && step(+1);
     case 'prev':     return card && step(-1);
@@ -2357,7 +2704,7 @@ async function onAction(act, el) {
     case 'all':      return toggleAll();
     case 'select':   if (rt.selected === el.dataset.id) return; rt.selected = el.dataset.id; return render();
     case 'filter':   rt.allFilter = el.dataset.id; return render();
-    case 'plan-sel': return sel && decide(sel, 'plan');
+    case 'plan-sel': return sel && askPlan(sel);
     case 'defer-sel': return sel && decide(sel, 'defer');
     case 'reopen':   return rt.selected && reopen(rt.selected);
     case 'play-now': return rt.selected && playNow(rt.selected);
@@ -2366,7 +2713,22 @@ async function onAction(act, el) {
       if (rt.tab === 'sub') { const id = detailId(); if (id) loadKidStatuses(id); }
       return render();
     case 'sub-create': return createSubtask(el.dataset.id);
+    case 'sug-open':  if (rt.sug) rt.sug.open = true; return render();
+    case 'sug-close': if (rt.sug) rt.sug.open = false; return render();
+    case 'sug-create': return createSuggested(el.dataset.id);
+    case 'tpl-edit':  return openTemplateEditor();
+    case 'tpl-add':   rt.tplEdit?.rows.push({ title: '', assignee: 'parent' }); render();
+      return document.querySelector(`[data-role="tpl-title"][data-i="${(rt.tplEdit?.rows.length ?? 1) - 1}"]`)?.focus();
+    case 'tpl-remove': rt.tplEdit?.rows.splice(Number(el.dataset.i), 1); return render();
+    case 'tpl-reset': if (rt.tplEdit) rt.tplEdit.rows = defaultTemplate(s.projectName, rt.tplEdit.kind); return render();
+    case 'tpl-cancel': rt.tplEdit = null; return render();
+    case 'tpl-save':  return saveTemplate();
+    case 'clone':     { const c = cardById(el.dataset.id); return c && openClone(c); }
+    case 'clone-ok':  return cloneStory(el.dataset.id);
     case 'comment-post': return addComment(el.dataset.id);
+    case 'comment-edit': return startCommentEdit(el.dataset.wp, el.dataset.id);
+    case 'comment-edit-save': return saveCommentEdit();
+    case 'comment-edit-cancel': return cancelCommentEdit();
     case 'detail-retry': details.delete(el.dataset.id); return render();
     case 'end':      return endGame();
     case 'back':     rt.view = null; s.phase = 'play'; s.level = Math.min(s.level, LEVELS.length - 1); save(); return render();
@@ -2441,12 +2803,47 @@ document.addEventListener('input', e => {
     const post = document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(e.target.dataset.id)}"]`);
     if (post) post.disabled = !e.target.value.trim() || rt.commentBusy.has(e.target.dataset.id);
   }
+  if (e.target.dataset.role === 'comment-edit') rt.commentDrafts.set(editKey(e.target.dataset.id), e.target.value);
+  if (e.target.dataset.role === 'sug-title' && rt.sug?.rows[e.target.dataset.i]) rt.sug.rows[e.target.dataset.i].title = e.target.value;
+  if (e.target.dataset.role === 'tpl-title' && rt.tplEdit?.rows[e.target.dataset.i]) rt.tplEdit.rows[e.target.dataset.i].title = e.target.value;
+  if (e.target.dataset.role === 'clone-subject' && rt.ui.mode === 'clone') rt.ui.subject = e.target.value;
 });
 document.addEventListener('keydown', e => {
-  if (e.target.dataset?.role === 'comment' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+  const role = e.target.dataset?.role;
+  if (role === 'comment' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     addComment(e.target.dataset.id);
+  } else if (role === 'comment-edit' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    saveCommentEdit();
+  } else if (role === 'comment-edit' && e.key === 'Escape') {
+    e.preventDefault(); e.stopImmediatePropagation();
+    cancelCommentEdit();
+  } else if (role === 'sub-subject' && e.key === 'Escape' && !rt.sub.busy) {   // drop the draft, so leaving the field creates nothing
+    e.preventDefault(); e.stopImmediatePropagation();
+    rt.sub.draft = ''; e.target.value = '';
   }
+});
+
+// Clicking outside a field saves it: the new subtask is created once focus leaves its
+// row (its type, title, assignee and Create), an edited comment is saved. Focus that
+// leaves only because the window lost it saves nothing.
+document.addEventListener('focusout', e => {
+  const t = e.target, role = t.dataset?.role;
+  const inRow = !!t.closest?.('.create-row');
+  if (!inRow && role !== 'comment-edit') return;
+  if (inRow && e.relatedTarget?.closest?.('.create-row')) return;   // still composing: choosing the type or assignee
+  const parentId = rt.subFor, sub = rt.sub;
+  const toCancel = e.relatedTarget?.matches?.('[data-act="comment-edit-cancel"]');
+  setTimeout(() => {
+    if (document.activeElement === t) return;   // still focused: the window lost focus, not the field
+    if (inRow) {
+      if (document.activeElement?.closest?.('.create-row')) return;
+      if (parentId && sub.draft.trim() && !sub.busy) createSubtask(parentId, sub, { refocus: false });
+    } else if (!toCancel && rt.commentEdit?.id === t.dataset.id) {
+      saveCommentEdit();
+    }
+  });
 });
 
 // ─── Jira-style pickers: status and assignee of the story on the table ────────
@@ -2469,7 +2866,7 @@ function pickCurrent() {
 function pickChoices() {
   const { field, wp } = pickSt;
   if (field === 'version') {
-    return [{ href: null, name: 'Stay in this sprint' },
+    return [{ href: null, name: rt.ui.mode === 'clone' ? 'This sprint' : 'Stay in this sprint' },
       ...rt.versions.filter(v => String(v.id) !== s.versionId)
         .sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999') || a.name.localeCompare(b.name))
         .map(v => ({ href: v._links?.self?.href ?? `/api/v3/versions/${v.id}`, name: v.name, sub: [v.startDate, v.endDate].filter(Boolean).join(' → ') }))];
@@ -2633,6 +3030,10 @@ document.addEventListener('change', async e => {
     return writeField(t.dataset.wp, 'storyPoints', n);
   }
   if (t.dataset.field === 'sub-assignee') { rt.sub.assigneeHref = t.value || null; return; }
+  if (t.dataset.field === 'sug-assignee') { const r = rt.sug?.rows[t.dataset.wp.slice(4)]; if (r) r.assigneeHref = t.value || null; return; }
+  if (t.dataset.role === 'sug-on') { const r = rt.sug?.rows[t.dataset.i]; if (r) r.on = t.checked; return render(); }
+  if (t.dataset.role === 'tpl-assignee') { const r = rt.tplEdit?.rows[t.dataset.i]; if (r) r.assignee = t.value; return; }
+  if (t.dataset.role === 'clone-kids') { if (rt.ui.mode === 'clone') rt.ui.kids = t.checked; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
@@ -2677,12 +3078,13 @@ document.addEventListener('change', async e => {
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const typing = e.target.matches('input, select, textarea');
-  if (e.key === 'Escape' && rt.ui.mode) { e.preventDefault(); return onAction('cancel'); }
+  if (e.key === 'Escape' && rt.ui.mode) { e.preventDefault(); return rt.ui.busy ? undefined : onAction('cancel'); }   // a clone in flight keeps its tray
   if (e.key === 'Escape' && rt.view === 'all' && !typing) { e.preventDefault(); return toggleAll(); }
   if (typing) {
     if (e.key !== 'Enter') return;
     if (isWpSelect(e.target)) { e.preventDefault(); commitSelect(e.target); }
     else if (e.target.dataset.role === 'reason') { e.preventDefault(); onAction('defer-ok'); }
+    else if (e.target.dataset.role === 'clone-subject') { e.preventDefault(); cloneStory(rt.ui.id); }
     else if (e.target.dataset.role === 'sub-subject') {
       e.preventDefault();
       const id = detailId();
@@ -2690,7 +3092,7 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
-  if (s.phase === 'lobby' || rt.sub.busy || rt.saving.size) return;
+  if (s.phase === 'lobby' || rt.sub.busy || rt.sug?.busy || rt.saving.size) return;
   const key = e.key.toLowerCase();
   if (key === 'v') { e.preventDefault(); return toggleAll(); }
   if (s.phase !== 'play' || rt.view === 'all') return;
@@ -2700,11 +3102,11 @@ document.addEventListener('keydown', e => {
     if (s.intro) { e.preventDefault(); return startLevel(); }
     if (lv.isBreak || !currentCard()) { e.preventDefault(); return nextLevel(); }
   }
-  if (e.key === ' ' && (!e.target.matches('button, a') || e.target.matches('[data-act="plan"], [data-act="defer"], [data-act="skip"], [data-act="prev"], [data-act="reopen-cur"]'))) {
+  if (e.key === ' ' && (!e.target.matches('button, a') || e.target.matches('[data-act="plan"], [data-act="plan-ok"], [data-act="defer"], [data-act="skip"], [data-act="prev"], [data-act="reopen-cur"]'))) {
     e.preventDefault(); return togglePause();
   }
   if (key === 'u') return undo();
-  if (s.intro || lv.isBreak || rt.ui.mode || !currentCard()) return;
+  if (s.intro || lv.isBreak || (rt.ui.mode && rt.ui.mode !== 'confirm-plan') || !currentCard()) return;
   if (key === 'p') { e.preventDefault(); onAction('plan'); }
   else if (key === 'd') { e.preventDefault(); onAction('defer'); }
   else if (key === 's' || key === 'n' || e.key === 'ArrowRight') { e.preventDefault(); onAction('skip'); }
@@ -2740,7 +3142,8 @@ setInterval(() => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  const got = await chrome.storage.local.get([SESSION_KEY, LEVELS_KEY]);
+  const got = await chrome.storage.local.get([SESSION_KEY, LEVELS_KEY, TEMPLATES_KEY]);
+  rt.templates = got[TEMPLATES_KEY] ?? {};
   ruleDefs = mergeDefs(got[LEVELS_KEY]);
   setDefs(ruleDefs);
   const stored = got[SESSION_KEY];

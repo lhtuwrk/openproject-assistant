@@ -276,6 +276,9 @@
     .comment .c-head { display: flex; align-items: center; gap: var(--space-xs); font-size: var(--text-sm); }
     .comment .c-head .avatar { width: 24px; height: 24px; font-size: 10px; }
     .comment .rich { font-size: var(--text-md); }
+    .comment .c-edit { margin-inline-start: auto; height: 24px; padding: 0 8px; font-size: var(--text-xs); }
+    .comment.editing textarea { width: 100%; height: auto; min-height: 76px; padding: var(--space-xs) var(--space-sm); resize: vertical; line-height: 1.45; }
+    .comment .c-hint { font-size: var(--text-xs); }
     .ctx-menu {
       position: fixed; z-index: 80; display: grid; min-width: 220px; padding: var(--space-2xs);
       background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / .28);
@@ -381,6 +384,13 @@
 
     .defer-row { display: flex; gap: var(--space-xs); padding-top: var(--space-xs); border-top: 1px solid var(--border); }
     .defer-row .ctrl { flex: 1; min-width: 0; }
+    .confirm-row, .clone-row { flex-wrap: wrap; align-items: center; }
+    .confirm-msg { flex-basis: 100%; font-size: var(--text-sm); color: var(--text2); }
+    .confirm-msg b { color: var(--warn); }
+    .clone-row .ctrl { flex-basis: 100%; }
+    .clone-row .chk { flex-basis: 100%; display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text2); }
+    .clone-row .card-error { flex-basis: 100%; }
+    .story-side .clone-btn { justify-self: start; padding-inline: 0; }
 
     .queue { width: 100%; color: var(--text2); font-size: var(--text-sm); display: flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; }
     .queue .num { color: var(--text); }
@@ -435,6 +445,17 @@
     .kid-row .kid-subject { overflow-wrap: anywhere; }
     .kid-row .card-error { grid-column: 1 / -1; }
     .create-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 170px auto; gap: var(--space-xs); padding-top: var(--space-sm); }
+
+    .sug { display: grid; gap: var(--space-xs); margin-top: var(--space-md); padding: var(--space-sm); border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .sug-head { display: flex; align-items: baseline; gap: var(--space-xs); flex-wrap: wrap; font-size: var(--text-sm); }
+    .sug-head .muted { font-size: var(--text-xs); }
+    .sug-head .spacer, .sug-foot .spacer { flex: 1; }
+    .sug-list { list-style: none; display: grid; gap: 4px; }
+    .sug-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 170px; gap: var(--space-xs); align-items: center; }
+    .tpl-row { display: grid; grid-template-columns: minmax(0, 1fr) 200px auto; gap: var(--space-xs); align-items: center; }
+    .sug-row .ctrl, .tpl-row .ctrl { width: 100%; }
+    .sug-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+    .sug-foot { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; padding-top: var(--space-xs); }
 
     .rel-group + .rel-group { margin-top: var(--space-sm); }
     .rel-group h4 { font-size: var(--text-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
@@ -597,6 +618,10 @@
       .lvl-row .when  { grid-column: 3; grid-row: 3; text-align: left; }
       .bar-actions { margin-left: 0; width: 100%; }
       .bar-actions kbd { display: none; }
+      .sug-row { grid-template-columns: auto minmax(0, 1fr); }
+      .sug-row .ctrl[data-field="sug-assignee"] { grid-column: 2; }
+      .tpl-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .tpl-row select { grid-column: 1; grid-row: 2; }
     }
     /* Tinder-style: a decided story is thrown off to the right (planned) or left (deferred) as a
        clone (planning.js flyOut); the next story rises from behind it. */

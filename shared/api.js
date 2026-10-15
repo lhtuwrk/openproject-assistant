@@ -162,6 +162,11 @@ export function postComment(wpId, raw) {
   return apiWrite('POST', `/api/v3/work_packages/${wpId}/activities`, { comment: { raw } });
 }
 
+/** Changes the text of a comment (allowed when the activity has an `update` link); resolves to the saved activity. */
+export function updateComment(activityId, raw) {
+  return apiWrite('PATCH', `/api/v3/activities/${activityId}`, { comment: { raw } });
+}
+
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
 /**
