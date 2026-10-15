@@ -687,7 +687,7 @@ function withBlobSrc(html) {
 
 /** Fills images that need the session cookie (description images, attachment thumbnails). */
 function hydrateImages() {
-  for (const img of document.querySelectorAll('#view img[data-blob]:not([src]), .pick-pop img[data-blob]:not([src])')) {
+  for (const img of document.querySelectorAll('#view img[data-blob]:not([src]), .pick-pop img[data-blob]:not([src]), .clone-dlg img[data-blob]:not([src])')) {
     const path = img.dataset.blob;
     const url = blobs.get(path);
     if (url && url !== 'loading' && url !== 'failed') { img.src = url; continue; }
@@ -1354,34 +1354,85 @@ function confirmPlanHtml(id) {
 }
 
 // ─── Clone a story ────────────────────────────────────────────────────────────
-// A dialog prefilled from the story: subject, type, story points, assignee, version and
-// description can be changed before the copy is made. Priority, label, parent and
-// category are copied as they are; status starts as the default (New). Its subtasks
-// can come along, unassigned. A copy in this sprint joins its level.
+// A large dialog laid out like the story on the table, prefilled from the story: the
+// title, type, story points, assignee, version and description (shown rendered, edited
+// in place) can be changed, and subtasks chosen to create with the copy: the story's
+// own, the suggested ones, or new ones. Priority, label, parent and category are copied
+// as they are; status starts as the default (New). A copy in this sprint joins its level.
 
 let cloneEl = null;
+let cl = null;   // { id, wp, rows: [{ on, title, assignee: 'story' | '' | href, typeHref, from }], descDirty, tab }
 const cloneOpen = () => !!cloneEl?.open;
 
 function closeClone() {
   if (!cloneEl || cloneEl.dataset.busy) return;
   cloneEl.close();
   cloneEl.remove();
-  cloneEl = null;
+  cloneEl = null; cl = null;
 }
 
 const option = (value, label, on) => `<option value="${esc(value ?? '')}"${on ? ' selected' : ''}>${esc(label)}</option>`;
 const versionHref = v => v._links?.self?.href ?? `/api/v3/versions/${v.id}`;
 
+/** Suggested subtasks for a type: the team's usual ones, without those already listed. */
+function cloneSuggestions(typeName, rows) {
+  const kind = kindOf(typeName);
+  if (!kind) return [];
+  const have = new Set(rows.map(r => sameTitle(r.title)));
+  return templateFor(rt.templates, s.projectId, s.projectName, kind, learnedNow()).lines
+    .map(l => ({ on: true, title: fillTitle(l.title, { id: cl.id, subject: cl.wp.subject }), assignee: l.assignee === 'none' ? '' : 'story', typeHref: null, from: 'suggested' }))
+    .filter(r => !have.has(sameTitle(r.title)));
+}
+
+function cloneRowsHtml() {
+  const people = rt.people ?? [];
+  const who = r => `<select class="ctrl" data-cl="assignee" data-i="${r.i}" aria-label="Assignee of “${esc(r.title)}”">
+      ${option('story', "Story's assignee", r.assignee === 'story')}${option('', 'Unassigned', r.assignee === '')}
+      ${people.map(p => option(p.href, p.href === rt.me?.href ? `${p.name} (me)` : p.name, p.href === r.assignee)).join('')}</select>`;
+  const rows = cl.rows.map((r, i) => ({ ...r, i }));
+  const group = (from, title) => {
+    const list = rows.filter(r => r.from === from);
+    return list.length ? `<h4 class="cl-group">${title}</h4><ul class="sug-list">${list.map(r => `<li class="sug-row cl-row">
+        <input type="checkbox" data-cl="on" data-i="${r.i}"${r.on ? ' checked' : ''} aria-label="Create “${esc(r.title)}”" />
+        <input class="ctrl" data-cl="title" data-i="${r.i}" value="${esc(r.title)}" aria-label="Subtask title" />
+        ${who(r)}
+        ${from === 'new' ? `<button type="button" class="ghost" data-cl="remove" data-i="${r.i}" aria-label="Remove “${esc(r.title)}”">✕</button>` : '<span></span>'}
+      </li>`).join('')}</ul>` : '';
+  };
+  const n = cl.rows.filter(r => r.on && r.title.trim()).length;
+  return `<p class="text2 cl-sum">${n ? `${n} subtask${n === 1 ? '' : 's'} will be created with the copy.` : 'No subtasks will be created.'}</p>
+    ${group('suggested', 'Suggested')}
+    ${group('original', `From #${esc(cl.id)} (unassigned unless you pick someone)`)}
+    ${group('new', 'Added here')}
+    <div class="cl-add">
+      <input class="ctrl" data-cl="new" placeholder="New subtask, Enter adds it" aria-label="Title of a new subtask" />
+      <button type="button" data-cl="add">Add</button>
+    </div>`;
+}
+
+function paintCloneRows() {
+  const box = cloneEl?.querySelector('[data-role="cl-subs"]');
+  if (box) box.innerHTML = cloneRowsHtml();
+  const tab = cloneEl?.querySelector('[data-ctab="subs"] .num');
+  const n = cl.rows.filter(r => r.on && r.title.trim()).length;
+  if (tab) tab.textContent = n ? String(n) : '';
+}
+
+function cloneTab(key) {
+  cl.tab = key;
+  for (const b of cloneEl.querySelectorAll('[data-ctab]')) b.setAttribute('aria-selected', String(b.dataset.ctab === key));
+  for (const p of cloneEl.querySelectorAll('[data-cpanel]')) p.hidden = p.dataset.cpanel !== key;
+}
+
 async function openClone(card) {
   closeClone();
   if (cloneEl) return;   // one is still being created
-  let wp = details.get(card.id)?.wp;
-  if (!wp) {
-    try { wp = await fetchWorkPackage(card.id); }
-    catch (err) { return toast(`Couldn't open #${card.id}: ${err.message}`); }
-  }
+  let wp = details.get(card.id)?.wp, kids = details.get(card.id)?.kids;
+  try {
+    wp ??= await fetchWorkPackage(card.id);
+    kids ??= await fetchChildWorkPackages(card.id).catch(() => []);
+  } catch (err) { return toast(`Couldn't open #${card.id}: ${err.message}`); }
   const L = wp._links ?? {};
-  const kids = details.get(card.id)?.kids;
   const types = [...(rt.types ?? [])];
   if (L.type?.href && !types.some(t => t.href === L.type.href)) types.unshift({ href: L.type.href, name: L.type.title });
   const people = [...(rt.people ?? [])];
@@ -1391,40 +1442,123 @@ async function openClone(card) {
       .sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999') || a.name.localeCompare(b.name))
       .map(v => ({ href: versionHref(v), name: v.name }))];
   const labels = wpLabels(wp);
-  const kept = [L.priority?.title && `priority ${L.priority.title}`, labels.length && `label ${labels.join(', ')}`,
-    L.parent?.title && `parent ${L.parent.title}`, L.category?.title && `category ${L.category.title}`].filter(Boolean);
+  const kept = [['Priority', L.priority?.title], ['Label', labels.join(', ')], ['Parent', L.parent?.title], ['Category', L.category?.title]]
+    .filter(([, v]) => v);
+  const html = wp.description?.html ?? '';
+  const hasDesc = !!(html.replace(/<[^>]*>/g, '').trim() || /<img/i.test(html));
+
+  cl = { id: card.id, wp, rows: kids.map(k => ({ on: false, title: k.subject ?? '', assignee: '', typeHref: k._links?.type?.href ?? null, from: 'original' })), descDirty: false, tab: 'desc' };
+  cl.rows.unshift(...cloneSuggestions(L.type?.title, cl.rows));
 
   const dlg = document.createElement('dialog');
   dlg.className = 'clone-dlg';
   dlg.setAttribute('aria-labelledby', 'clone-title');
   dlg.innerHTML = `<form class="clone-form" method="dialog">
-      <h2 id="clone-title">Clone #${esc(card.id)}</h2>
-      <label class="dlg-fld"><span>Subject</span><input class="ctrl" name="subject" required value="${esc(wp.subject ?? '')}" /></label>
-      <div class="dlg-grid">
-        <label class="dlg-fld"><span>Type</span><select class="ctrl" name="type">${types.map(t => option(t.href, t.name, t.href === L.type?.href)).join('')}</select></label>
-        <label class="dlg-fld"><span>Story points</span><input class="ctrl" name="points" type="number" min="0" step="1" inputmode="numeric" value="${typeof wp.storyPoints === 'number' ? wp.storyPoints : ''}" placeholder="–" /></label>
-        <label class="dlg-fld"><span>Assignee</span><select class="ctrl" name="assignee">${option('', 'Unassigned', !L.assignee?.href)}${people.map(p => option(p.href, p.href === rt.me?.href ? `${p.name} (me)` : p.name, p.href === L.assignee?.href)).join('')}</select></label>
-        <label class="dlg-fld"><span>Version</span><select class="ctrl" name="version">${versions.map((v, i) => option(v.href, v.name, i === 0)).join('')}</select></label>
+      <header class="cl-head">
+        <span class="muted" id="clone-title">Clone of <a href="${BACKLOG_URL}/work_packages/${esc(card.id)}" target="_blank" rel="noopener">#${esc(card.id)} ↗</a></span>
+        <button type="button" class="ghost" data-clone-cancel aria-label="Close">✕</button>
+      </header>
+      <div class="cl-body">
+        <section class="cl-main">
+          <textarea class="ctrl cl-title" name="subject" rows="2" required aria-label="Subject of the copy">${esc(wp.subject ?? '')}</textarea>
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab" data-ctab="desc" aria-selected="true">Description</button>
+            <button type="button" role="tab" class="tab" data-ctab="subs" aria-selected="false">Subtasks <span class="num muted"></span></button>
+          </div>
+          <div class="cl-panel" role="tabpanel" data-cpanel="desc">
+            <div class="rich cl-desc" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Description of the copy" data-placeholder="No description. Type one here.">${hasDesc ? withBlobSrc(safeHtml(html)) : ''}</div>
+          </div>
+          <div class="cl-panel" role="tabpanel" data-cpanel="subs" data-role="cl-subs" hidden></div>
+        </section>
+        <aside class="cl-side">
+          <label class="dlg-fld"><span>Type</span><select class="ctrl" name="type">${types.map(t => option(t.href, t.name, t.href === L.type?.href)).join('')}</select></label>
+          <label class="dlg-fld"><span>Story points</span><input class="ctrl" name="points" type="number" min="0" step="1" inputmode="numeric" value="${typeof wp.storyPoints === 'number' ? wp.storyPoints : ''}" placeholder="–" /></label>
+          <label class="dlg-fld"><span>Assignee</span><select class="ctrl" name="assignee">${option('', 'Unassigned', !L.assignee?.href)}${people.map(p => option(p.href, p.href === rt.me?.href ? `${p.name} (me)` : p.name, p.href === L.assignee?.href)).join('')}</select></label>
+          <label class="dlg-fld"><span>Version</span><select class="ctrl" name="version">${versions.map((v, i) => option(v.href, v.name, i === 0)).join('')}</select></label>
+          <div class="fld"><span>Status</span><b>New</b></div>
+          ${kept.map(([k, v]) => `<div class="fld"><span>${k}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join('')}
+          <p class="muted dlg-note">${kept.length ? `${kept.map(([k]) => k.toLowerCase()).join(', ')} copied as they are.` : ''}</p>
+        </aside>
       </div>
-      <label class="dlg-fld"><span>Description</span><textarea class="ctrl" name="description" rows="9">${esc(wp.description?.raw ?? '')}</textarea></label>
-      ${kids?.length === 0 ? '' : `<label class="chk"><input type="checkbox" name="kids" /> Copy its ${kids ? `${kids.length} ` : ''}subtask${kids?.length === 1 ? '' : 's'} (unassigned)</label>`}
-      <p class="muted dlg-note">${kept.length ? `Copied as it is: ${esc(kept.join(' · '))}. ` : ''}The copy starts as New.</p>
-      <p class="card-error" role="alert" data-role="clone-err" hidden></p>
-      <div class="dlg-actions"><button type="button" class="ghost" data-clone-cancel>Cancel</button><button type="submit" class="primary" data-role="clone-ok">Clone</button></div>
+      <footer class="cl-foot">
+        <p class="card-error" role="alert" data-role="clone-err" hidden></p>
+        <span class="spacer"></span>
+        <span class="muted cl-hint">Ctrl+Enter clones</span>
+        <button type="button" class="ghost" data-clone-cancel>Cancel</button>
+        <button type="submit" class="primary" data-role="clone-ok">Clone</button>
+      </footer>
     </form>`;
   document.body.append(dlg);
   cloneEl = dlg;
+  paintCloneRows();
+  hydrateImages();
+
+  const form = dlg.querySelector('form');
   dlg.addEventListener('cancel', e => { e.preventDefault(); closeClone(); });   // Esc; ignored while the copy is being made
   dlg.addEventListener('close', () => {   // closed by the browser anyway (a repeated Esc)
-    if (cloneEl === dlg && !dlg.dataset.busy) { dlg.remove(); cloneEl = null; }
+    if (cloneEl === dlg && !dlg.dataset.busy) { dlg.remove(); cloneEl = null; cl = null; }
   });
   dlg.addEventListener('click', e => {
-    if (e.target.closest('[data-clone-cancel]') || e.target === dlg) closeClone();   // Cancel, or a click on the backdrop
+    if (e.target.closest('[data-clone-cancel]') || e.target === dlg) return closeClone();   // Cancel, ✕, or a click on the backdrop
+    const tab = e.target.closest('[data-ctab]');
+    if (tab) return cloneTab(tab.dataset.ctab);
+    const act = e.target.closest('[data-cl]')?.dataset;
+    if (act?.cl === 'remove') { cl.rows.splice(Number(act.i), 1); return paintCloneRows(); }
+    if (act?.cl === 'add') return addCloneRow();
+    if (e.target.closest('.cl-desc a[href]') && !e.ctrlKey && !e.metaKey) e.preventDefault();   // editing: a click places the caret
   });
-  dlg.querySelector('form').addEventListener('submit', e => { e.preventDefault(); cloneStory(card.id, wp, new FormData(e.target)); });
+  dlg.addEventListener('input', e => {
+    const d = e.target.dataset;
+    if (e.target.closest('.cl-desc')) cl.descDirty = true;
+    if (d?.cl === 'title' && cl.rows[d.i]) { cl.rows[d.i].title = e.target.value; paintCount(); }
+  });
+  dlg.addEventListener('change', e => {
+    const d = e.target.dataset, r = cl.rows[d?.i];
+    if (d?.cl === 'on' && r) { r.on = e.target.checked; paintCount(); }
+    if (d?.cl === 'assignee' && r) r.assignee = e.target.value;
+    if (e.target.name === 'type') {   // another kind of work: its own suggestions
+      const name = e.target.selectedOptions[0]?.textContent;
+      cl.rows = cl.rows.filter(x => x.from !== 'suggested');
+      cl.rows.unshift(...cloneSuggestions(name, cl.rows));
+      paintCloneRows();
+    }
+  });
+  dlg.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); return form.requestSubmit(); }
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (e.target.dataset?.cl === 'new') { e.preventDefault(); return addCloneRow(); }
+    if (e.target.matches('input')) e.preventDefault();   // Enter in a field doesn't clone by accident
+    if (e.target.name === 'subject') e.preventDefault();   // the title stays one line
+  });
+  form.addEventListener('submit', e => { e.preventDefault(); cloneStory(card.id, wp, new FormData(form)); });
   dlg.showModal();
   const subject = dlg.querySelector('[name="subject"]');
   subject.focus(); subject.select();
+
+  function paintCount() {
+    const n = cl.rows.filter(r => r.on && r.title.trim()).length;
+    const sum = dlg.querySelector('.cl-sum'), tab = dlg.querySelector('[data-ctab="subs"] .num');
+    if (sum) sum.textContent = n ? `${n} subtask${n === 1 ? '' : 's'} will be created with the copy.` : 'No subtasks will be created.';
+    if (tab) tab.textContent = n ? String(n) : '';
+  }
+  function addCloneRow() {
+    const input = dlg.querySelector('[data-cl="new"]');
+    const title = input?.value.trim();
+    if (!title) return;
+    cl.rows.push({ on: true, title, assignee: 'story', typeHref: null, from: 'new' });
+    paintCloneRows();
+    dlg.querySelector('[data-cl="new"]')?.focus();
+  }
+}
+
+/** The edited description as stored text: pictures point at the backlog again, links lose what was added for display. */
+function editedDescription(el) {
+  const c = el.cloneNode(true);
+  for (const img of c.querySelectorAll('img')) {
+    if (img.dataset.blob) { img.setAttribute('src', img.dataset.blob); img.removeAttribute('data-blob'); }
+  }
+  for (const a of c.querySelectorAll('a[target]')) { a.removeAttribute('target'); a.removeAttribute('rel'); }
+  return c.innerHTML.trim();
 }
 
 /** The copy's body: the original's fields, with what was changed in the dialog. */
@@ -1437,7 +1571,7 @@ function cloneBody(wp, f) {
   if (Array.isArray(label)) links[LABEL_FIELD] = label.filter(l => l?.href).map(l => ({ href: l.href }));
   else if (label?.href) links[LABEL_FIELD] = { href: label.href };
   const body = { subject: f.subject, _links: Object.fromEntries(Object.entries(links).filter(([, v]) => v)) };
-  if (f.description.trim()) body.description = { raw: f.description };
+  if (f.description) body.description = { raw: f.description };
   if (f.points !== null) body.storyPoints = f.points;
   const text = wp[LABEL_FIELD];
   if (text != null && typeof text !== 'object') body[LABEL_FIELD] = text;
@@ -1446,32 +1580,37 @@ function cloneBody(wp, f) {
 }
 
 async function cloneStory(id, wp, form) {
-  const dlg = cloneEl;
-  if (!dlg || dlg.dataset.busy) return;
+  const dlg = cloneEl, st = cl;
+  if (!dlg || !st || dlg.dataset.busy) return;
   const raw = String(form.get('points') ?? '').trim();
+  const descEl = dlg.querySelector('.cl-desc');
   const f = {
-    subject: String(form.get('subject') ?? '').trim(), type: form.get('type') || null, assignee: form.get('assignee') || null,
-    version: form.get('version') || s.versionHref, description: String(form.get('description') ?? ''),
-    points: raw === '' ? null : Math.max(0, Math.round(Number(raw))), kids: form.get('kids') === 'on',
+    subject: String(form.get('subject') ?? '').replace(/\s+/g, ' ').trim(), type: form.get('type') || null, assignee: form.get('assignee') || null,
+    version: form.get('version') || s.versionHref,
+    // unchanged: the original's own text, exactly; edited: what is in the box now
+    description: st.descDirty ? (descEl.textContent.trim() || descEl.querySelector('img') ? editedDescription(descEl) : '') : (wp.description?.raw ?? ''),
+    points: raw === '' ? null : Math.max(0, Math.round(Number(raw))),
   };
+  const kids = st.rows.filter(r => r.on && r.title.trim());
   const errEl = dlg.querySelector('[data-role="clone-err"]'), ok = dlg.querySelector('[data-role="clone-ok"]');
-  const controls = [...dlg.querySelectorAll('input, select, textarea, button')];
   const fail = msg => { errEl.textContent = `Couldn't clone: ${msg}`; errEl.hidden = false; };
   if (!f.subject) return fail('the copy needs a subject');
   if (f.points !== null && !Number.isFinite(f.points)) return fail('story points must be a number');
-  dlg.dataset.busy = '1'; errEl.hidden = true;
-  ok.textContent = 'Cloning…'; ok.setAttribute('aria-busy', 'true');
-  controls.forEach(c => { c.disabled = true; });
+  const lock = on => {
+    dlg.querySelectorAll('input, select, textarea, button').forEach(c => { c.disabled = on; });
+    if (descEl) descEl.contentEditable = on ? 'false' : 'true';
+    ok.textContent = on ? 'Cloning…' : 'Clone';
+    on ? ok.setAttribute('aria-busy', 'true') : ok.removeAttribute('aria-busy');
+  };
+  dlg.dataset.busy = '1'; errEl.hidden = true; lock(true);
   try {
     const copy = await createWorkPackage(cloneBody(wp, f));
     let failed = 0;
-    if (f.kids) {
-      const kids = details.get(id)?.kids ?? await fetchChildWorkPackages(id);
-      for (const k of kids) {
-        try {
-          await addSubtask(copy.id, k.subject ?? '', { typeHref: k._links?.type?.href, versionHref: f.version, projectHref: copy._links?.project?.href });
-        } catch { failed++; }
-      }
+    for (const k of kids) {
+      try {
+        const assigneeHref = k.assignee === 'story' ? f.assignee : k.assignee || null;
+        await addSubtask(copy.id, k.title.trim(), { typeHref: k.typeHref, assigneeHref, versionHref: f.version, projectHref: copy._links?.project?.href });
+      } catch { failed++; }
     }
     const here = f.version === s.versionHref;
     if (here) {
@@ -1484,7 +1623,8 @@ async function cloneStory(id, wp, form) {
     if (cloneEl === dlg) closeClone();
     render();
     const into = here ? '' : ` into ${rt.versions.find(v => versionHref(v) === f.version)?.name ?? 'another version'}`;
-    const what = `#${id} cloned as #${copy.id}${into}${failed ? `; ${failed} subtask${failed === 1 ? '' : 's'} couldn't be copied` : ''}`;
+    const made = kids.length - failed;
+    const what = `#${id} cloned as #${copy.id}${into}${made ? ` with ${made} subtask${made === 1 ? '' : 's'}` : ''}${failed ? `; ${failed} subtask${failed === 1 ? '' : 's'} couldn't be created` : ''}`;
     announce(what);
     toast(what, here ? 'Show it' : 'Open ↗', () => {
       hideToast();
@@ -1493,11 +1633,10 @@ async function cloneStory(id, wp, form) {
     });
   } catch (err) {
     delete dlg.dataset.busy;
-    controls.forEach(c => { c.disabled = false; });
-    ok.textContent = 'Clone'; ok.removeAttribute('aria-busy');
+    lock(false);
     const msg = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
     if (dlg.open) fail(msg);
-    else { toast(`Couldn't clone #${id}: ${msg}`); if (cloneEl === dlg) { dlg.remove(); cloneEl = null; } }
+    else { toast(`Couldn't clone #${id}: ${msg}`); if (cloneEl === dlg) { dlg.remove(); cloneEl = null; cl = null; } }
   }
 }
 
@@ -2882,6 +3021,7 @@ async function openViewer(path, name) {
 
 document.addEventListener('click', e => {
   if (e.target.closest('[data-viewer-close]') || e.target === viewerEl) return closeViewer();
+  if (e.target.closest('.clone-dlg')) return;   // the copy's description is being edited there
   const f = e.target.closest('a[data-viewer]');
   const pic = !f && e.target.closest('.rich img[data-blob]');
   const path = f?.dataset.viewer ?? pic?.dataset.blob;
