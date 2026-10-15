@@ -829,14 +829,14 @@ const KIND_NAME = { story: 'Story', bug: 'Bug' };
 function templateEditorHtml() {
   const ed = rt.tplEdit;
   const rows = ed.rows.map((r, i) => `<li class="tpl-row">
-      <input class="ctrl" data-role="tpl-title" data-i="${i}" data-id="tpl-${i}" value="${esc(r.title)}" placeholder="e.g. Implement {subject}" aria-label="Subtask ${i + 1}" />
+      <input class="ctrl" data-role="tpl-title" data-i="${i}" data-id="tpl-${i}" value="${esc(r.title)}" placeholder="e.g. Write the test report with evidence" aria-label="Subtask ${i + 1}" />
       <select class="ctrl" data-role="tpl-assignee" data-i="${i}" data-id="tpl-a${i}" aria-label="Assignee of subtask ${i + 1}">
         <option value="parent"${r.assignee !== 'none' ? ' selected' : ''}>Story's assignee</option>
         <option value="none"${r.assignee === 'none' ? ' selected' : ''}>Unassigned (second person)</option>
       </select>
       <button class="ghost" data-act="tpl-remove" data-i="${i}" aria-label="Remove subtask ${i + 1}">✕</button></li>`).join('');
   return `<section class="sug" aria-label="Subtask template">
-      <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · {subject} is the story title</span></div>
+      <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · write {subject} to put the story title in a line</span></div>
       ${rows ? `<ul class="sug-list">${rows}</ul>` : '<p class="text2">No lines: nothing will be suggested.</p>'}
       <div class="sug-foot"><button class="ghost" data-act="tpl-add">+ Add a line</button>
         ${defaultTemplate(s.projectName, ed.kind).length ? '<button class="ghost" data-act="tpl-reset">Reset to default</button>' : ''}
