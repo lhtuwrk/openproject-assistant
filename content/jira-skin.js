@@ -1976,7 +1976,7 @@ function editSubject(span) {
 // ─── Picker (assignee or status) ──────────────────────────────────────────────
 
 let meCache = null;                 // { href, name } | undefined once known
-const optionsCache = new Map();     // `${kidId}:${field}` -> [{ href, name }]
+const optionsCache = new Map();     // `${kidId}:${field}` -> { basis, values: Promise<[{ href, name }]> }
 let picker = null;                  // { el, button, wpId, kidId, field, options, active, state }
 
 let mePromise = null;              // one request, however many callers
@@ -2034,12 +2034,26 @@ async function loadOptions(kidId, field) {
       try { return await fromProject; } catch { /* fall back to the form below */ }
     }
   }
-  if (!optionsCache.has(key)) {
-    optionsCache.set(key, fetchSchema(kidId)
+  // The workflow's allowed statuses follow the child's status and assignee (moves can
+  // be open to the assignee only), so a list is reused only while both are unchanged.
+  const basis = field === 'status' ? statusBasis(kidId) : '';
+  if (basis === null) return fetchSchema(kidId).then(schema => allowedValues(schema[field]));   // not settled: don't keep it
+  if (optionsCache.get(key)?.basis !== basis) {
+    const values = fetchSchema(kidId)
       .then(schema => allowedValues(schema[field]))
-      .catch(err => { optionsCache.delete(key); throw err; }));
+      .catch(err => { if (optionsCache.get(key)?.values === values) optionsCache.delete(key); throw err; });
+    optionsCache.set(key, { basis, values });
   }
-  return optionsCache.get(key);
+  return optionsCache.get(key).values;
+}
+
+/** What the child's allowed statuses depend on, or null while one of them is being
+ *  saved or the children list is refetching. */
+function statusBasis(kidId) {
+  if (pendingWrites.has(`${kidId}:status`) || pendingWrites.has(`${kidId}:assignee`)) return null;
+  const kids = childCache.get(viewWpId());
+  const kid = Array.isArray(kids) ? kids.find(k => k.id === kidId) : null;
+  return kid ? `${kid.statusHref ?? ''}|${kid.assigneeHref ?? ''}` : null;
 }
 
 function closePicker({ refocus = false } = {}) {

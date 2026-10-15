@@ -577,9 +577,20 @@ async function loadDetail(id) {
 async function loadStatuses(id) {
   const d = details.get(id);
   if (!d?.wp) return;
-  try { d.statuses = await fetchAllowedStatuses(id); }
-  catch { d.statuses = null; }
+  const ask = d.statusesAsk = {};   // only the latest request may answer
+  let statuses;
+  try { statuses = await fetchAllowedStatuses(id); }
+  catch { statuses = null; }
+  if (d.statusesAsk !== ask) return;
+  d.statuses = statuses;
   requestRender();
+}
+
+/** A subtask's status or assignee changed: its allowed statuses must be fetched again. */
+function forgetKidStatuses(d, kidId) {
+  d.kidStatuses?.delete(kidId);
+  d.kidStatusFailed?.delete(kidId);
+  (d.kidStatusAsk ??= new Map()).set(kidId, {});   // a fetch already under way answers for the old state
 }
 
 /** Every subtask's allowed statuses at once, so the selects open with their options. */
@@ -590,8 +601,13 @@ async function loadKidStatuses(id) {
   const todo = d.kids.filter(k => !d.kidStatuses.has(String(k.id)) && !d.kidStatusFailed?.has(String(k.id)));
   if (!todo.length) { d.kidStatusesLoading = false; return; }
   await Promise.all(todo.map(async k => {
-    try { d.kidStatuses.set(String(k.id), await fetchAllowedStatuses(k.id)); }
-    catch { (d.kidStatusFailed ??= new Set()).add(String(k.id)); /* the select keeps the current status only */ }
+    const kid = String(k.id), ask = d.kidStatusAsk?.get(kid);
+    try {
+      const statuses = await fetchAllowedStatuses(kid);
+      if (d.kidStatusAsk?.get(kid) === ask) d.kidStatuses.set(kid, statuses);
+    } catch {
+      if (d.kidStatusAsk?.get(kid) === ask) (d.kidStatusFailed ??= new Set()).add(kid);   /* the select keeps the current status only */
+    }
   }));
   d.kidStatusesLoading = false;
   requestRender();
@@ -675,12 +691,13 @@ async function writeField(wpId, field, href, parentId) {
       details.delete(parentId ?? wpId);   // a reload started before the save: load it again after
     } else if (parentId) {
       if (d?.kids) d.kids = d.kids.map(k => String(k.id) === String(wpId) ? saved : k);
-      if (field === 'status') { d?.kidStatuses?.delete(String(wpId)); loadKidStatuses(parentId); }
+      // Workflows can allow other moves to the assignee or author, so a new assignee changes the list too.
+      if (d && (field === 'status' || field === 'assignee')) { forgetKidStatuses(d, String(wpId)); loadKidStatuses(parentId); }
     } else {
       if (d) d.wp = saved;
       const card = rt.cards.get(String(wpId));
       if (card) rt.cards.set(card.id, { ...toCard(saved), labels: card.labels });
-      if (field === 'status') loadStatuses(wpId);
+      if (field === 'status' || field === 'assignee') loadStatuses(wpId);
       if (field === 'storyPoints' && s.decisions[wpId]) s.decisions[wpId].card.points = toCard(saved).points;
     }
     announce(`#${wpId} ${field} saved`);
