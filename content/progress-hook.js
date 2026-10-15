@@ -451,6 +451,22 @@
     parent:   /^\/api\/v3\/work_packages\/\d+$/,    // Add existing child
   };
 
+  // A child's write also bumps its parent's lockVersion (derived progress, dates).
+  // OpenProject's own cache would keep the old one, and its next edit of either —
+  // e.g. opening the story's status menu, which POSTs /form — fails with 409
+  // "conflicting modifications" and silently does nothing. So both are reloaded
+  // into the app's cache, the way OpenProject does after its own child edits.
+  async function refreshAppCache(wpId, res) {
+    try {
+      const parentId = idFromHref((await res.json())._links?.parent?.href);
+      const { apiV3Service } = (await window.OpenProject?.getPluginContext?.())?.services ?? {};
+      if (!apiV3Service) return;
+      for (const id of [wpId, parentId]) {
+        if (id) apiV3Service.work_packages.id(String(id)).refresh().catch(() => {});
+      }
+    } catch { /* no plugin context: the app refreshes on the next page load */ }
+  }
+
   window.addEventListener('message', async (e) => {
     if (e.source !== window || e.origin !== location.origin) return;
     const d = e.data;
@@ -483,6 +499,7 @@
       });
       let message = '';
       if (!res.ok) { try { message = (await res.json()).message ?? ''; } catch { /* not JSON */ } }
+      else refreshAppCache(d.id, res.clone());
       reply({ ok: res.ok, status: res.status, message });
     } catch (err) {
       reply({ ok: false, message: err.message });

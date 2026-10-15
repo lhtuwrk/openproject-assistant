@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: after creating a subtask or posting a comment, the field no longer keeps the old text, so the next subtask doesn't reuse the previous title.
 - Jira style: a subtask's status picker on the story page offers the moves allowed from its current status and assignee, not the ones from before its last change.
 - Planning: a subtask's or story's status list refreshes after its assignee changes, and no longer shows the moves from its previous status.
+- Jira style: after changing a subtask's status, assignee or title on the story page, the story's own status button opens again instead of doing nothing.
 
 ## [1.6.1] - 2026-10-14
 

@@ -1506,8 +1506,8 @@ function restoreFullView() {
 //  only writes to OpenProject. They are sent by progress-hook.js in the page's
 //  MAIN world (writeWp below), so they go through the same hooks as the app's own
 //  edits (Confirm open subtasks, Auto 100 % on resolve) and are announced the same
-//  way. They bypass OpenProject's own cache, though: a child row still open in the
-//  list table keeps its old lockVersion until the page is reloaded.
+//  way. progress-hook.js then reloads the child and its parent into OpenProject's
+//  own cache, so the app's next edit of either doesn't fail on a stale lockVersion.
 
 const API_BASE = location.origin;   // only ever injected on the configured backlog host
 
