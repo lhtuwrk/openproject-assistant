@@ -384,13 +384,29 @@
 
     .defer-row { display: flex; gap: var(--space-xs); padding-top: var(--space-xs); border-top: 1px solid var(--border); }
     .defer-row .ctrl { flex: 1; min-width: 0; }
-    .confirm-row, .clone-row { flex-wrap: wrap; align-items: center; }
+    .confirm-row { flex-wrap: wrap; align-items: center; }
     .confirm-msg { flex-basis: 100%; font-size: var(--text-sm); color: var(--text2); }
     .confirm-msg b { color: var(--warn); }
-    .clone-row .ctrl { flex-basis: 100%; }
-    .clone-row .chk { flex-basis: 100%; display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text2); }
-    .clone-row .card-error { flex-basis: 100%; }
     .story-side .clone-btn { justify-self: start; padding-inline: 0; }
+
+    .clone-dlg {
+      width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); margin: auto; padding: 0;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius-lg);
+      box-shadow: 0 12px 40px var(--shadow);
+    }
+    .clone-dlg::backdrop { background: rgb(0 0 0 / .5); }
+    .clone-form { display: grid; gap: var(--space-sm); padding: var(--space-lg); }
+    .clone-form h2 { font-size: var(--text-xl); font-weight: 650; letter-spacing: -0.02em; }
+    .dlg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
+    .dlg-fld { display: grid; gap: 4px; min-width: 0; }
+    .dlg-fld > span { font-size: var(--text-xs); color: var(--muted); font-weight: 500; }
+    .dlg-fld .ctrl { width: 100%; }
+    .dlg-fld textarea.ctrl { height: auto; min-height: 140px; padding: var(--space-xs) var(--space-sm); resize: vertical; line-height: 1.45; font-family: var(--font-mono, inherit); font-size: var(--text-sm); }
+    .clone-form .chk { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text2); }
+    .clone-form .chk input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .dlg-note { font-size: var(--text-xs); }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: var(--space-xs); padding-top: var(--space-xs); }
+    @media (max-width: 560px) { .dlg-grid { grid-template-columns: minmax(0, 1fr); } }
 
     .queue { width: 100%; color: var(--text2); font-size: var(--text-sm); display: flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; }
     .queue .num { color: var(--text); }

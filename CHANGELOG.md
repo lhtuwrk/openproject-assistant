@@ -7,8 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Planning: your own comments on a story can be edited in place, @mentions included.
-- Planning: the Subtasks tab suggests the team's usual subtasks with readable titles built from the story, from a per-project template the facilitator can edit.
-- Planning: a story can be cloned from the planning screen, into this sprint or another version, optionally with its subtasks.
+- Planning: the Subtasks tab suggests the subtasks the team usually creates, learned from the project's last three sprints (or a per-project template the facilitator can edit), each with a readable title of its own.
+- Planning: a story can be cloned from a dialog where its subject, type, story points, assignee, version and description can be changed first, optionally with its subtasks.
 
 ### Changed
 - Planning: planning a story that is still New or Reopened asks for confirmation first.

@@ -12,9 +12,9 @@ import {
   fetchActiveProjects, fetchOpenVersions, fetchProjectWorkPackages, fetchWorkPackage,
   fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses,
   fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchComments, postComment, updateComment,
-  fetchUserName, fetchBacklogBlob, sprintCalendar,
+  fetchUserName, fetchBacklogBlob, sprintCalendar, fetchAllVersions,
 } from '../shared/api.js';
-import { TEMPLATES_KEY, templateFor, defaultTemplate, fillTitle, kindOf } from './subtask-templates.js';
+import { TEMPLATES_KEY, templateFor, suggestedTemplate, learnTemplates, fillTitle, kindOf } from './subtask-templates.js';
 import { cachedMe, refreshMe, initials, avatarHue, todayStr } from '../shared/me.js';
 
 const SESSION_KEY = '__blm_planning_session';
@@ -332,6 +332,7 @@ const rt = {
   templates: null,             // TEMPLATES_KEY contents, once read
   sug: null,                   // { for, kind, rows: [{ on, title, assigneeHref }], open, busy, err }: suggested subtasks
   tplEdit: null,               // { kind, rows: [{ title, assignee }] } while the subtask template is edited
+  learned: null,               // { projectId, sprints, story, bug }: the team's usual subtasks, from recent sprints
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -629,6 +630,32 @@ function ensureDetail() {
     fetchProjectTypes(s.projectId).then(t => { rt.types = t; }).catch(() => { rt.types = []; })
       .finally(() => { rt.typesLoading = false; requestRender(); });
   }
+  if (rt.learned?.projectId !== s.projectId && s.projectId) loadLearned(s.projectId);
+}
+
+const LEARN_SPRINTS = 3;
+/** Reads the subtasks of the project's last finished sprints, to suggest what the team usually does. */
+async function loadLearned(projectId) {
+  rt.learned = { projectId, loading: true };
+  let out = { projectId, sprints: [] };
+  try {
+    const today = todayStr();
+    const recent = (await fetchAllVersions(projectId))
+      .filter(v => v.endDate && v.endDate < today && String(v.id) !== s.versionId)
+      .sort((a, b) => b.endDate.localeCompare(a.endDate))
+      .slice(0, LEARN_SPRINTS);
+    if (recent.length) {
+      const wps = await fetchProjectWorkPackages(projectId, [
+        { status:     { operator: '*', values: [] } },
+        { version_id: { operator: '=', values: recent.map(v => String(v.id)) } },
+      ]);
+      out = { projectId, sprints: recent.map(v => v.name), ...learnTemplates(wps) };
+    }
+  } catch { /* the built-in template stays */ }
+  if (rt.learned?.projectId !== projectId) return;   // the project changed meanwhile
+  rt.learned = out;
+  if (rt.sug && !rt.sug.touched) rt.sug = null;   // rebuilt from what was learned, unless already used
+  requestRender();
 }
 
 /** Loads the stories Next and Prev would show, once the current one is in, so they open at once. */
@@ -760,6 +787,8 @@ const defaultTypeHref = () => (rt.types?.find(t => /^task$/i.test(t.name)) ?? rt
 // ─── Suggested subtasks from the project's template ───────────────────────────
 
 const sameTitle = t => (t ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+/** What the project's recent sprints taught, once read. */
+const learnedNow = () => (rt.learned?.projectId === s.projectId && !rt.learned.loading ? rt.learned : null);
 
 /** The suggestions for a loaded story, built once per story; null when its type has no template kind. */
 function sugFor(id, d) {
@@ -768,12 +797,17 @@ function sugFor(id, d) {
   if (rt.sug?.for === id && rt.sug.kind === kind) return rt.sug;
   const story = { id, subject: d.wp.subject };
   const have = new Set((d.kids ?? []).map(k => sameTitle(k.subject)));
-  const rows = templateFor(rt.templates, s.projectId, s.projectName, kind).map(l => {
+  const learned = learnedNow();
+  const { lines, source } = templateFor(rt.templates, s.projectId, s.projectName, kind, learned);
+  const rows = lines.map(l => {
     const title = fillTitle(l.title, story);
     // undefined: whoever has the story when the subtasks are created
     return { on: !have.has(sameTitle(title)), title, assigneeHref: l.assignee === 'none' ? null : undefined };
   });
-  rt.sug = { for: id, kind, rows, open: !d.kids?.length && rows.length > 0, busy: false, err: '' };
+  const from = source === 'yours' ? 'your template'
+    : source === 'learned' ? `what the team did on ${learned[kind].stories} ${KIND_NAME[kind].toLowerCase()}${learned[kind].stories === 1 ? '' : 's'} in ${learned.sprints.join(', ')}`
+    : 'the default template';
+  rt.sug = { for: id, kind, rows, from, open: !d.kids?.length && rows.length > 0, busy: false, err: '' };
   return rt.sug;
 }
 
@@ -783,7 +817,7 @@ async function createSuggested(parentId) {
   const todo = sg.rows.filter(r => r.on && r.title.trim());
   if (!todo.length) return;
   const parentAssignee = details.get(parentId)?.wp?._links?.assignee?.href ?? null;
-  sg.busy = true; sg.err = ''; render();
+  sg.busy = true; sg.touched = true; sg.err = ''; render();
   let made = 0;
   for (const r of todo) {
     try {
@@ -804,7 +838,7 @@ async function createSuggested(parentId) {
 function openTemplateEditor() {
   const kind = rt.sug?.kind;
   if (!kind) return;
-  rt.tplEdit = { kind, rows: templateFor(rt.templates, s.projectId, s.projectName, kind) };
+  rt.tplEdit = { kind, rows: templateFor(rt.templates, s.projectId, s.projectName, kind, learnedNow()).lines };
   render();
   document.querySelector('[data-role="tpl-title"]')?.focus();
 }
@@ -839,7 +873,7 @@ function templateEditorHtml() {
       <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · write {subject} to put the story title in a line</span></div>
       ${rows ? `<ul class="sug-list">${rows}</ul>` : '<p class="text2">No lines: nothing will be suggested.</p>'}
       <div class="sug-foot"><button class="ghost" data-act="tpl-add">+ Add a line</button>
-        ${defaultTemplate(s.projectName, ed.kind).length ? '<button class="ghost" data-act="tpl-reset">Reset to default</button>' : ''}
+        ${suggestedTemplate(s.projectName, ed.kind, learnedNow()).length ? `<button class="ghost" data-act="tpl-reset">${learnedNow()?.[ed.kind] ? 'Reset to what the team does' : 'Reset to default'}</button>` : ''}
         <span class="spacer"></span><button class="ghost" data-act="tpl-cancel">Cancel</button><button class="primary" data-act="tpl-save">Save template</button></div>
     </section>`;
 }
@@ -861,7 +895,7 @@ function suggestHtml(id, d) {
   }).join('');
   const n = sg.rows.filter(r => r.on && r.title.trim()).length;
   return `<section class="sug" aria-label="Suggested subtasks">
-      <div class="sug-head"><b>Suggested subtasks</b><span class="muted">${KIND_NAME[sg.kind].toLowerCase()} template</span><span class="spacer"></span>
+      <div class="sug-head"><b>Suggested subtasks</b><span class="muted">from ${esc(sg.from)}</span><span class="spacer"></span>
         <button class="ghost" data-act="tpl-edit">Edit template</button></div>
       <ul class="sug-list">${rows}</ul>
       ${sg.err ? `<div class="card-error" role="alert">Couldn't create the subtasks: ${esc(sg.err)}</div>` : ''}
@@ -1320,78 +1354,137 @@ function confirmPlanHtml(id) {
 }
 
 // ─── Clone a story ────────────────────────────────────────────────────────────
-// A copy with the same type, description, priority, label, assignee, parent and story
-// points, in this sprint or another version; status starts as the default (New).
-// Its subtasks can come along, unassigned. A clone in this sprint joins its level.
+// A dialog prefilled from the story: subject, type, story points, assignee, version and
+// description can be changed before the copy is made. Priority, label, parent and
+// category are copied as they are; status starts as the default (New). Its subtasks
+// can come along, unassigned. A copy in this sprint joins its level.
 
-function openClone(card) {
-  rt.ui = { mode: 'clone', id: card.id, subject: card.subject, kids: false, moveTo: null, busy: false, err: '' };
-  render();
-  const input = document.querySelector('[data-role="clone-subject"]');
-  if (input) { input.focus(); input.select(); }
+let cloneEl = null;
+const cloneOpen = () => !!cloneEl?.open;
+
+function closeClone() {
+  if (!cloneEl || cloneEl.dataset.busy) return;
+  cloneEl.close();
+  cloneEl.remove();
+  cloneEl = null;
 }
 
-function cloneHtml(card) {
-  const u = rt.ui;
-  const kids = details.get(card.id)?.kids;
-  const others = rt.versions.some(v => String(v.id) !== s.versionId);
-  return `<div class="defer-row clone-row" role="group" aria-label="Clone #${esc(card.id)}">
-      <input class="ctrl" data-role="clone-subject" value="${esc(u.subject)}" aria-label="Subject of the copy"${u.busy ? ' readonly' : ''} />
-      ${kids?.length ? `<label class="chk"><input type="checkbox" data-role="clone-kids"${u.kids ? ' checked' : ''} /> Copy its ${kids.length} subtask${kids.length === 1 ? '' : 's'}</label>` : ''}
-      ${others ? `<button type="button" class="pick ver-pick" data-pick="version" data-wp="${esc(card.id)}" aria-haspopup="listbox"
-        aria-expanded="${pickSt?.field === 'version' ? 'true' : 'false'}" aria-label="Version of the copy. Now: ${esc(u.moveTo?.name ?? 'this sprint')}"><span class="ver-k">Into</span><span class="nm">${esc(u.moveTo?.name ?? 'This sprint')}</span></button>` : ''}
-      ${u.err ? `<p class="card-error" role="alert">Couldn't clone: ${esc(u.err)}</p>` : ''}
-      <button class="primary" data-act="clone-ok" data-id="${esc(card.id)}"${u.busy ? ' aria-busy="true"' : ''}>${u.busy ? 'Cloning…' : 'Clone'}</button>
-      <button class="ghost" data-act="cancel"${u.busy ? ' disabled' : ''}>Cancel</button></div>`;
-}
+const option = (value, label, on) => `<option value="${esc(value ?? '')}"${on ? ' selected' : ''}>${esc(label)}</option>`;
+const versionHref = v => v._links?.self?.href ?? `/api/v3/versions/${v.id}`;
 
-/** The copy's body: the original's fields, with the given subject and version. */
-function cloneBody(wp, subject, versionHref) {
+async function openClone(card) {
+  closeClone();
+  if (cloneEl) return;   // one is still being created
+  let wp = details.get(card.id)?.wp;
+  if (!wp) {
+    try { wp = await fetchWorkPackage(card.id); }
+    catch (err) { return toast(`Couldn't open #${card.id}: ${err.message}`); }
+  }
   const L = wp._links ?? {};
-  const href = l => (l?.href ? { href: l.href } : null);
-  const links = { project: href(L.project), type: href(L.type), priority: href(L.priority), version: versionHref ? { href: versionHref } : null,
-    assignee: href(L.assignee), parent: href(L.parent), category: href(L.category) };
+  const kids = details.get(card.id)?.kids;
+  const types = [...(rt.types ?? [])];
+  if (L.type?.href && !types.some(t => t.href === L.type.href)) types.unshift({ href: L.type.href, name: L.type.title });
+  const people = [...(rt.people ?? [])];
+  if (L.assignee?.href && !people.some(p => p.href === L.assignee.href)) people.unshift({ href: L.assignee.href, name: L.assignee.title });
+  const versions = [{ href: s.versionHref, name: `${s.versionName} (this sprint)` },
+    ...rt.versions.filter(v => String(v.id) !== s.versionId)
+      .sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999') || a.name.localeCompare(b.name))
+      .map(v => ({ href: versionHref(v), name: v.name }))];
+  const labels = wpLabels(wp);
+  const kept = [L.priority?.title && `priority ${L.priority.title}`, labels.length && `label ${labels.join(', ')}`,
+    L.parent?.title && `parent ${L.parent.title}`, L.category?.title && `category ${L.category.title}`].filter(Boolean);
+
+  const dlg = document.createElement('dialog');
+  dlg.className = 'clone-dlg';
+  dlg.setAttribute('aria-labelledby', 'clone-title');
+  dlg.innerHTML = `<form class="clone-form" method="dialog">
+      <h2 id="clone-title">Clone #${esc(card.id)}</h2>
+      <label class="dlg-fld"><span>Subject</span><input class="ctrl" name="subject" required value="${esc(wp.subject ?? '')}" /></label>
+      <div class="dlg-grid">
+        <label class="dlg-fld"><span>Type</span><select class="ctrl" name="type">${types.map(t => option(t.href, t.name, t.href === L.type?.href)).join('')}</select></label>
+        <label class="dlg-fld"><span>Story points</span><input class="ctrl" name="points" type="number" min="0" step="1" inputmode="numeric" value="${typeof wp.storyPoints === 'number' ? wp.storyPoints : ''}" placeholder="–" /></label>
+        <label class="dlg-fld"><span>Assignee</span><select class="ctrl" name="assignee">${option('', 'Unassigned', !L.assignee?.href)}${people.map(p => option(p.href, p.href === rt.me?.href ? `${p.name} (me)` : p.name, p.href === L.assignee?.href)).join('')}</select></label>
+        <label class="dlg-fld"><span>Version</span><select class="ctrl" name="version">${versions.map((v, i) => option(v.href, v.name, i === 0)).join('')}</select></label>
+      </div>
+      <label class="dlg-fld"><span>Description</span><textarea class="ctrl" name="description" rows="9">${esc(wp.description?.raw ?? '')}</textarea></label>
+      ${kids?.length === 0 ? '' : `<label class="chk"><input type="checkbox" name="kids" /> Copy its ${kids ? `${kids.length} ` : ''}subtask${kids?.length === 1 ? '' : 's'} (unassigned)</label>`}
+      <p class="muted dlg-note">${kept.length ? `Copied as it is: ${esc(kept.join(' · '))}. ` : ''}The copy starts as New.</p>
+      <p class="card-error" role="alert" data-role="clone-err" hidden></p>
+      <div class="dlg-actions"><button type="button" class="ghost" data-clone-cancel>Cancel</button><button type="submit" class="primary" data-role="clone-ok">Clone</button></div>
+    </form>`;
+  document.body.append(dlg);
+  cloneEl = dlg;
+  dlg.addEventListener('cancel', e => { e.preventDefault(); closeClone(); });   // Esc; ignored while the copy is being made
+  dlg.addEventListener('close', () => {   // closed by the browser anyway (a repeated Esc)
+    if (cloneEl === dlg && !dlg.dataset.busy) { dlg.remove(); cloneEl = null; }
+  });
+  dlg.addEventListener('click', e => {
+    if (e.target.closest('[data-clone-cancel]') || e.target === dlg) closeClone();   // Cancel, or a click on the backdrop
+  });
+  dlg.querySelector('form').addEventListener('submit', e => { e.preventDefault(); cloneStory(card.id, wp, new FormData(e.target)); });
+  dlg.showModal();
+  const subject = dlg.querySelector('[name="subject"]');
+  subject.focus(); subject.select();
+}
+
+/** The copy's body: the original's fields, with what was changed in the dialog. */
+function cloneBody(wp, f) {
+  const L = wp._links ?? {};
+  const href = h => (h ? { href: h } : null);
+  const links = { project: href(L.project?.href), type: href(f.type), priority: href(L.priority?.href), version: href(f.version),
+    assignee: href(f.assignee), parent: href(L.parent?.href), category: href(L.category?.href) };
   const label = L[LABEL_FIELD];
   if (Array.isArray(label)) links[LABEL_FIELD] = label.filter(l => l?.href).map(l => ({ href: l.href }));
   else if (label?.href) links[LABEL_FIELD] = { href: label.href };
-  const body = { subject, _links: Object.fromEntries(Object.entries(links).filter(([, v]) => v)) };
-  if (wp.description?.raw) body.description = { raw: wp.description.raw };
-  if (typeof wp.storyPoints === 'number') body.storyPoints = wp.storyPoints;
+  const body = { subject: f.subject, _links: Object.fromEntries(Object.entries(links).filter(([, v]) => v)) };
+  if (f.description.trim()) body.description = { raw: f.description };
+  if (f.points !== null) body.storyPoints = f.points;
   const text = wp[LABEL_FIELD];
   if (text != null && typeof text !== 'object') body[LABEL_FIELD] = text;
   else if (text?.raw) body[LABEL_FIELD] = { raw: text.raw };
   return body;
 }
 
-async function cloneStory(id) {
-  const u = rt.ui;
-  if (u.mode !== 'clone' || u.id !== id || u.busy) return;
-  const subject = (u.subject ?? '').trim();
-  if (!subject) { u.err = 'the copy needs a subject'; return render(); }
-  u.busy = true; u.err = ''; render();
+async function cloneStory(id, wp, form) {
+  const dlg = cloneEl;
+  if (!dlg || dlg.dataset.busy) return;
+  const raw = String(form.get('points') ?? '').trim();
+  const f = {
+    subject: String(form.get('subject') ?? '').trim(), type: form.get('type') || null, assignee: form.get('assignee') || null,
+    version: form.get('version') || s.versionHref, description: String(form.get('description') ?? ''),
+    points: raw === '' ? null : Math.max(0, Math.round(Number(raw))), kids: form.get('kids') === 'on',
+  };
+  const errEl = dlg.querySelector('[data-role="clone-err"]'), ok = dlg.querySelector('[data-role="clone-ok"]');
+  const controls = [...dlg.querySelectorAll('input, select, textarea, button')];
+  const fail = msg => { errEl.textContent = `Couldn't clone: ${msg}`; errEl.hidden = false; };
+  if (!f.subject) return fail('the copy needs a subject');
+  if (f.points !== null && !Number.isFinite(f.points)) return fail('story points must be a number');
+  dlg.dataset.busy = '1'; errEl.hidden = true;
+  ok.textContent = 'Cloning…'; ok.setAttribute('aria-busy', 'true');
+  controls.forEach(c => { c.disabled = true; });
   try {
-    const wp = details.get(id)?.wp ?? await fetchWorkPackage(id);
-    const target = u.moveTo ?? { href: s.versionHref, name: s.versionName };
-    const copy = await createWorkPackage(cloneBody(wp, subject, target.href));
+    const copy = await createWorkPackage(cloneBody(wp, f));
     let failed = 0;
-    if (u.kids) {
+    if (f.kids) {
       const kids = details.get(id)?.kids ?? await fetchChildWorkPackages(id);
       for (const k of kids) {
         try {
-          await addSubtask(copy.id, k.subject ?? '', { typeHref: k._links?.type?.href, versionHref: target.href, projectHref: copy._links?.project?.href });
+          await addSubtask(copy.id, k.subject ?? '', { typeHref: k._links?.type?.href, versionHref: f.version, projectHref: copy._links?.project?.href });
         } catch { failed++; }
       }
     }
-    const here = !u.moveTo;
+    const here = f.version === s.versionHref;
     if (here) {
       const c = toCard(copy);
       rt.cards.set(c.id, c);
       for (const l of PLAY_LEVELS) syncOrder(l.key);
       save();
     }
-    if (rt.ui === u) rt.ui = { mode: null };
+    delete dlg.dataset.busy;
+    if (cloneEl === dlg) closeClone();
     render();
-    const what = `#${id} cloned as #${copy.id}${here ? '' : ` into ${target.name}`}${failed ? `; ${failed} subtask${failed === 1 ? '' : 's'} couldn't be copied` : ''}`;
+    const into = here ? '' : ` into ${rt.versions.find(v => versionHref(v) === f.version)?.name ?? 'another version'}`;
+    const what = `#${id} cloned as #${copy.id}${into}${failed ? `; ${failed} subtask${failed === 1 ? '' : 's'} couldn't be copied` : ''}`;
     announce(what);
     toast(what, here ? 'Show it' : 'Open ↗', () => {
       hideToast();
@@ -1399,11 +1492,12 @@ async function cloneStory(id) {
       rt.view = 'all'; rt.selected = String(copy.id); render();
     });
   } catch (err) {
-    u.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
-    if (rt.ui !== u) toast(`Couldn't clone #${id}: ${u.err}`);   // the tray was closed meanwhile
-  } finally {
-    u.busy = false;
-    render();
+    delete dlg.dataset.busy;
+    controls.forEach(c => { c.disabled = false; });
+    ok.textContent = 'Clone'; ok.removeAttribute('aria-busy');
+    const msg = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+    if (dlg.open) fail(msg);
+    else { toast(`Couldn't clone #${id}: ${msg}`); if (cloneEl === dlg) { dlg.remove(); cloneEl = null; } }
   }
 }
 
@@ -2377,7 +2471,6 @@ function storySideHtml(card) {
   const ids = levelIds(lv.key).filter(x => cardById(x));
   const pos = ids.indexOf(card.id) + 1;
   const tray = rt.ui.mode === 'confirm-plan' && rt.ui.id === card.id ? confirmPlanHtml(card.id)
-    : rt.ui.mode === 'clone' && rt.ui.id === card.id ? cloneHtml(card)
     : rt.ui.mode === 'defer' ? `<div class="defer-row">
       <input class="ctrl" data-role="reason" placeholder="Why not this sprint? (optional)" aria-label="Reason to defer" />
       ${rt.versions.some(v => String(v.id) !== s.versionId) ? `<button type="button" class="pick ver-pick" data-pick="version" data-wp="${esc(card.id)}" aria-haspopup="listbox"
@@ -2524,9 +2617,8 @@ function allHtml() {
           ? '<button data-act="reopen">Mark not planned</button>'
           : rt.ui.mode === 'confirm-plan' && rt.ui.id === rt.selected ? confirmPlanHtml(rt.selected)
           : `<button class="primary" data-act="plan-sel">Planned</button><button data-act="defer-sel">Defer</button>${inPlay && currentCard()?.id !== rt.selected ? '<button data-act="play-now">Put it on the table</button>' : ''}`}
-        ${rt.ui.mode === 'clone' && rt.ui.id === rt.selected ? '' : `<button class="ghost" data-act="clone" data-id="${esc(rt.selected)}">Clone</button>`}
+        <button class="ghost" data-act="clone" data-id="${esc(rt.selected)}">Clone</button>
       </div>
-      ${rt.ui.mode === 'clone' && rt.ui.id === rt.selected ? cloneHtml(sel) : ''}
     </article>` : '';
   return `<div class="all">
     <section class="all-list-wrap">
@@ -2730,18 +2822,17 @@ async function onAction(act, el) {
       if (rt.tab === 'sub') { const id = detailId(); if (id) loadKidStatuses(id); }
       return render();
     case 'sub-create': return createSubtask(el.dataset.id);
-    case 'sug-open':  if (rt.sug) rt.sug.open = true; return render();
-    case 'sug-close': if (rt.sug) rt.sug.open = false; return render();
+    case 'sug-open':  if (rt.sug) Object.assign(rt.sug, { open: true, touched: true }); return render();
+    case 'sug-close': if (rt.sug) Object.assign(rt.sug, { open: false, touched: true }); return render();
     case 'sug-create': return createSuggested(el.dataset.id);
     case 'tpl-edit':  return openTemplateEditor();
     case 'tpl-add':   rt.tplEdit?.rows.push({ title: '', assignee: 'parent' }); render();
       return document.querySelector(`[data-role="tpl-title"][data-i="${(rt.tplEdit?.rows.length ?? 1) - 1}"]`)?.focus();
     case 'tpl-remove': rt.tplEdit?.rows.splice(Number(el.dataset.i), 1); return render();
-    case 'tpl-reset': if (rt.tplEdit) rt.tplEdit.rows = defaultTemplate(s.projectName, rt.tplEdit.kind); return render();
+    case 'tpl-reset': if (rt.tplEdit) rt.tplEdit.rows = suggestedTemplate(s.projectName, rt.tplEdit.kind, learnedNow()); return render();
     case 'tpl-cancel': rt.tplEdit = null; return render();
     case 'tpl-save':  return saveTemplate();
     case 'clone':     { const c = cardById(el.dataset.id); return c && openClone(c); }
-    case 'clone-ok':  return cloneStory(el.dataset.id);
     case 'comment-post': return addComment(el.dataset.id);
     case 'comment-edit': return startCommentEdit(el.dataset.wp, el.dataset.id);
     case 'comment-edit-save': return saveCommentEdit();
@@ -2821,9 +2912,8 @@ document.addEventListener('input', e => {
     if (post) post.disabled = !e.target.value.trim() || rt.commentBusy.has(e.target.dataset.id);
   }
   if (e.target.dataset.role === 'comment-edit') rt.commentDrafts.set(editKey(e.target.dataset.id), e.target.value);
-  if (e.target.dataset.role === 'sug-title' && rt.sug?.rows[e.target.dataset.i]) rt.sug.rows[e.target.dataset.i].title = e.target.value;
+  if (e.target.dataset.role === 'sug-title' && rt.sug?.rows[e.target.dataset.i]) { rt.sug.rows[e.target.dataset.i].title = e.target.value; rt.sug.touched = true; }
   if (e.target.dataset.role === 'tpl-title' && rt.tplEdit?.rows[e.target.dataset.i]) rt.tplEdit.rows[e.target.dataset.i].title = e.target.value;
-  if (e.target.dataset.role === 'clone-subject' && rt.ui.mode === 'clone') rt.ui.subject = e.target.value;
 });
 document.addEventListener('keydown', e => {
   const role = e.target.dataset?.role;
@@ -2883,7 +2973,7 @@ function pickCurrent() {
 function pickChoices() {
   const { field, wp } = pickSt;
   if (field === 'version') {
-    return [{ href: null, name: rt.ui.mode === 'clone' ? 'This sprint' : 'Stay in this sprint' },
+    return [{ href: null, name: 'Stay in this sprint' },
       ...rt.versions.filter(v => String(v.id) !== s.versionId)
         .sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999') || a.name.localeCompare(b.name))
         .map(v => ({ href: v._links?.self?.href ?? `/api/v3/versions/${v.id}`, name: v.name, sub: [v.startDate, v.endDate].filter(Boolean).join(' → ') }))];
@@ -3047,10 +3137,9 @@ document.addEventListener('change', async e => {
     return writeField(t.dataset.wp, 'storyPoints', n);
   }
   if (t.dataset.field === 'sub-assignee') { rt.sub.assigneeHref = t.value || null; return; }
-  if (t.dataset.field === 'sug-assignee') { const r = rt.sug?.rows[t.dataset.wp.slice(4)]; if (r) r.assigneeHref = t.value || null; return; }
-  if (t.dataset.role === 'sug-on') { const r = rt.sug?.rows[t.dataset.i]; if (r) r.on = t.checked; return render(); }
+  if (t.dataset.field === 'sug-assignee') { const r = rt.sug?.rows[t.dataset.wp.slice(4)]; if (r) { r.assigneeHref = t.value || null; rt.sug.touched = true; } return; }
+  if (t.dataset.role === 'sug-on') { const r = rt.sug?.rows[t.dataset.i]; if (r) { r.on = t.checked; rt.sug.touched = true; } return render(); }
   if (t.dataset.role === 'tpl-assignee') { const r = rt.tplEdit?.rows[t.dataset.i]; if (r) r.assignee = t.value; return; }
-  if (t.dataset.role === 'clone-kids') { if (rt.ui.mode === 'clone') rt.ui.kids = t.checked; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
@@ -3080,7 +3169,7 @@ document.addEventListener('change', async e => {
     const p = rt.projects.find(x => String(x.id) === t.value);
     s.projectId = p ? String(p.id) : null;
     s.projectName = p?.name ?? '';
-    s.order = {}; rt.people = null; rt.types = null; rt.cards = new Map(); details.clear();
+    s.order = {}; rt.people = null; rt.types = null; rt.learned = null; rt.cards = new Map(); details.clear();
     setVersion(null);
     save();
     await withLoading(async () => { await loadVersions(); guessVersion(); await loadCards(); save(); });
@@ -3095,13 +3184,13 @@ document.addEventListener('change', async e => {
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const typing = e.target.matches('input, select, textarea');
-  if (e.key === 'Escape' && rt.ui.mode) { e.preventDefault(); return rt.ui.busy ? undefined : onAction('cancel'); }   // a clone in flight keeps its tray
+  if (cloneOpen()) return;   // the clone dialog handles its own keys
+  if (e.key === 'Escape' && rt.ui.mode) { e.preventDefault(); return onAction('cancel'); }
   if (e.key === 'Escape' && rt.view === 'all' && !typing) { e.preventDefault(); return toggleAll(); }
   if (typing) {
     if (e.key !== 'Enter') return;
     if (isWpSelect(e.target)) { e.preventDefault(); commitSelect(e.target); }
     else if (e.target.dataset.role === 'reason') { e.preventDefault(); onAction('defer-ok'); }
-    else if (e.target.dataset.role === 'clone-subject') { e.preventDefault(); cloneStory(rt.ui.id); }
     else if (e.target.dataset.role === 'sub-subject') {
       e.preventDefault();
       const id = detailId();
