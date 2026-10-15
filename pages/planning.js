@@ -836,7 +836,7 @@ function templateEditorHtml() {
       </select>
       <button class="ghost" data-act="tpl-remove" data-i="${i}" aria-label="Remove subtask ${i + 1}">✕</button></li>`).join('');
   return `<section class="sug" aria-label="Subtask template">
-      <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · {subject} is the story title, {id} its number</span></div>
+      <div class="sug-head"><b>${KIND_NAME[ed.kind]} subtask template</b><span class="muted">for ${esc(s.projectName || 'this project')} · {subject} is the story title</span></div>
       ${rows ? `<ul class="sug-list">${rows}</ul>` : '<p class="text2">No lines: nothing will be suggested.</p>'}
       <div class="sug-foot"><button class="ghost" data-act="tpl-add">+ Add a line</button>
         ${defaultTemplate(s.projectName, ed.kind).length ? '<button class="ghost" data-act="tpl-reset">Reset to default</button>' : ''}

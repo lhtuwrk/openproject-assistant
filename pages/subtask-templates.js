@@ -2,7 +2,7 @@
 // story kind. Defaults come from the subtasks teams created in their recent sprints;
 // a facilitator's edits are kept per project under TEMPLATES_KEY.
 // A line is { title, assignee }: the title may use {subject} (the story title, cut
-// short) and {id}; assignee 'parent' takes the story's assignee, 'none' leaves the
+// short); assignee 'parent' takes the story's assignee, 'none' leaves the
 // subtask for a second person (review, cross-test).
 
 export const TEMPLATES_KEY = '__blm_subtask_templates';
@@ -13,32 +13,30 @@ const DEFAULTS = [
   {
     project: /credit\s*utility/i,
     story: [
-      line('Clarify scope and acceptance criteria of #{id} with PO/TA'),
+      line('Clarify scope and acceptance criteria of {subject} with PO/TA'),
       line('Implement {subject}'),
       line('Self-test {subject} against the acceptance criteria'),
-      line('Cross-test #{id} and execute its test cases', 'none'),
-      line('Open, review and merge the PRs for #{id}'),
-      line('Write the test report with evidence for #{id}'),
+      line('Cross-test {subject} and execute its test cases', 'none'),
+      line('Write the test report with evidence for {subject}'),
       line('Demo {subject} to the PO'),
     ],
     bug: [
-      line('Investigate and reproduce #{id}, comparing with the old UI'),
+      line('Investigate and reproduce {subject}, comparing with the old UI'),
       line('Fix {subject}'),
-      line('Retest the fix and run the regression test cases for #{id}', 'none'),
-      line('Review and merge the PRs for #{id}'),
-      line('Update the test report with evidence for #{id}'),
-      line('Demo the fix for #{id} to the PO'),
+      line('Retest the fix for {subject} and run the regression test cases', 'none'),
+      line('Update the test report with evidence for {subject}'),
+      line('Demo the fix for {subject} to the PO'),
     ],
   },
   {
     project: /consultant\s*workplace|salmon/i,
     story: [
       line('Implement {subject}'),
-      line('Review and test {subject} (#{id})', 'none'),
+      line('Review and test {subject}', 'none'),
     ],
     bug: [
       line('Fix {subject}'),
-      line('Review and test the fix for #{id}', 'none'),
+      line('Review and test the fix for {subject}', 'none'),
     ],
   },
 ];
