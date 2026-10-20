@@ -6,8 +6,9 @@
 //   html.blm-jira-bl  the Backlogs page
 //
 // Adds a stylesheet and tags status, type and priority values so they render as
-// Jira lozenges and icons. Its only writes to OpenProject are a child work item's
-// assignee and status, changed in the Child work items section (see writeWp).
+// Jira lozenges and icons. Its only writes to OpenProject are a work package's
+// status, assignee or accountable picked in its picker (Child work items section,
+// or OpenProject's own fields, see pageTarget), and a child's title (see writeWp).
 // Toggled from Settings ("Jira style"); the Children-table Assignee column has
 // its own switch ("Assign from the Children table"), and so does the Activity
 // filter ("Activity filter"); both work without the skin.
@@ -142,6 +143,17 @@ function tagCells() {
       leaf.dataset.blmTone = tone;
     }
   }
+  for (const f of document.querySelectorAll('.relation-row .inline-edit--display-field.status')) {
+    const tone = statusTone(f.textContent.trim().toLowerCase());
+    if (f.dataset.blmTone !== tone) {
+      f.classList.add('blm-jx-lozenge');
+      f.dataset.blmTone = tone;
+    }
+  }
+  for (const t of document.querySelectorAll('.relation-row--type > span[class*="__hl_inline_type"]')) {
+    const text = t.textContent.trim().toLowerCase();
+    if (text) ensureIcon(t, 'type', typeKind(text));
+  }
   for (const cell of document.querySelectorAll('td.type')) {
     const leaf = textLeaf(cell);
     if (leaf) ensureIcon(leaf, 'type', typeKind(leaf.textContent.trim().toLowerCase()));
@@ -171,8 +183,15 @@ function tagCells() {
     if (f.dataset.blmType !== kind) f.dataset.blmType = kind;
   }
 
+  // Priority in the Details sidebar: tagged only; CSS swaps OpenProject's dot for
+  // the list's priority icon.
+  for (const f of document.querySelectorAll(':is(.work-packages--details, .work-packages--show-view) .inline-edit--display-field.priority')) {
+    const level = priorityLevel(f.textContent.trim().toLowerCase());
+    if (f.dataset.blmPriority !== level) f.dataset.blmPriority = level;
+  }
+
   // Icons stay inside the table: in the work-package header they become extra
-  // layout items, and detail priorities already carry OpenProject's own dot.
+  // layout items.
   // wp-status-button is an Angular element, not a class.
   for (const btn of document.querySelectorAll(
     'wp-status-button button, .wp-status-button button, button[class*="__hl_background_status"]'
@@ -219,6 +238,7 @@ function untagCells() {
   welcomeEl = null;
   document.querySelectorAll('.blm-jx-icon').forEach(el => el.remove());
   document.querySelectorAll('[data-blm-type]').forEach(el => { delete el.dataset.blmType; });
+  document.querySelectorAll('[data-blm-priority]').forEach(el => { delete el.dataset.blmPriority; });
   document.querySelectorAll('.blm-jx-lozenge, .blm-jx-status').forEach(el => {
     el.classList.remove('blm-jx-lozenge', 'blm-jx-status');
     delete el.dataset.blmTone;
@@ -260,6 +280,7 @@ html.${ROOT_CLASS}, html.${AS_CLASS}, html.${ACT_CLASS}, html.${FILES_CLASS} {
   --jx-link-hover: #0055cc;
   --jx-surface: #ffffff;
   --jx-surface-sunken: #f7f8f9;
+  --jx-surface-raised: #ffffff;
   --jx-hover: rgba(9, 30, 66, 0.06);
   --jx-selected: #e9f2ff;
   --jx-selected-hover: #cce0ff;
@@ -558,11 +579,15 @@ html.${WP_CLASS} .work-package-table tbody tr.wp-table--row.-checked > td { back
 html.${WP_CLASS} .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--jx-selected-hover); }
 
 /* Key and subject */
+/* Keys read "#123" in the subtle text colour in every view (list, Backlogs, Child
+   work items, Relations); the link colour shows on hover */
 html.${WP_CLASS} .work-package-table td.id a {
-  color: var(--jx-link); font-weight: 500; text-decoration: none;
+  color: var(--jx-text-subtle); font-weight: 500; text-decoration: none;
   font-variant-numeric: tabular-nums;
 }
-html.${WP_CLASS} .work-package-table td.id a:hover { color: var(--jx-link-hover); text-decoration: underline; }
+html.${WP_CLASS} .work-package-table td.id a::before,
+html.${BL_CLASS} #rb li.story > .id .t a::before { content: "#"; }
+html.${WP_CLASS} .work-package-table td.id a:hover { color: var(--jx-link); text-decoration: underline; }
 html.${WP_CLASS} .work-package-table td.subject,
 html.${WP_CLASS} .work-package-table td.subject * { color: var(--jx-text); font-weight: 400; }
 
@@ -598,22 +623,37 @@ ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
 html.${ROOT_CLASS} .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 ${['highest', 'high', 'medium', 'low'].map(k => `
 html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
-html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }`).join('')}
+html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }
+html.${WP_CLASS} .inline-edit--display-field[data-blm-priority="${k}"] { --jx-prio-c: var(--jx-prio-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+html.${WP_CLASS} .inline-edit--display-field[data-blm-priority]::before {
+  content: "" !important; display: inline-block !important; width: 16px !important; height: 16px !important;
+  margin: 0 6px 0 0 !important; vertical-align: -3px; border: 0 !important; border-radius: 0 !important;
+  background: var(--jx-prio-c) !important;
+  -webkit-mask: var(--jx-glyph) center / 16px no-repeat; mask: var(--jx-glyph) center / 16px no-repeat;
+}
 
-/* Status lozenges */
-html.${WP_CLASS} .work-package-table .blm-jx-lozenge {
-  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-  padding: 0 4px; border-radius: var(--jx-radius);
-  font-family: var(--jx-font); font-size: 11px; font-weight: 700; line-height: 16px;
+/* Status lozenges: one look in the list, Backlogs, Child work items and Relations */
+:is(html.${WP_CLASS}, html.${BL_CLASS}) .blm-jx-lozenge {
+  display: inline-block; box-sizing: border-box; max-width: 100%; height: 20px; overflow: hidden; text-overflow: ellipsis;
+  padding: 0 6px; margin: 0; border: 0; border-radius: var(--jx-radius);
+  font-family: var(--jx-font); font-size: 11px; font-weight: 700; line-height: 20px;
   text-transform: uppercase; letter-spacing: 0; white-space: nowrap; vertical-align: middle;
   background: var(--jx-todo-bg); color: var(--jx-todo-fg);
+  transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
-html.${WP_CLASS} .work-package-table .blm-jx-lozenge[data-blm-tone="progress"] {
+:is(html.${WP_CLASS}, html.${BL_CLASS}) .blm-jx-lozenge[data-blm-tone="progress"] {
   background: var(--jx-progress-bg); color: var(--jx-progress-fg);
 }
-html.${WP_CLASS} .work-package-table .blm-jx-lozenge[data-blm-tone="done"] {
+:is(html.${WP_CLASS}, html.${BL_CLASS}) .blm-jx-lozenge[data-blm-tone="done"] {
   background: var(--jx-done-bg); color: var(--jx-done-fg);
 }
+/* Ones that open the status picker; hover steps each tone towards its text colour */
+html.${WP_CLASS} :is(button.blm-jx-lozenge:not([aria-disabled="true"]), .blm-jx-lozenge.-editable) { cursor: pointer; }
+html.${WP_CLASS} :is(button.blm-jx-lozenge:not([aria-disabled="true"]), .blm-jx-lozenge.-editable):hover { background: var(--jx-todo-bg-hover); }
+html.${WP_CLASS} :is(button.blm-jx-lozenge:not([aria-disabled="true"]), .blm-jx-lozenge.-editable)[data-blm-tone="progress"]:hover { background: var(--jx-progress-bg-hover); }
+html.${WP_CLASS} :is(button.blm-jx-lozenge:not([aria-disabled="true"]), .blm-jx-lozenge.-editable)[data-blm-tone="done"]:hover { background: var(--jx-done-bg-hover); }
+html.${WP_CLASS} .blm-jx-lozenge:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
+html.${WP_CLASS} .blm-jx-lozenge[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--jx-focus); }
 
 /* Assignee avatars */
 html.${WP_CLASS} .work-package-table td.assignee .op-principal--avatar,
@@ -623,6 +663,19 @@ html.${WP_CLASS} .work-package-table td.assignee img {
   aspect-ratio: 1; border-radius: 50%; object-fit: cover; background-size: cover; background-position: center;
 }
 html.${WP_CLASS} .work-package-table td.assignee * { color: var(--jx-text); }
+html.${WP_CLASS} :is(.work-packages--details, .work-packages--show-view) .inline-edit--container:is(.assignee, .responsible) .op-avatar {
+  width: 24px !important; height: 24px !important; min-width: 24px; flex: none;
+}
+html.${WP_CLASS} .inline-edit--display-field:is(.assignee, .responsible).-placeholder .custom-option.-empty {
+  display: inline-flex; align-items: center; gap: var(--jx-space-2); font-size: 0; color: var(--jx-text-subtlest);
+}
+html.${WP_CLASS} .inline-edit--display-field:is(.assignee, .responsible).-placeholder .custom-option.-empty::before {
+  content: ""; flex: none; width: 24px; height: 24px; box-sizing: border-box;
+  border: 1.5px dashed var(--jx-text-subtlest); border-radius: 50%;
+}
+html.${WP_CLASS} .inline-edit--display-field:is(.assignee, .responsible).-placeholder .custom-option.-empty::after {
+  content: "Unassigned"; font-family: var(--jx-font); font-size: 14px; color: var(--jx-text-subtlest);
+}
 
 /* Group headers ("New (1)", "Specified (18)") and sum rows */
 html.${WP_CLASS} .work-package-table tr.-group-header > td,
@@ -768,6 +821,11 @@ html.${WP_CLASS} .work-packages--show-view .op-uc-container {
 html.${WP_CLASS} .op-user-activity--user-name,
 html.${WP_CLASS} { --blm-chip-bg: var(--jx-hover); --blm-chip-border: var(--jx-border); --blm-chip-fg: var(--jx-text); --blm-chip-muted: var(--jx-text-subtle); --blm-chip-hover: var(--jx-btn-hover); --blm-chip-focus: var(--jx-focus); }
 html.${WP_CLASS} a.blm-chip { color: var(--jx-text); text-decoration: none; }
+/* Chip type squares in the skin's type colours, like the list's type icons */
+html.${WP_CLASS} .blm-chip { border-radius: var(--jx-radius); }
+html.${WP_CLASS} .blm-chip-ic { border-radius: var(--jx-radius); color: var(--jx-on-icon) !important; }
+${['bug', 'story', 'task', 'other'].map(k => `
+html.${WP_CLASS} .blm-chip[data-kind="${k}"] { --tc: var(--jx-type-${k}); }`).join('')}
 html.${WP_CLASS} .user-comment--user { font-weight: 600; color: var(--jx-text); }
 html.${WP_CLASS} .op-user-activity--date,
 html.${WP_CLASS} .user-comment--date { color: var(--jx-text-subtlest); }
@@ -828,7 +886,7 @@ html.${WP_CLASS} .blm-jx-side .attributes-group--header {
   border-bottom: 1px solid var(--jx-border);
 }
 html.${WP_CLASS} .blm-jx-side .wp-attribute-group {
-  display: block !important; columns: auto !important;
+  display: block !important; columns: auto !important; width: auto !important; max-width: 100% !important;
   margin: 0 !important; padding: var(--jx-space-2) var(--jx-space-4) var(--jx-space-3) !important;
 }
 html.${WP_CLASS} .blm-jx-side .attributes-key-value {
@@ -858,7 +916,7 @@ html.${WP_CLASS} .work-packages--show-view op-wp-tabs::before {
 html.${WP_CLASS} .work-packages--show-view .description-group::before { content: "Description"; }
 html.${WP_CLASS} .work-packages--show-view .description-group .op-uc-container { padding: 0 !important; }
 html.${WP_CLASS} .work-packages--show-view op-wp-tabs { display: block; padding-top: var(--jx-space-6); }
-html.${WP_CLASS} .work-packages--show-view op-wp-tabs::before { content: "Activity"; }
+html.${WP_CLASS} .work-packages--show-view op-wp-tabs::before { content: attr(data-blm-tab); }
 html.${WP_CLASS} .work-packages--show-view .tabcontent { padding: var(--jx-space-4) 0 0 !important; }
 
 /* Header: back · type · summary on one line, actions to the right */
@@ -867,6 +925,7 @@ html.${WP_CLASS} .work-packages--show-view .toolbar-container {
   border-bottom: 0 !important;
 }
 html.${WP_CLASS} .work-packages--show-view wp-breadcrumb { display: block; padding: var(--jx-space-1) var(--jx-space-6) 0; line-height: 1; }
+html.${WP_CLASS} wp-breadcrumb-parent { display: inline-flex; align-items: center; gap: var(--jx-space-1); }
 html.${WP_CLASS} .work-packages--show-view wp-breadcrumb :is(.op-wp-breadcrumb, .wp-breadcrumb, ul, li, div) { margin: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; min-height: 0 !important; }html.${WP_CLASS} .work-packages--show-view .wp-show--header-container {
   display: flex; align-items: center; gap: var(--jx-space-3); min-width: 0;
 }
@@ -955,6 +1014,10 @@ html.${WP_CLASS} .work-packages--show-view .work-packages--details--subject .inl
   font-family: var(--jx-font); font-size: 24px !important; font-weight: 500 !important;
   font-style: normal; line-height: 1.25; letter-spacing: -0.01em; color: var(--jx-text);
   overflow-wrap: anywhere;
+}
+html.${WP_CLASS} .work-packages--details .work-packages--details--subject .inline-edit--display-field.subject {
+  font-family: var(--jx-font); font-size: 20px !important; font-weight: 500 !important;
+  font-style: normal; line-height: 1.3; letter-spacing: -0.01em; color: var(--jx-text);
 }
 html.${WP_CLASS} .work-packages--show-view .op-back-button {
   width: 32px; height: 32px; padding: 0; justify-content: center;
@@ -1054,6 +1117,8 @@ html.${BL_CLASS} #rb li.story > * {
 }
 html.${BL_CLASS} #rb li.story > .type_id { order: 1; flex: none; }
 html.${BL_CLASS} #rb li.story > .id { order: 2; flex: none; min-width: 56px; }
+html.${BL_CLASS} #rb li.story > .id .t a { color: var(--jx-text-subtle); font-weight: 500; font-variant-numeric: tabular-nums; text-decoration: none; }
+html.${BL_CLASS} #rb li.story > .id .t a:hover { color: var(--jx-link); text-decoration: underline; }
 html.${BL_CLASS} #rb li.story > .subject {
   order: 3; flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1080,19 +1145,7 @@ html.${BL_CLASS} #rb li.story > .type_id:has(.blm-jx-icon) > .t {
 }
 
 /* Status lozenge and story-point pill */
-html.${BL_CLASS} #rb li.story .blm-jx-lozenge {
-  display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis;
-  padding: 0 4px; border-radius: var(--jx-radius);
-  font-size: 11px; font-weight: 700; line-height: 16px;
-  text-transform: uppercase; white-space: nowrap; vertical-align: middle;
-  background: var(--jx-todo-bg); color: var(--jx-todo-fg);
-}
-html.${BL_CLASS} #rb li.story .blm-jx-lozenge[data-blm-tone="progress"] {
-  background: var(--jx-progress-bg); color: var(--jx-progress-fg);
-}
-html.${BL_CLASS} #rb li.story .blm-jx-lozenge[data-blm-tone="done"] {
-  background: var(--jx-done-bg); color: var(--jx-done-fg);
-}
+html.${BL_CLASS} #rb li.story .blm-jx-lozenge { max-width: 160px; }
 html.${BL_CLASS} #rb li.story > .story_points {
   min-width: 24px; text-align: center;
 }
@@ -1110,10 +1163,10 @@ html.${WP_CLASS} .blm-jx-children { padding-top: var(--jx-space-6); }
 html.${WP_CLASS} .blm-jx-jump {
   position: fixed; right: 32px; bottom: 72px; z-index: 50;
   padding: 8px 14px; border: 0; border-radius: 999px; cursor: pointer;
-  font: 600 13px/16px var(--jx-font); color: #fff; background: var(--jx-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font: 600 13px/16px var(--jx-font); color: var(--jx-on-primary); background: var(--jx-primary);
+  box-shadow: var(--jx-shadow-raised);
 }
-html.${WP_CLASS} .blm-jx-jump:hover { filter: brightness(1.1); }
+html.${WP_CLASS} .blm-jx-jump:hover { background: var(--jx-primary-hover); }
 html.${WP_CLASS} .blm-jx-jump:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 2px; }
 html.${WP_CLASS} .blm-jx-children-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--jx-space-3);
@@ -1122,6 +1175,7 @@ html.${WP_CLASS} .blm-jx-children-head {
 html.${WP_CLASS} .blm-jx-children-title {
   font-family: var(--jx-font); font-size: 16px; font-weight: 600; font-style: normal;
   color: var(--jx-text); margin: 0;
+  border: 0; padding: 0;   /* OpenProject underlines every h3 */
 }
 html.${WP_CLASS} .blm-jx-children-sum {
   margin-left: auto;
@@ -1223,7 +1277,7 @@ html.${WP_CLASS} .blm-jx-children .assignee {
   max-width: 220px; min-width: 0; white-space: nowrap;
   height: 32px; padding: 0 var(--jx-space-2) 0 var(--jx-space-1); margin: 0; border: 0; border-radius: var(--jx-radius);
   background: transparent; cursor: pointer;
-  font-family: var(--jx-font); font-size: 12px; font-weight: 500; color: var(--jx-text-subtle);
+  font-family: var(--jx-font); font-size: 14px; font-weight: 400; color: var(--jx-text);
   transition: background-color var(--jx-dur) var(--jx-ease-out);
 }
 html.${WP_CLASS} .blm-jx-children .assignee:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
@@ -1262,6 +1316,9 @@ html.${WP_CLASS} .blm-jx-children .assignee .name,
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
 html.${WP_CLASS} .blm-jx-children .assignee.saving { opacity: 0.6; cursor: progress; }
 html.${WP_CLASS} .blm-jx-children .assignee[aria-disabled="true"]:hover { background: transparent; }
+html.${WP_CLASS} .blm-jx-children .locked { cursor: default; }
+html.${WP_CLASS} .blm-jx-children span.subject.locked { cursor: default; }
+html.${WP_CLASS} .blm-jx-children span.subject.locked:hover { background: transparent; }
 html.${WP_CLASS} .blm-jx-children .assignee.error { color: var(--jx-error); box-shadow: inset 0 0 0 1px var(--jx-error); }
 
 /* Assignee picker (fixed, appended to body) */
@@ -1291,26 +1348,44 @@ html.${WP_CLASS} .blm-jx-children .assignee.error { color: var(--jx-error); box-
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--jx-primary); }
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--jx-done-bar); }
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-note { padding: var(--jx-space-2); color: var(--jx-text-subtlest); font-size: 12px; }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge {
-  flex: none; display: inline-block; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
-  height: 20px; padding: 0 6px; margin: 0; border: 0; border-radius: var(--jx-radius); cursor: pointer;
-  font-family: var(--jx-font); font-size: 11px; font-weight: 700; line-height: 20px;
-  text-transform: uppercase; white-space: nowrap;
-  background: var(--jx-todo-bg); color: var(--jx-todo-fg);
-  transition: filter var(--jx-dur) var(--jx-ease-out);
+/* OpenProject's list items are 16px; the rows the picker edits are 14px */
+:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { font-size: 14px; line-height: 20px; }
+/* OpenProject's own status / assignee fields while the picker's choice saves */
+html.${WP_CLASS} .blm-jx-saving { opacity: 0.6; cursor: progress !important; }
+html.${WP_CLASS} .blm-jx-toast {
+  position: fixed; left: 16px; bottom: 16px; z-index: 2147483646; max-width: min(440px, calc(100vw - 32px));
+  padding: var(--jx-space-2) var(--jx-space-3); border-radius: var(--jx-radius-panel);
+  background: var(--jx-surface-raised); color: var(--jx-text); border: 1px solid var(--jx-border);
+  border-left: 4px solid var(--jx-error); box-shadow: var(--jx-shadow-raised);
+  font-family: var(--jx-font); font-size: 14px; line-height: 20px;
 }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:hover { filter: brightness(0.94); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:active { filter: brightness(0.86); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--jx-focus); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; }
+/* Subtask bar and popover from content.js, in the skin's colours: in progress is
+   blue and done green, as on the lozenges; the popover is a skin panel. */
+html.${WP_CLASS} .blm-native-bar > .blm-native-done { background: var(--jx-done-bg-hover); }
+html.${WP_CLASS} .blm-native-bar > .blm-native-prog { background: var(--jx-progress-bg-hover); }
+html.${WP_CLASS} td.subject > button.blm-meter .blm-meter-done { background: var(--jx-done-bar); }
+html.${WP_CLASS} td.subject > button.blm-meter .blm-meter-prog { background: var(--jx-primary); }
+html.${WP_CLASS} .blm-pop {
+  background: var(--jx-surface-raised); color: var(--jx-text); border-color: var(--jx-border);
+  border-radius: var(--jx-radius-panel); box-shadow: var(--jx-shadow-raised); font-family: var(--jx-font);
+}
+html.${WP_CLASS} .blm-pop-head { color: var(--jx-text-subtlest); border-bottom-color: var(--jx-border); }
+html.${WP_CLASS} .blm-pop-head .dot.done { background: var(--jx-done-bar); }
+html.${WP_CLASS} .blm-pop-head .dot.prog { background: var(--jx-primary); }
+html.${WP_CLASS} .blm-pop li + li { border-top-color: var(--jx-border); }
+html.${WP_CLASS} .blm-pop .pop-id { color: var(--jx-text-subtle); }
+html.${WP_CLASS} .blm-pop .pop-id:hover,
+html.${WP_CLASS} .blm-fix-msg a { color: var(--jx-link); }
+html.${WP_CLASS} .blm-pop .pop-status { border-radius: var(--jx-radius); background: var(--jx-todo-bg); color: var(--jx-todo-fg); }
+html.${WP_CLASS} .blm-pop .pop-status.done { background: var(--jx-done-bg); color: var(--jx-done-fg); }
+html.${WP_CLASS} .blm-pop .pop-status.prog { background: var(--jx-progress-bg); color: var(--jx-progress-fg); }
+html.${WP_CLASS} .blm-fix-btn {
+  border-radius: var(--jx-radius); background: var(--jx-primary); border-color: var(--jx-primary); color: var(--jx-on-primary);
+}
+html.${WP_CLASS} .blm-fix-btn:hover { background: var(--jx-primary-hover); border-color: var(--jx-primary-hover); }
+html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge { flex: none; max-width: 140px; }
 html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge.saving { opacity: 0.6; cursor: progress; }
 html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge.error { box-shadow: inset 0 0 0 1px var(--jx-error); }
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[data-blm-tone="progress"] {
-  background: var(--jx-progress-bg); color: var(--jx-progress-fg);
-}
-html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[data-blm-tone="done"] {
-  background: var(--jx-done-bg); color: var(--jx-done-fg);
-}
 @media (max-width: 640px) {
   html.${WP_CLASS} .blm-jx-children li {
     grid-template-columns: 16px 56px minmax(0, 1fr) 32px var(--jx-col-status);
@@ -1318,6 +1393,29 @@ html.${WP_CLASS} .blm-jx-children .blm-jx-lozenge[data-blm-tone="done"] {
   html.${WP_CLASS} .blm-jx-children .assignee { max-width: 32px; padding: 0; }
   html.${WP_CLASS} .blm-jx-children .assignee .name { display: none; }
 }
+
+/* Relations tab: each row reads like a child work item (type icon, #id, title,
+   status lozenge); "Create new relation" is a skin button. tagCells() tags them. */
+html.${WP_CLASS} .relation-row--grid { font-family: var(--jx-font); font-size: 14px; line-height: 20px; align-items: center; }
+html.${WP_CLASS} .relation-row { border-radius: var(--jx-radius); transition: background-color var(--jx-dur) var(--jx-ease-out); }
+html.${WP_CLASS} .relation-row:hover { background: var(--jx-hover); }
+html.${WP_CLASS} .relation-row--type { display: inline-flex; align-items: center; font-size: 12px; color: var(--jx-text-subtle); }
+html.${WP_CLASS} .relation-row--type > span:not(.hidden-for-sighted) {
+  font-size: 12px !important; font-weight: 500 !important; text-transform: none !important;
+  letter-spacing: 0 !important; color: var(--jx-text-subtle) !important;
+}
+html.${WP_CLASS} a.relation-row--grid-id { font-size: 14px; font-weight: 500; color: var(--jx-text-subtle); font-variant-numeric: tabular-nums; }
+html.${WP_CLASS} a.relation-row--grid-subject { color: var(--jx-text); }
+html.${WP_CLASS} :is(a.relation-row--grid-id, a.relation-row--grid-subject):hover { color: var(--jx-link); text-decoration: underline; }
+html.${WP_CLASS} .relation-row .blm-jx-lozenge::before { display: none !important; }
+html.${WP_CLASS} .wp-relations-create-button .wp-inline-create--add-link {
+  display: inline-flex; align-items: center; gap: var(--jx-space-1); height: 28px; padding: 0 var(--jx-space-2);
+  border: 0; border-radius: var(--jx-radius); background: transparent; color: var(--jx-text-subtle);
+  font-family: var(--jx-font); font-size: 13px; font-weight: 500; text-decoration: none;
+  transition: background-color var(--jx-dur) var(--jx-ease-out);
+}
+html.${WP_CLASS} .wp-relations-create-button .wp-inline-create--add-link:hover { background: var(--jx-btn-hover); color: var(--jx-text); }
+html.${WP_CLASS} .wp-relations-create-button .wp-inline-create--add-link:focus-visible { outline: 2px solid var(--jx-focus); outline-offset: 1px; box-shadow: none; }
 
 /* Assignee column in OpenProject's Children table (Relations tab) */
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .work-package-table .blm-assign-th { white-space: nowrap; }
@@ -1519,7 +1617,7 @@ const RETRY_AFTER_MS = 30_000;
 const pendingWrites = new Map();
 /** `${kidId}:${field}` -> message of the last failed write, shown on that control. */
 const writeErrors = new Map();
-const FIELD_LABEL = { assignee: 'assignee', status: 'status' };
+const FIELD_LABEL = { assignee: 'assignee', status: 'status', responsible: 'accountable' };
 
 /** The work package shown in the split view or on the full page, or null. */
 function viewWpId() {
@@ -1569,13 +1667,14 @@ async function fetchChildren(wpId) {
     assignee:     kid._links?.assignee?.title ?? '',
     assigneeHref: kid._links?.assignee?.href ?? null,
     projectHref:  kid._links?.project?.href ?? null,
+    editable:     !!(kid._links?.update || kid._links?.updateImmediately),
   }));
 }
 
 /** The child's edit-form schema: what OpenProject's own editor uses for its
  *  allowed statuses (workflow) and assignees. Read-only — a form POST saves nothing. */
-async function fetchSchema(kidId) {
-  const { lockVersion } = await getJson(`/api/v3/work_packages/${kidId}`);
+async function fetchSchema(kidId, lockVersion) {
+  lockVersion ??= (await getJson(`/api/v3/work_packages/${kidId}`)).lockVersion;
   const res = await fetch(`${API_BASE}/api/v3/work_packages/${kidId}/form`, {
     method: 'POST', credentials: 'include', headers: writeHeaders(), body: JSON.stringify({ lockVersion }),
   });
@@ -1696,6 +1795,12 @@ function fieldButton(k, field, cls, text, content) {
   b.setAttribute('aria-label', `${field === 'status' ? 'Status' : 'Assignee'} of #${k.id}: ${text}. Change`);
   // aria-disabled, not disabled: a disabled button can't keep keyboard focus.
   if (pending) { b.classList.add('saving'); b.setAttribute('aria-disabled', 'true'); b.setAttribute('aria-busy', 'true'); }
+  if (!k.editable) {
+    b.classList.add('locked');
+    b.setAttribute('aria-disabled', 'true');
+    b.setAttribute('aria-label', `${field === 'status' ? 'Status' : 'Assignee'} of #${k.id}: ${text}`);
+    b.title = `You can't edit #${k.id}`;
+  }
   if (error) { b.classList.add('error'); b.title = `Couldn't change the ${FIELD_LABEL[field]}: ${error}`; }
   return b;
 }
@@ -1742,11 +1847,13 @@ function buildChildren(wpId, kids) {
     key.href = href;
     // Only the #id opens the detail page; the title edits in place.
     const subject = el('span', 'subject', k.subject);
-    subject.tabIndex = 0;
-    subject.setAttribute('role', 'button');
-    subject.setAttribute('aria-label', `Edit title of #${k.id}: ${k.subject}`);
-    subject.title = writeErrors.has(`${k.id}:subject`)
-      ? `Couldn't change the title: ${writeErrors.get(`${k.id}:subject`)}` : 'Click to edit the title';
+    if (k.editable) {
+      subject.tabIndex = 0;
+      subject.setAttribute('role', 'button');
+      subject.setAttribute('aria-label', `Edit title of #${k.id}: ${k.subject}`);
+      subject.title = writeErrors.has(`${k.id}:subject`)
+        ? `Couldn't change the title: ${writeErrors.get(`${k.id}:subject`)}` : 'Click to edit the title';
+    } else subject.classList.add('locked');
     if (pendingWrites.has(`${k.id}:subject`)) { subject.classList.add('saving'); subject.setAttribute('aria-busy', 'true'); }
     if (writeErrors.has(`${k.id}:subject`)) subject.classList.add('error');
     key.dataset.kid = subject.dataset.kid = k.id;
@@ -1835,7 +1942,7 @@ function renderChildren() {
   else if (createState.wpId === wpId && !current?.querySelector('.blm-jx-create-row')) section.querySelector('.blm-jx-create-input')?.focus();
 
   // Keep an open picker attached to the rebuilt button.
-  if (picker) {
+  if (picker && !picker.page) {
     const btn = picker.field === 'existing'
       ? section.querySelector('[data-child-action="existing"]')
       : section.querySelector(`[data-kid="${picker.kidId}"][data-field="${picker.field}"]`);
@@ -1944,7 +2051,7 @@ async function changeSubject(wpId, kidId, text) {
 function editSubject(span) {
   const section = span.closest('.blm-jx-children');
   const kidId = span.dataset.kid;
-  if (!section || !kidId || pendingWrites.has(`${kidId}:subject`)) return;
+  if (!section || !kidId || span.classList.contains('locked') || pendingWrites.has(`${kidId}:subject`)) return;
   const wpId = section.dataset.wp;
   const original = span.textContent;
   const input = el('input', 'subject');
@@ -2072,7 +2179,8 @@ function placePicker() {
   if (!picker.button.isConnected) { closePicker(); return; }
   const r = picker.button.getBoundingClientRect();
   const w = picker.el.offsetWidth;
-  const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
+  // Row controls sit at the right of their row; OpenProject's fields start at the left.
+  const left = Math.max(8, Math.min(picker.page ? r.left : r.right - w, innerWidth - w - 8));
   const below = r.bottom + 4;
   const fitsBelow = below + picker.el.offsetHeight < innerHeight - 8;
   picker.el.style.left = `${left}px`;
@@ -2080,26 +2188,26 @@ function placePicker() {
 }
 
 function renderPickerList(values, status) {
-  const { el: pop, kidId, wpId, field } = picker;
+  const { el: pop, field } = picker;
+  const people = field !== 'status';
   const list  = pop.querySelector('ul');
   const query = pop.querySelector('input').value.trim().toLowerCase();
-  const cached = childCache.get(wpId);
-  const current = (Array.isArray(cached) ? cached.find(k => k.id === kidId)?.[`${field}Href`] : null) ?? null;
+  const current = pickerCurrent();
   list.replaceChildren();
 
   if (status) { list.append(el('li', 'blm-jx-picker-note', status)); picker.options = []; picker.active = -1; return; }
 
   const options = [];
-  if (!query && field === 'assignee') {
+  if (!query && people) {
     if (meCache?.href && values.some(p => p.href === meCache.href)) options.push({ href: meCache.href, name: meCache.name, label: 'Assign to me' });
     options.push({ href: null, name: '', label: 'Unassigned' });
   }
   for (const v of values) if (!query || v.name.toLowerCase().includes(query)) options.push({ ...v, label: v.name });
 
-  if (!options.length) list.append(el('li', 'blm-jx-picker-note', field === 'status' ? 'No matching status' : 'No matching people'));
+  if (!options.length) list.append(el('li', 'blm-jx-picker-note', people ? 'No matching people' : 'No matching status'));
   options.forEach((o, i) => {
-    const li = el('li', 'blm-jx-picker-option', field === 'assignee' ? null : o.label);
-    if (field === 'assignee') li.append(avatar(o.name, o.href, { small: true }), el('span', 'name', o.label));
+    const li = el('li', 'blm-jx-picker-option', people ? null : o.label);
+    if (people) li.append(avatar(o.name, o.href, { small: true }), el('span', 'name', o.label));
     li.id = `blm-jx-opt-${i}`;
     li.setAttribute('role', 'option');
     li.setAttribute('aria-selected', 'false');
@@ -2129,24 +2237,35 @@ function markActive({ scroll = true } = {}) {
   } else input.removeAttribute('aria-activedescendant');
 }
 
-function choose(option) {
-  const { wpId, kidId, field } = picker;
-  closePicker({ refocus: true });
-  changeField(wpId, kidId, field, { href: option.href, name: option.name });
+/** The href the picker's work package has now for its field (null = none). */
+function pickerCurrent() {
+  if (picker.page) return picker.page.current ?? null;
+  const cached = childCache.get(picker.wpId);
+  return (Array.isArray(cached) ? cached.find(k => k.id === picker.kidId)?.[`${picker.field}Href`] : null) ?? null;
 }
 
-async function openPicker(button) {
+function choose(option) {
+  const { wpId, kidId, field, page, button } = picker;
+  const current = pickerCurrent();
+  closePicker({ refocus: true });
+  if (page) changePageField(button, kidId, field, option.href, current);
+  else changeField(wpId, kidId, field, { href: option.href, name: option.name });
+}
+
+async function openPicker(button, target = null) {
   closePicker();
   const wpId  = viewWpId();
-  const kidId = button.dataset.kid;
-  const field = button.dataset.field;
+  const kidId = target?.id ?? button.dataset.kid;
+  const field = target?.field ?? button.dataset.field;
   if (!/^\d+$/.test(kidId ?? '') || !FIELD_LABEL[field]) return;
+  const page  = target ? {} : null;
 
   const pop = el('div', 'blm-jx-picker');
   const input = el('input');
   input.type = 'search';
   input.placeholder = field === 'status' ? 'Search statuses' : 'Search people';
-  input.setAttribute('aria-label', field === 'status' ? `New status for #${kidId}` : `Assign #${kidId} to`);
+  input.setAttribute('aria-label', field === 'status' ? `New status for #${kidId}`
+    : field === 'responsible' ? `Accountable for #${kidId}` : `Assign #${kidId} to`);
   input.setAttribute('role', 'combobox');
   input.setAttribute('aria-expanded', 'true');
   input.setAttribute('aria-controls', 'blm-jx-picker-list');
@@ -2156,17 +2275,19 @@ async function openPicker(button) {
   pop.append(input, list);
   document.body.append(pop);
 
-  picker = { el: pop, button, wpId, kidId, field, options: [], active: -1, state: 'loading' };
+  picker = { el: pop, button, wpId, kidId, field, page, options: [], active: -1, state: 'loading' };
   button.setAttribute('aria-expanded', 'true');
-  writeErrors.delete(`${kidId}:${field}`);
-  button.classList.remove('error');
-  button.removeAttribute('title');
+  if (!page) {
+    writeErrors.delete(`${kidId}:${field}`);
+    button.classList.remove('error');
+    button.removeAttribute('title');
+  }
 
   const notes = {
     loading: field === 'status' ? 'Loading statuses…' : 'Loading people…',
     error:   (msg) => `Couldn't load ${field === 'status' ? 'statuses' : 'people'} (${msg}). Close and try again.`,
   };
-  const ready = field === 'assignee' ? peopleReady.get(kidProject(kidId)) : null;
+  const ready = field === 'assignee' && !page ? peopleReady.get(kidProject(kidId)) : null;
   let values = ready ?? [];
   let errorNote = '';
   if (ready) { picker.state = 'ready'; renderPickerList(values); }
@@ -2200,7 +2321,10 @@ async function openPicker(button) {
 
   if (ready) { loadMe().then(() => { if (picker?.el === pop && !input.value) renderPickerList(values); }); return; }
   try {
-    [values] = await Promise.all([loadOptions(kidId, field), field === 'assignee' ? loadMe() : null]);
+    [values] = await Promise.all([
+      page ? loadPageOptions(kidId, field, page) : loadOptions(kidId, field),
+      field !== 'status' ? loadMe() : null,
+    ]);
     if (picker?.el === pop) { picker.state = 'ready'; renderPickerList(values); placePicker(); }
   } catch (err) {
     if (picker?.el === pop) {
@@ -2210,6 +2334,105 @@ async function openPicker(button) {
     }
   }
 }
+
+// ─── The same picker for OpenProject's own fields ─────────────────────────────
+//  The status button in the work-package header, and the status, assignee and
+//  accountable fields in list rows, the Details sidebar and embedded tables open
+//  this picker instead of OpenProject's own menu, so a status or a person is picked
+//  the same way everywhere. Only fields OpenProject marks editable. The write goes
+//  through progress-hook.js like a child's, which then reloads the work package
+//  into OpenProject's cache so its own view shows the new value.
+
+const PAGE_FIELD = '.inline-edit--display-field.-editable:is([data-field-name="status"], [data-field-name="assignee"], [data-field-name="responsible"])';
+const pageProjects = new Map();   // wpId -> projectHref, so a second open finds its people at once
+// wpIds with a write in flight: each write reads the lockVersion first, so a second
+// one on the same work package before the first lands would fail with a conflict.
+// Their fields ignore clicks until it lands.
+const pageWrites = new Set();
+
+/** { el, id, field } for a click on one of those fields, else null. */
+function pageTarget(node) {
+  if (!skinEnabled || !onWorkPackagePage() || !(node instanceof Element)) return null;
+  if (node.closest('.blm-jx-children, .blm-assign-cell, .blm-jx-picker')) return null;
+  const btn = node.closest('wp-status-button button');
+  if (btn) {
+    const id = viewWpId();
+    return btn.disabled || !id ? null : { el: btn, id, field: 'status' };
+  }
+  const f = node.closest(PAGE_FIELD);
+  if (!f || f.closest('.wp-inline-create-row')) return null;   // a row still being created: OpenProject's form
+  // A field in a row belongs to that row's work package, never to the one on view.
+  const row = f.closest('tr, .relation-row');
+  const id = !row ? viewWpId()
+    : row.matches('tr') ? tableRowId(row)
+    : /(?:^|\s)relation-row-(\d+)(?:\s|$)/.exec(row.className)?.[1];
+  if (!/^\d+$/.test(id ?? '')) return null;
+  return { el: f, id, field: f.dataset.fieldName };
+}
+
+/** Options for a page field; sets page.current from the work package as it is now. */
+async function loadPageOptions(id, field, page) {
+  const known = field === 'assignee' ? peopleReady.get(pageProjects.get(id)) : null;
+  const wp = await getJson(`/api/v3/work_packages/${id}`);
+  page.current = wp._links?.[field]?.href ?? null;
+  const projectHref = wp._links?.project?.href;
+  if (projectHref) pageProjects.set(id, projectHref);
+  if (known) return known;
+  if (field === 'assignee') {
+    const fromProject = peopleFor(projectHref);
+    if (fromProject) {
+      try { return await fromProject; } catch { /* fall back to the form below */ }
+    }
+  }
+  return allowedValues((await fetchSchema(id, wp.lockVersion))[field]);
+}
+
+/** Dimmed while saving; OpenProject shows the saved value once its cache reloads. */
+async function changePageField(button, id, field, href, current) {
+  if (href === current) return;
+  pageWrites.add(id);
+  button.classList.add('blm-jx-saving');
+  button.setAttribute('aria-busy', 'true');
+  try {
+    await writeWp(id, field, href);
+  } catch (err) {
+    showToast(`Couldn't change the ${FIELD_LABEL[field]} of #${id}: ${err.message || 'request failed'}`);
+  } finally {
+    pageWrites.delete(id);
+    button.classList.remove('blm-jx-saving');
+    button.removeAttribute('aria-busy');
+  }
+}
+
+let toastEl = null;
+function showToast(text) {
+  toastEl?.remove();
+  const t = toastEl = el('div', 'blm-jx-toast', text);
+  t.setAttribute('role', 'alert');
+  document.body.append(t);
+  setTimeout(() => t.remove(), 6000);
+}
+
+// Window, capture phase: ahead of OpenProject's own handlers on the field.
+window.addEventListener('click', e => {
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  const t = pageTarget(e.target);
+  if (!t) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (pageWrites.has(t.id)) return;
+  if (picker?.button === t.el) closePicker({ refocus: true });
+  else openPicker(t.el, t);
+}, true);
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const t = pageTarget(e.target);
+  // A button turns Enter / Space into a click itself, which the listener above takes.
+  if (!t || e.target !== t.el || t.el.tagName === 'BUTTON') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (!pageWrites.has(t.id)) openPicker(t.el, t);
+}, true);
 
 document.addEventListener('click', e => {
   const title = e.target.closest?.('.blm-jx-children span.subject');
@@ -2330,7 +2553,7 @@ function renderTableAssignees() {
         status ? status.before(fresh) : row.append(fresh);
       }
       if (hadFocus) btn.focus();
-      if (picker && picker.kidId === k.id && picker.field === 'assignee' && !picker.button.isConnected) {
+      if (picker && !picker.page && picker.kidId === k.id && picker.field === 'assignee' && !picker.button.isConnected) {
         picker.button = btn;
         btn.setAttribute('aria-expanded', 'true');
       }
@@ -3242,6 +3465,16 @@ ${D} {
   --jx-prio-high: #fab387;
   --jx-prio-medium: #f9e2af;
   --jx-prio-low: #89b4fa;
+  --jx-done-bar: #a6e3a1;
+  --jx-error: #f38ba8;
+  /* Light avatar tones: their initials are --jx-on-primary, near-black here */
+  --jx-avatar-0: #89b4fa;
+  --jx-avatar-1: #a6e3a1;
+  --jx-avatar-2: #fab387;
+  --jx-avatar-3: #cba6f7;
+  --jx-avatar-4: #f38ba8;
+  --jx-avatar-5: #74c7ec;
+  --jx-shadow-raised: 0 8px 24px rgba(17, 17, 27, 0.6), 0 0 0 1px rgba(205, 214, 244, 0.06);
 
   /* OpenProject's own design variables */
   --body-background: var(--jx-surface);
@@ -3360,7 +3593,7 @@ ${D} .flatpickr-calendar,
 ${D} .op-datepicker-modal {
   background: var(--jx-surface-raised) !important; color: var(--jx-text) !important;
   border-color: var(--jx-border) !important;
-  box-shadow: 0 8px 24px rgba(17, 17, 27, 0.6) !important;
+  box-shadow: var(--jx-shadow-raised) !important;
 }
 ${D} .ng-dropdown-panel .ng-option,
 ${D} .dropdown-menu a,
@@ -3504,7 +3737,7 @@ ${D} .ng-select .ng-clear-wrapper .ng-clear { color: var(--jx-text-subtle) !impo
 ${D} .spot-drop-modal--body,
 ${D} .spot-tooltip--body {
   background: var(--jx-surface-raised) !important; color: var(--jx-text) !important;
-  border: 1px solid var(--jx-border) !important; box-shadow: 0 8px 24px rgba(17, 17, 27, 0.6) !important;
+  border: 1px solid var(--jx-border) !important; box-shadow: var(--jx-shadow-raised) !important;
 }
 ${D} .spot-drop-modal--body :is(.spot-container, .spot-list, .spot-list--item, form) { background: transparent !important; color: var(--jx-text); }
 ${D} .spot-action-bar { background: var(--jx-surface-sunken) !important; border-color: var(--jx-border) !important; color: var(--jx-text); }
@@ -3607,30 +3840,17 @@ ${D} .op-pagination--item-link:hover { background: var(--jx-selected) !important
 /* The editable page title is only boxed while it has focus */
 ${D} .toolbar-container .title-container input:not(:focus) { background: transparent !important; border-color: transparent !important; }
 
-/* Subtask bar and popover from content.js */
+/* Subtask bar and popover from content.js: dark-only surfaces (colours from tokens are in the main sheet) */
 ${D} .blm-native-bar { background: rgba(205, 214, 244, 0.08) !important; border-color: rgba(205, 214, 244, 0.22) !important; }
-${D} .blm-native-bar > .blm-native-done { background: #a6e3a1; }
-${D} .blm-native-bar > .blm-native-prog { background: #f9e2af; }
+${D} .blm-native-bar > .blm-native-done { background: var(--jx-done-bar); }
+${D} .blm-native-bar > .blm-native-prog { background: var(--jx-primary); }
 ${D} .blm-native-bar > .blm-count { color: var(--jx-text); text-shadow: 0 0 2px #11111b, 0 0 4px #11111b; }
 ${D} .blm-native-host:hover > .blm-native-bar { border-color: var(--jx-focus) !important; box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2); }
 ${D} .blm-warn { background: rgba(249, 226, 175, 0.12); border-color: rgba(249, 226, 175, 0.4); color: #f9e2af; }
-${D} td.subject > button.blm-meter .blm-meter-done { background: #a6e3a1; }
-${D} td.subject > button.blm-meter .blm-meter-prog { background: #f9e2af; }
 ${D} td.subject > button.blm-meter > .blm-warn { color: #f9e2af; }
-${D} .blm-pop { background: var(--jx-surface-raised); color: var(--jx-text); border-color: var(--jx-border); box-shadow: 0 10px 30px rgba(17, 17, 27, 0.65); }
-${D} .blm-pop-head { color: var(--jx-text-subtlest); border-bottom-color: var(--jx-border); }
 ${D} .blm-pop-head .dot.other { background: #585b70; }
 ${D} .blm-pop-note { background: rgba(249, 226, 175, 0.12); color: #f9e2af; }
-${D} .blm-pop li + li { border-top-color: var(--jx-border); }
-${D} .blm-pop .pop-id { color: var(--jx-text-subtle); }
-${D} .blm-pop .pop-id:hover,
-${D} .blm-fix-msg a { color: var(--jx-link-hover); }
 ${D} .blm-pop .pop-pct { color: #fab387; }
-${D} .blm-pop .pop-status { background: var(--jx-todo-bg); color: var(--jx-todo-fg); }
-${D} .blm-pop .pop-status.done { background: var(--jx-done-bg); color: var(--jx-done-fg); }
-${D} .blm-pop .pop-status.prog { background: rgba(249, 226, 175, 0.16); color: #f9e2af; }
-${D} .blm-fix-btn { background: var(--jx-primary); border-color: var(--jx-primary); color: var(--jx-on-primary); }
-${D} .blm-fix-btn:hover { background: var(--jx-primary-hover); }
 `;
 
 // Motion and feedback. Only opacity, translate, scale and colours animate (cheap, no
@@ -3740,12 +3960,13 @@ const EXTRAS = `
   padding: 3px 12px; border-radius: 999px; font: 600 13px/1.4 var(--jx-font, system-ui, sans-serif);
   background: var(--jx-selected, #e9f2ff); color: var(--jx-link, #0c66e4);
 }
-.op-pagination:has(> .blm-quote) { position: relative; }
+.op-pagination:has(> .blm-quote) > .op-pagination--pages { flex: 0 1 auto; }
+.op-pagination:has(> .blm-quote) > .op-pagination--options { order: 2; flex: 0 0 auto; }
 .blm-quote {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  max-width: 45%; text-align: center; cursor: default;
+  order: 1; flex: 1 1 0; min-width: 0; align-self: center; margin: 0 var(--jx-space-4, 16px);
+  text-align: center; cursor: default;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  font: italic 500 16px/1.45 var(--jx-font, system-ui, sans-serif); color: var(--jx-text, #172b4d);
+  font: italic 500 14px/1.45 var(--jx-font, system-ui, sans-serif); color: var(--jx-text-subtle, #44546f);
 }
 `;
 // Log time dialog: a Jira-style panel (light and dark through the tokens) and the
@@ -3917,6 +4138,14 @@ function renderChips() {
   for (const root of roots) blmChips.transform(root, { origin: API_BASE, info: chipInfo, newTab: false });
 }
 
+/** The heading above the full page's tabs names the open tab ("Files", not "Files (13)"). */
+function syncTabHeading() {
+  for (const tabs of document.querySelectorAll('.work-packages--show-view op-wp-tabs')) {
+    const name = tabs.querySelector('.op-tab-row--link_selected')?.textContent.trim().replace(/\s*\(\d+\)$/, '') || 'Activity';
+    if (tabs.dataset.blmTab !== name) tabs.dataset.blmTab = name;
+  }
+}
+
 function schedule() {
   if (frame || dragging) return;
   frame = requestAnimationFrame(() => {
@@ -3930,7 +4159,7 @@ function schedule() {
     if (onWp && !wasOnWp) pickQuote();
     wasOnWp = onWp;
     if (onWp) {
-      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); renderChildren(); renderChips(); syncJump(); adjustRelationsCount(); }
+      if (skinEnabled) { tagCells(); greet(); arrangeFullView(); syncTabHeading(); renderChildren(); renderChips(); syncJump(); adjustRelationsCount(); }
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();
@@ -3949,7 +4178,7 @@ function disable() {
   restoreFullView();
   restoreRelationsCount();
   syncJump();
-  if (picker?.button.closest('.blm-jx-children')) closePicker();
+  if (picker?.page || picker?.button.closest('.blm-jx-children')) closePicker();
   document.querySelector('.blm-jx-children')?.remove();
   removeTimelog();
 }

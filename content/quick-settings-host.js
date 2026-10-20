@@ -29,12 +29,15 @@
     host = document.createElement('div');
     host.style.cssText = 'all: initial; position: fixed; inset: 0; z-index: 2147483647;';
     const root = host.attachShadow({ mode: 'closed' });
+    // Dark on a dark dashboard page (data-theme) or a dark Jira-style backlog (data-blm-theme).
+    const { theme, blmTheme } = document.documentElement.dataset;
+    const dark = theme === 'dark' || blmTheme === 'dark';
     root.innerHTML = `
       <style>
-        .scrim { position: fixed; inset: 0; background: rgba(9, 30, 66, 0.25); opacity: 0;
+        .scrim { position: fixed; inset: 0; background: ${dark ? 'rgba(17, 17, 27, 0.6)' : 'rgba(9, 30, 66, 0.25)'}; opacity: 0;
           transition: opacity 180ms cubic-bezier(0.2, 0, 0, 1); }
         .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(${width}, 100vw);
-          box-shadow: -8px 0 24px rgba(9, 30, 66, 0.18); transform: translateX(100%);
+          box-shadow: ${dark ? '-8px 0 24px rgba(17, 17, 27, 0.6)' : '-8px 0 24px rgba(9, 30, 66, 0.18)'}; transform: translateX(100%);
           transition: transform 200ms cubic-bezier(0.2, 0, 0, 1); background: transparent; }
         iframe { border: 0; width: 100%; height: 100%; display: block; color-scheme: normal; }
         :host([data-open="true"]) .scrim { opacity: 1; }

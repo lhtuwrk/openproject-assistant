@@ -73,6 +73,26 @@
     .feature a.go:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
     .feature.off .meta .status { color: var(--muted); }
     .feature.off a.go { display: none; }
+    /* Settings of a feature, under its scope line */
+    .feature .cfg {
+      grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-xs) var(--space-sm);
+      margin-top: var(--space-xs); font-size: var(--text-sm);
+    }
+    .feature.off .cfg { opacity: .55; }
+    .cfg .fld { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: var(--text-xs); font-weight: 600; }
+    .cfg .fld .ctrl { width: 96px; }
+    .cfg .fld-wide .ctrl { width: 160px; }
+    .cfg .chk { display: flex; align-items: center; gap: var(--space-2xs); color: var(--text2); cursor: pointer; flex-basis: 100%; }
+    .cfg .chk input { accent-color: var(--accent); }
+    .cfg .status { font-size: var(--text-xs); flex-basis: 100%; }
+    .ctrl {
+      background: var(--overlay); color: var(--text); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 4px 9px; font: inherit; font-size: var(--text-sm); height: 30px;
+      color-scheme: var(--scheme); max-width: 100%;
+    }
+    .ctrl:hover { border-color: var(--subtle); }
+    .ctrl:focus-visible { outline: none; border-color: var(--focus); }
+    .ctrl[aria-invalid="true"] { border-color: var(--red); }
     .group-lede a.host-change { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
     .group-lede a.host-change:hover { text-decoration: underline; }
     .group-lede a.host-change:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
@@ -157,6 +177,19 @@
           <div class="control"><input type="checkbox" class="switch" id="f-confirm" /></div>
           <div class="meta"><span class="scope">Status changes</span></div>
         </li>
+        <li class="feature" data-key="__blm_fixed_version" data-default="true" id="feat-fixed">
+          <label class="name" for="f-fixed">Ask for Fixed in version</label>
+          <p class="desc">When a Bug, or a work package related to a Bug, moves to Resolved and its Fixed in version doesn't list the sprint's release yet, asks for it with the release added, and saves it with the status. The release goes up by one each sprint (A and B halves of the month), counted from the sprint below.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-fixed" /></div>
+          <div class="meta"><span class="scope">Status changes · writes Fixed in version</span></div>
+          <div class="cfg">
+            <label class="fld">Sprint <input type="text" class="ctrl" id="fx-sprint" placeholder="26.10.B" spellcheck="false" /></label>
+            <label class="fld">ships release <input type="text" class="ctrl" id="fx-version" placeholder="2.47" spellcheck="false" inputmode="decimal" /></label>
+            <label class="fld fld-wide">Types <input type="text" class="ctrl" id="fx-types" placeholder="Bug" spellcheck="false" /></label>
+            <label class="chk"><input type="checkbox" id="fx-related" /> Also work packages related to one of these types</label>
+            <span class="status" id="fx-status" aria-live="polite"></span>
+          </div>
+        </li>
         <li class="feature" data-key="__blm_list_cache" data-default="true">
           <label class="name" for="f-listcache">Short list cache</label>
           <p class="desc">Reuses the work-package list for 15 seconds, so going back from a story doesn't reload it. Saves clear it at once; other people's changes show up after 15 seconds, and OpenProject's refresh button returns the same rows in that time. Turn off to always fetch fresh.</p>
@@ -207,7 +240,7 @@
         </li>
         <li class="feature" data-key="__blm_jira_skin" data-default="true">
           <label class="name" for="f-jira">Jira style</label>
-          <p class="desc">Restyles OpenProject like Jira: a white top bar and light sidebar on every page; work-package lists with status lozenges and type and priority icons; the work-package page with Details in a right-hand sidebar and a Child work items section, where you can change a child's assignee and status; and the Backlogs page as Jira sprint containers. Those two changes are the only things it writes to OpenProject.</p>
+          <p class="desc">Restyles OpenProject like Jira: a white top bar and light sidebar on every page; work-package lists with status lozenges and type and priority icons; the work-package page with Details in a right-hand sidebar and a Child work items section, where you can change a child's assignee and status; and the Backlogs page as Jira sprint containers. Status, assignee and accountable open one searchable picker everywhere. The only things it writes to OpenProject are what you pick there and a child's title edited in place.</p>
           <div class="control"><input type="checkbox" class="switch" id="f-jira" /></div>
           <div class="meta"><span class="scope">Top bar · work packages · backlogs</span></div>
         </li>

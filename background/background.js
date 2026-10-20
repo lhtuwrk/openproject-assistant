@@ -244,6 +244,19 @@ async function migrateToEndOfDay() {
 
 // ─── Job 1: sync today's snapshot ────────────────────────────────────────────
 
+/** Whether the version's members or their points differ from the last sync's (its ledger). */
+async function scopeChangedSinceLastSync(versionName, wps) {
+  const lkey   = MEMBERS_PREFIX + versionName;
+  const before = (await chrome.storage.local.get(lkey))[lkey]?.current;
+  if (!before) return false;   // first sync: nothing to compare with
+  if (Object.keys(before).length !== wps.length) return true;
+  return wps.some(wp => {
+    const was = before[wp.id];
+    const pts = typeof wp.storyPoints === 'number' ? wp.storyPoints : 0;
+    return !was || Math.abs((was.points ?? 0) - pts) > 0.001;
+  });
+}
+
 async function syncTracked() {
   if (!(await burndownEnabled())) return;
   const tracked  = await getTracked();
@@ -269,9 +282,20 @@ async function syncTracked() {
       try {
         const wps      = (await fetchWorkPackagesByVersion(v.projectId, v.versionId)).filter(w => wpIncluded(w, settings));
         if (!wps.length) continue;
+        // Scope changed since the last sync (a story joined or left, or its points
+        // changed): replay today, so the chart can name the stories behind it.
+        if (await scopeChangedSinceLastSync(v.versionName, wps)) {
+          const first = v.startDate ? dayBefore(v.startDate) : null;
+          saved += await rebuildVersionDays(v, settings, [today], first, today);
+          await chrome.storage.local.remove('__blm_fetch_progress');
+          continue;
+        }
         await updateMemberLedger(v.versionName, wps, today);   // record membership for move-out tracking
         const statuses = aggregateWorkPackages(wps);
-        if (await saveSnapshot(key, v.versionName, statuses, 'api')) {
+        // Same scope: today's moved-in / moved-out / points detail still holds, keep it
+        const { movedIn, movedOut, pointsChanged } = existing ?? {};
+        const meta = Object.fromEntries(Object.entries({ movedIn, movedOut, pointsChanged }).filter(([, x]) => x));
+        if (await saveSnapshot(key, v.versionName, statuses, 'api', meta)) {
           saved++;
           // This light sync doesn't replay activity, so a burn detail computed for an
           // older state of today no longer matches it: drop it, the chart falls back.
@@ -395,6 +419,101 @@ async function batchFetchActivities(wpIds, batchSize = 10, onProgress) {
   return results;
 }
 
+/**
+ * Replays the activity of one version's work packages to rebuild the given dates:
+ * finished days are locked at their end-of-day state ('reconstructed'), today stays
+ * a live 'api' snapshot. Each day also gets its detail: the stories that moved in or
+ * out, changed points, or changed status since the day before (none for firstDate).
+ * Returns how many snapshots were written.
+ */
+async function rebuildVersionDays(v, settings, dates, firstDate, today) {
+  let saved = 0;
+  const current    = (await fetchWorkPackagesByVersion(v.projectId, v.versionId)).filter(w => wpIncluded(w, settings));
+  if (!current.length) return 0;
+
+  // Fold in stories that have LEFT the version.  The by-version fetch only sees
+  // current members, so a moved-out story's scope drop would vanish and it could
+  // never be named.  The ledger remembers every id ever seen; we re-fetch the
+  // departed ones individually (skipping any since deleted) so their activity is
+  // replayed too — which restores the dip AND fills in the movedOut detail.
+  const departedIds = await updateMemberLedger(v.versionName, current, today);
+  const departed    = (await Promise.all(
+    departedIds.map(id => fetchWorkPackage(id).catch(() => null))
+  )).filter(w => w && wpIncluded(w, settings));
+  const wps = [...current, ...departed];
+
+  const activities = await batchFetchActivities(wps.map(w => w.id), 10, (done, total) => {
+    chrome.storage.local.set({
+      __blm_fetch_progress: { done, total, version: v.versionName },
+    });
+  });
+  const normTarget = normalizeVer(v.versionName);
+
+  // Flow record — CURRENT members only: status + when each entered its current
+  // status, for the dashboard's Aging-WIP / cycle-time views.  activities[i] lines
+  // up with wps[i], and current members are the first current.length entries.
+  const flowStories = current.map((wp, i) => ({
+    id:              wp.id,
+    subject:         wp.subject ?? `#${wp.id}`,
+    type:            wp._links?.type?.title ?? '',
+    status:          wp._links?.status?.title ?? 'Unknown',
+    points:          typeof wp.storyPoints === 'number' ? wp.storyPoints : 0,
+    enteredStatusAt: statusEnteredDate(wp, activities[i] ?? []),
+    createdAt:       (wp.createdAt ?? '').slice(0, 10),
+  }));
+  await chrome.storage.local.set({ [FLOW_PREFIX + v.versionName]: { asOf: today, stories: flowStories } });
+
+  for (const date of dates) {
+    const prevDate = !firstDate || date > firstDate ? dayBefore(date) : null;
+
+    const states        = [];
+    const movedOut      = [];
+    const movedIn       = [];
+    const pointsChanged = [];
+    const statusChanges = [];   // WPs that changed status while staying in the version
+
+    for (let i = 0; i < wps.length; i++) {
+      const wp   = wps[i];
+      const acts = activities[i] ?? [];
+
+      const curr  = wpRawStateAtDate(wp, acts, date);
+      const inNow = curr?.version === normTarget;
+      if (inNow) states.push({ status: curr.status, points: curr.points });
+
+      if (prevDate) {
+        const prev   = wpRawStateAtDate(wp, acts, prevDate);
+        const inPrev = prev?.version === normTarget;
+        const label  = wp.subject ?? `#${wp.id}`;
+        const wpType = wp._links?.type?.title ?? '';
+        if (inPrev && !inNow && curr)
+          movedOut.push({ id: wp.id, subject: label, points: prev.points, toVersion: curr.version || '', type: wpType });
+        else if (!inPrev && inNow)
+          movedIn.push({ id: wp.id, subject: label, points: curr.points, fromVersion: prev?.version || '', type: wpType });
+        else if (inPrev && inNow && prev && Math.abs(curr.points - prev.points) > 0.001)
+          pointsChanged.push({ id: wp.id, subject: label, from: prev.points, to: curr.points, type: wpType });
+        // Track all status changes for WPs staying in the version (enables burn-detail)
+        if (inPrev && inNow && prev && curr && prev.status !== curr.status)
+          statusChanges.push({ id: wp.id, subject: label, points: curr.points, fromStatus: prev.status, toStatus: curr.status, type: wpType });
+      }
+    }
+    if (!states.length) continue;
+
+    const statuses = buildSnapshotFromStates(states);
+    const key      = `${date}__${v.versionName}`;
+    const meta     = {};
+    if (movedOut.length)      meta.movedOut      = movedOut;
+    if (movedIn.length)       meta.movedIn       = movedIn;
+    if (pointsChanged.length) meta.pointsChanged = pointsChanged;
+    // Always include statusChanges (even []) so the detail key is written and
+    // showBurnedDetail can distinguish "tracking ran, nothing burned" from "never tracked".
+    meta.statusChanges = statusChanges;
+    // Today hasn't ended: it stays a live 'api' snapshot that later syncs may refresh
+    const source   = date === today ? 'api' : 'reconstructed';
+    if (await saveSnapshot(key, v.versionName, statuses, source, meta)) saved++;
+  }
+  return saved;
+}
+
 async function reconstructMissingDays() {
   if (!(await burndownEnabled())) return;
   const tracked  = await getTracked();
@@ -428,91 +547,7 @@ async function reconstructMissingDays() {
     if (!missing.length) continue;
 
     try {
-      const current    = (await fetchWorkPackagesByVersion(v.projectId, v.versionId)).filter(w => wpIncluded(w, settings));
-      if (!current.length) continue;
-
-      // Fold in stories that have LEFT the version.  The by-version fetch only sees
-      // current members, so a moved-out story's scope drop would vanish and it could
-      // never be named.  The ledger remembers every id ever seen; we re-fetch the
-      // departed ones individually (skipping any since deleted) so their activity is
-      // replayed too — which restores the dip AND fills in the movedOut detail.
-      const departedIds = await updateMemberLedger(v.versionName, current, today);
-      const departed    = (await Promise.all(
-        departedIds.map(id => fetchWorkPackage(id).catch(() => null))
-      )).filter(w => w && wpIncluded(w, settings));
-      const wps = [...current, ...departed];
-
-      const activities = await batchFetchActivities(wps.map(w => w.id), 10, (done, total) => {
-        chrome.storage.local.set({
-          __blm_fetch_progress: { done, total, version: v.versionName },
-        });
-      });
-      const normTarget = normalizeVer(v.versionName);
-
-      // Flow record — CURRENT members only: status + when each entered its current
-      // status, for the dashboard's Aging-WIP / cycle-time views.  activities[i] lines
-      // up with wps[i], and current members are the first current.length entries.
-      const flowStories = current.map((wp, i) => ({
-        id:              wp.id,
-        subject:         wp.subject ?? `#${wp.id}`,
-        type:            wp._links?.type?.title ?? '',
-        status:          wp._links?.status?.title ?? 'Unknown',
-        points:          typeof wp.storyPoints === 'number' ? wp.storyPoints : 0,
-        enteredStatusAt: statusEnteredDate(wp, activities[i] ?? []),
-        createdAt:       (wp.createdAt ?? '').slice(0, 10),
-      }));
-      await chrome.storage.local.set({ [FLOW_PREFIX + v.versionName]: { asOf: today, stories: flowStories } });
-
-      for (const date of missing) {
-        const dateIdx = allDates.indexOf(date);
-        const prevDate = dateIdx > 0 ? allDates[dateIdx - 1] : null;
-
-        const states        = [];
-        const movedOut      = [];
-        const movedIn       = [];
-        const pointsChanged = [];
-        const statusChanges = [];   // WPs that changed status while staying in the version
-
-        for (let i = 0; i < wps.length; i++) {
-          const wp   = wps[i];
-          const acts = activities[i] ?? [];
-
-          const curr  = wpRawStateAtDate(wp, acts, date);
-          const inNow = curr?.version === normTarget;
-          if (inNow) states.push({ status: curr.status, points: curr.points });
-
-          if (prevDate) {
-            const prev   = wpRawStateAtDate(wp, acts, prevDate);
-            const inPrev = prev?.version === normTarget;
-            const label  = wp.subject ?? `#${wp.id}`;
-            const wpType = wp._links?.type?.title ?? '';
-            if (inPrev && !inNow && curr)
-              movedOut.push({ id: wp.id, subject: label, points: prev.points, toVersion: curr.version || '', type: wpType });
-            else if (!inPrev && inNow)
-              movedIn.push({ id: wp.id, subject: label, points: curr.points, fromVersion: prev?.version || '', type: wpType });
-            else if (inPrev && inNow && prev && Math.abs(curr.points - prev.points) > 0.001)
-              pointsChanged.push({ id: wp.id, subject: label, from: prev.points, to: curr.points, type: wpType });
-            // Track all status changes for WPs staying in the version (enables burn-detail)
-            if (inPrev && inNow && prev && curr && prev.status !== curr.status)
-              statusChanges.push({ id: wp.id, subject: label, points: curr.points, fromStatus: prev.status, toStatus: curr.status, type: wpType });
-          }
-        }
-        if (!states.length) continue;
-
-        const statuses = buildSnapshotFromStates(states);
-        const key      = `${date}__${v.versionName}`;
-        const meta     = {};
-        if (movedOut.length)      meta.movedOut      = movedOut;
-        if (movedIn.length)       meta.movedIn       = movedIn;
-        if (pointsChanged.length) meta.pointsChanged = pointsChanged;
-        // Always include statusChanges (even []) so the detail key is written and
-        // showBurnedDetail can distinguish "tracking ran, nothing burned" from "never tracked".
-        meta.statusChanges = statusChanges;
-        // Today hasn't ended: it stays a live 'api' snapshot that later syncs may refresh
-        const source   = date === today ? 'api' : 'reconstructed';
-        if (await saveSnapshot(key, v.versionName, statuses, source, meta)) reconstructed++;
-      }
-
+      reconstructed += await rebuildVersionDays(v, settings, missing, allDates[0], today);
     } catch {
       // Skip this version silently; next alarm will retry
     }

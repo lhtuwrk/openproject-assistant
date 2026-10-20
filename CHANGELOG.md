@@ -9,16 +9,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: your own comments on a story can be edited in place, @mentions included.
 - Planning: the Subtasks tab suggests the subtasks the team usually creates, learned from the project's last three sprints (or a per-project template the facilitator can edit), each with a readable title of its own.
 - Planning: a story can be cloned from a large dialog laid out like the story: its title, type, story points, assignee, version and rendered description can be changed first, and subtasks (the story's own, the suggested ones or new ones) created with the copy.
+- Resolving a Bug, or a story related to a Bug, asks for its Fixed in version with the sprint's release already added (2.47 for sprint 26.10.B, one up each sprint), and saves it with the status. The starting sprint, release and types are set in Settings.
 
 ### Changed
 - Planning: planning a story that is still New or Reopened asks for confirmation first.
 - Planning: a new subtask is created when you click outside its title field, not only on Enter.
+- Opening the status menu or a field's dropdown (assignee, priority, version…) on a work package shows a spinner on it while its choices load, instead of looking frozen.
+- Status changes save faster: the open-subtasks and auto-progress checks reuse the work package already on screen and no longer hold the save for extra requests.
+- Jira style: status, assignee and accountable open the same searchable picker everywhere (work-package header, list rows, Details sidebar, Relations tab), not OpenProject's own menus.
+- Jira style: status lozenges, ticket keys (#123), priority icons, avatars and "Unassigned" look the same in the list, Backlogs, Child work items, Relations and the sidebar; "in progress" is blue everywhere, the subtask bar and its popover included.
+- Jira style: the Relations tab is laid out like Child work items, and the confirmation dialogs and settings drawer follow the Jira style look in light and dark.
 
 ### Fixed
 - Planning: after creating a subtask or posting a comment, the field no longer keeps the old text, so the next subtask doesn't reuse the previous title.
 - Jira style: a subtask's status picker on the story page offers the moves allowed from its current status and assignee, not the ones from before its last change.
 - Planning: a subtask's or story's status list refreshes after its assignee changes, and no longer shows the moves from its previous status.
 - Jira style: after changing a subtask's status, assignee or title on the story page, the story's own status button opens again instead of doing nothing.
+- Burndown: today's Scope tab keeps naming the stories that moved in, moved out or changed points; the live sync no longer wipes them a second after the chart opens, and a scope change during the day is named at the next sync.
+- Jira style dark mode: avatar initials, error states and popup shadows are readable on the dark background.
+- Jira style: the quote no longer overlaps the page count, the work-package page no longer scrolls sideways, the heading above the tabs names the open tab, and child rows you can't edit no longer look clickable.
 
 ## [1.6.1] - 2026-10-14
 
