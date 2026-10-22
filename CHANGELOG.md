@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Planning: planning a story that is still New or Reopened asks for confirmation first.
 - Planning: a new subtask is created when you click outside its title field, not only on Enter.
+- Planning: the time a story gets now comes from its story points rather than its priority, and every level is held to a target of its own, so the sprint goal keeps its time and it's the levels played last that run short when the sprint doesn't fit the session. A level's target is set under Edit grouping; priority still sets the minutes of a story nobody has pointed.
 - Opening the status menu or a field's dropdown (assignee, priority, version…) on a work package shows a spinner on it while its choices load, instead of looking frozen.
 - Status changes save faster: the open-subtasks and auto-progress checks reuse the work package already on screen and no longer hold the save for extra requests.
 - Jira style: after a status change in the work-package list, the row pulses while it saves, then the list scrolls to where it landed (another group, say), slides it in and highlights it for a second. If the new status takes it out of the list's filters, a note says so.

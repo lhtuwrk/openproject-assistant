@@ -25,8 +25,16 @@ const START_AT    = '14:30';
 const END_AT      = '18:00';
 const LOOT_MIN    = 15;
 
-// Minutes a story gets by its priority; a level's timebox is the sum over its
-// stories, scaled down together when the whole sprint doesn't fit the session.
+// Minutes a story gets by its story points — how much there is to talk about.
+// Priority decides the order stories are dealt in, not how long each one takes,
+// so it only sets the minutes of a story nobody has pointed yet.
+const SIZES = [
+  { key: 'xs', label: '1 pt or less',   upTo: 1,        min: 3 },
+  { key: 's',  label: '2–3 pts',        upTo: 3,        min: 5 },
+  { key: 'm',  label: '5 pts',          upTo: 5,        min: 8 },
+  { key: 'l',  label: '8 pts',          upTo: 8,        min: 12 },
+  { key: 'xl', label: '13 pts or more', upTo: Infinity, min: 18 },
+];
 const BUCKETS = [
   { key: 'immediate', label: 'Immediate', min: 6 },
   { key: 'high',      label: 'High',      min: 5 },
@@ -79,6 +87,10 @@ const ruleSub = d => d.isBreak ? d.sub : d.catchAll ? 'Every other story, by pri
   : [d.labels?.length ? `Label ${d.labels.join(' · ')}` : '', d.priority ? `${d.priority} priority` : '', d.type ? `Type ${d.type}` : '',
      d.status ? `Status ${d.status}` : '', d.assignee ? (d.assignee === NONE ? 'Unassigned' : `Assignee ${d.assignee}`) : ''].filter(Boolean).join(' · ') || 'No rule yet';
 
+/** A level's target in minutes, kept in range; falls back when the value is not a number. */
+const levelTarget = (v, fallback) =>
+  Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(300, Math.round(Number(v)))) : fallback;
+
 function compile(d) {
   const re = d.labels?.length ? new RegExp(`\\b(${d.labels.map(escRe).join('|')})\\b`, 'i') : null;
   const pri = d.priority ? new RegExp(`\\b${escRe(d.priority)}\\b`, 'i') : null;
@@ -97,6 +109,7 @@ function mergeDefs(saved) {
   const builtIn = DEFAULT_DEFS.map(d => {
     const o = byKey.get(d.key);
     return o ? { ...d, name: String(o.name || d.name).slice(0, 40), short: undefined,
+      min: d.isBreak ? d.min : levelTarget(o.min, d.min),
       labels: d.isBreak || d.catchAll ? d.labels : (o.labels ?? []).map(String), priority: d.isBreak || d.catchAll ? d.priority : (o.priority ?? ''),
       ...(d.isBreak || d.catchAll ? {} : Object.fromEntries(EXTRA.map(k => [k, String(o[k] ?? '')]))) } : d;
   });
@@ -104,7 +117,7 @@ function mergeDefs(saved) {
     .map(d => d.isBreak
       ? { key: String(d.key), custom: true, isBreak: true, name: String(d.name || 'Break').slice(0, 40), sub: 'No tickets', min: 10 }
       : { key: String(d.key), custom: true, name: String(d.name || 'New level').slice(0, 40),
-      min: 15, labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
+      min: levelTarget(d.min, 15), labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
       ...Object.fromEntries(EXTRA.map(k => [k, String(d[k] ?? '')])) });
   return [...custom, ...builtIn];
 }
@@ -292,7 +305,8 @@ function freshSession(prev) {
     versionName: prev?.versionName ?? '',
     versionHref: prev?.versionHref ?? null,
     budgets:     { ...Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l.min])), ...prev?.budgets },   // minutes; play levels are set at Start
-    perStory:    { ...Object.fromEntries(BUCKETS.map(b => [b.key, b.min])), ...prev?.perStory },
+    perSize:     { ...Object.fromEntries(SIZES.map(b => [b.key, b.min])), ...prev?.perSize },
+    perStory:    { ...Object.fromEntries(BUCKETS.map(b => [b.key, b.min])), ...prev?.perStory },   // stories with no points
     scale: 1,                  // per-story minutes × scale = what each story got, fixed at Start
     cardSpent: {},             // wpId -> ms discussed
     levelOrder:  normalizeOrder(prev?.levelOrder),
@@ -348,7 +362,10 @@ function bucketOf(priority) {
   if (/low|minor|trivial/i.test(priority)) return 'low';
   return 'normal';
 }
-const storyMin = card => Number(s.perStory[bucketOf(card.priority)]) || 0;
+const sizeOf = points => (SIZES.find(b => points <= b.upTo) ?? SIZES[SIZES.length - 1]).key;
+/** A pointed story gets the minutes of its size; an unpointed one falls back to its priority. */
+const storyMin = card => Number(card.points == null
+  ? s.perStory[bucketOf(card.priority)] : s.perSize[sizeOf(card.points)]) || 0;
 const cardBudgetMs = card => storyMin(card) * (s.levelScale?.[levelKeyOf(card.id)] ?? s.scale) * 60000;
 
 const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
@@ -367,21 +384,59 @@ const hhmm = total => {
 /** Minutes of every break (the ones you added and the coffee one). */
 const breakMin = () => LEVELS.filter(l => l.isBreak).reduce((t, l) => t + (Number(s.budgets[l.key]) || 0), 0);
 
-/** Each play level's minutes from its stories, scaled to fit the session if needed. */
+/** What each play level deserves of the window, from its grouping rule. A level
+ *  split into parts shares its target between them, by what their stories need. */
+function targetsOf(raw) {
+  const baseOf = l => l.of ?? l.key;
+  const whole = {};
+  for (const l of PLAY_LEVELS) whole[baseOf(l)] = (whole[baseOf(l)] ?? 0) + raw[l.key];
+  return Object.fromEntries(PLAY_LEVELS.map(l => {
+    const base = baseOf(l);
+    const target = Math.max(0, Number(DEF[base]?.min) || 0);
+    return [l.key, whole[base] > 0 ? target * (raw[l.key] / whole[base]) : target / (l.parts || 1)];
+  }));
+}
+
+/** How the window is shared out among the play levels.
+ *  Every level is held to its own target first, so a long tail of low stories can't
+ *  eat the sprint goal's time. Whatever is left over then tops up the levels still
+ *  short of what their stories need, in play order — which leaves the shortfall on
+ *  the levels played last, the catch-all among them. No level gets more than its
+ *  stories need; the rest of the window is spare. */
 function timePlan() {
   const raw = Object.fromEntries(PLAY_LEVELS.map(l => [l.key,
     levelIds(l.key).filter(id => rt.cards.has(id)).reduce((t, id) => t + storyMin(rt.cards.get(id)), 0)]));
-  const sum = Object.values(raw).reduce((t, m) => t + m, 0);
   // Sections set by hand keep their minutes; the others share what is left of the window.
+  const auto = PLAY_LEVELS.filter(l => manualMin(l.key) === null);
   const fixed = PLAY_LEVELS.reduce((t, l) => t + (manualMin(l.key) ?? 0), 0);
-  const autoSum = PLAY_LEVELS.reduce((t, l) => t + (manualMin(l.key) === null ? raw[l.key] : 0), 0);
+  const autoSum = auto.reduce((t, l) => t + raw[l.key], 0);
   const avail = Math.max(0, toMin(endAt()) - toMin(startAt()) - LOOT_MIN - breakMin() - fixed);
-  const scale = autoSum > avail && autoSum > 0 ? avail / autoSum : 1;
+
+  const target = targetsOf(raw);
+  // Targets that together ask for more than the window are trimmed back together.
+  const asked = auto.reduce((t, l) => t + target[l.key], 0);
+  const fit = asked > avail && asked > 0 ? avail / asked : 1;
+
+  const got = {};
+  let left = avail;
+  for (const l of auto) {
+    got[l.key] = Math.max(0, Math.min(raw[l.key], target[l.key] * fit, left));
+    left -= got[l.key];
+  }
+  for (const l of auto) {
+    if (left <= 0) break;
+    const take = Math.min(raw[l.key] - got[l.key], left);
+    if (take > 0) { got[l.key] += take; left -= take; }
+  }
+  const given = auto.reduce((t, l) => t + got[l.key], 0);
   return {
-    raw, sum, autoSum, fixed, avail, scale,
-    minutes: key => manualMin(key) ?? raw[key] * scale,
+    raw, autoSum, fixed, avail, target, spare: left,
+    scale: autoSum > 0 ? given / autoSum : 1,
+    /** The levels that got less time than their stories asked for, in play order. */
+    cut: auto.filter(l => raw[l.key] - got[l.key] > 0.5),
+    minutes: key => manualMin(key) ?? got[key] ?? 0,
     /** What share of each story's own minutes its section gives it. */
-    scaleOf: key => (manualMin(key) === null ? scale : raw[key] > 0 ? manualMin(key) / raw[key] : 1),
+    scaleOf: key => (raw[key] > 0 ? (manualMin(key) ?? got[key] ?? 0) / raw[key] : 1),
   };
 }
 
@@ -932,8 +987,8 @@ function setOrder(order) {
 const splitLabels = text => [...new Set(String(text).split(/[,;\n]/).map(x => x.trim()).filter(Boolean))];
 
 /** Stores the rules and re-deals the sprint's stories into the levels they now describe. */
-const persistRules = () => chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom, isBreak }) =>
-  ({ key, name, labels, priority, type, status, assignee, custom, ...(isBreak && custom ? { isBreak } : {}) })) });
+const persistRules = () => chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom, isBreak, min }) =>
+  ({ key, name, labels, priority, type, status, assignee, custom, min, ...(isBreak && custom ? { isBreak } : {}) })) });
 
 function applyRules(next) {
   if (s.phase !== 'lobby') return;
@@ -951,6 +1006,7 @@ function editRule(key, field, value) {
     : field === 'name' ? { ...d, name: value.trim().slice(0, 40) || d.name, short: undefined }
     : field === 'labels' ? { ...d, labels: splitLabels(value) }
     : field === 'priority' ? { ...d, priority: PRIORITIES.includes(value) ? value : '' }
+    : field === 'min' ? { ...d, min: levelTarget(value, d.min) }
     : EXTRA.includes(field) ? { ...d, [field]: value }
     : d));
 }
@@ -1820,13 +1876,15 @@ function patchFormState(a, b) {
 }
 
 // Re-rendering replaces the controls, so the focused one is found again by its data attribute.
-const FOCUS_KEYS = ['field', 'set', 'budget', 'per', 'act', 'role', 'pick'];
+const FOCUS_KEYS = ['field', 'set', 'budget', 'per', 'perSize', 'rule', 'act', 'role', 'pick'];
 function focusKey() {
   const el = document.activeElement;
   const k = el && FOCUS_KEYS.find(x => el.dataset?.[x]);
   if (!k) return null;
-  const extra = el.dataset.wp ? `[data-wp="${CSS.escape(el.dataset.wp)}"]` : el.dataset.id ? `[data-id="${CSS.escape(el.dataset.id)}"]` : el.dataset.tab ? `[data-tab="${CSS.escape(el.dataset.tab)}"]` : '';
-  return { sel: `[data-${k}="${CSS.escape(el.dataset[k])}"]${extra}`, caret: el.selectionStart ?? null };
+  const extra = el.dataset.wp ? `[data-wp="${CSS.escape(el.dataset.wp)}"]` : el.dataset.id ? `[data-id="${CSS.escape(el.dataset.id)}"]` : el.dataset.tab ? `[data-tab="${CSS.escape(el.dataset.tab)}"]`
+    : el.dataset.key ? `[data-key="${CSS.escape(el.dataset.key)}"]` : '';
+  const attr = k.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);   // perSize -> data-per-size
+  return { sel: `[data-${attr}="${CSS.escape(el.dataset[k])}"]${extra}`, caret: el.selectionStart ?? null };
 }
 
 function render() {
@@ -1920,6 +1978,10 @@ function renderBanner() {
 
 function ruleEditor(l) {
   const field = (cap, inner) => `<label class="rf"><span>${cap}</span>${inner}</label>`;
+  const name = field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(ruleDefs.find(d => d.key === l.key)?.name ?? l.name)}" maxlength="40" />`);
+  const minutes = field('Minutes', `<input class="ctrl num" data-rule="min" data-key="${l.key}" type="number" min="0" max="300" step="5" value="${esc(l.min)}"
+    title="What this level deserves of the window. It never gets more than its stories need, and the levels played first are served first." />`);
+  if (l.catchAll) return `<div class="rule-edit catch-all">${name}${minutes}</div>`;
   const more = [['type', 'Type', 'type'], ['status', 'Status', 'status'], ['assignee', 'Assignee', 'assigneeName']].map(([k, cap, f]) => {
     const vals = [...new Set([...rt.cards.values()].map(c => c[f]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if (l[k] && l[k] !== NONE && !vals.includes(l[k])) vals.unshift(l[k]);
@@ -1929,13 +1991,33 @@ function ruleEditor(l) {
   }).join('');
   const open = EXTRA.some(k => l[k]) || rt.moreOpen.has(l.key);
   return `<div class="rule-edit">
-    ${field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(ruleDefs.find(d => d.key === l.key)?.name ?? l.name)}" maxlength="40" />`)}
+    ${name}
     ${field('Labels', `<input class="ctrl" data-rule="labels" data-key="${l.key}" value="${esc((l.labels ?? []).join(', '))}" placeholder="goal, pilot" />`)}
     ${field('Priority', `<select class="ctrl" data-rule="priority" data-key="${l.key}"><option value="">Any</option>
       ${PRIORITIES.map(p => `<option value="${p}"${l.priority === p ? ' selected' : ''}>${p}</option>`).join('')}</select>`)}
+    ${minutes}
     <details class="rule-more" data-key="${l.key}"${open ? ' open' : ''}><summary>More filters (type, status, assignee)</summary><div class="rule-more-grid">${more}</div></details>
     ${l.custom ? `<button class="ghost" data-act="rule-remove" data-key="${l.key}" aria-label="Remove ${esc(l.name)}">Remove level</button>` : ''}
   </div>`;
+}
+
+/** What the minutes box is showing, for its tooltip. */
+function minsTitle(l, plan, counts) {
+  const tail = 'Type a number to set this section’s time yourself.';
+  if (manualMin(l.key) !== null) return `Set by hand. ${tail}`;
+  const need = Math.round(plan.raw[l.key]);
+  const got = Math.round(plan.minutes(l.key));
+  const held = got < need
+    ? ` Held to ${got} min: its target is ${Math.round(plan.target[l.key])} min and the window is full. Change the target under Edit grouping.`
+    : '';
+  return `${counts[l.key].n} stories need ${need} min.${held} ${tail}`;
+}
+
+/** The levels that ran short, named for the warning line. */
+function cutNames(plan) {
+  const n = plan.cut.map(l => l.short);
+  if (n.length > 3) return `${n.slice(0, 2).join(', ')} and ${n.length - 2} more levels`;
+  return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0];
 }
 
 function lobbyHtml() {
@@ -1965,11 +2047,11 @@ function lobbyHtml() {
     const own = l.isBreak && l.custom;
     const text = own
       ? `<div><input class="ctrl name-edit" data-rule="name" data-key="${l.key}" value="${esc(l.name)}" maxlength="40" aria-label="Name of this break" /><div class="sub">${esc(l.sub)}</div></div>`
-      : rt.editRules && !l.catchAll && !l.isBreak && !l.of ? ruleEditor(l)
+      : rt.editRules && !l.isBreak && !l.of ? ruleEditor(l)
       : `<div><div class="name">${esc(l.name)}</div><div class="sub">${esc(l.sub)}</div></div>`;
     const mins = l.isBreak
       ? `<label class="mins"><input class="ctrl num" type="number" min="0" max="180" step="5" value="${esc(s.budgets[l.key])}" data-budget="${l.key}" aria-label="Minutes of ${esc(l.name)}" /> <span class="muted">min</span></label>`
-      : `<label class="mins${manualMin(l.key) === null ? '' : ' manual'}" title="${manualMin(l.key) === null ? `${counts[l.key].n} stories × minutes by priority${plan.scale < 1 ? ', scaled to fit' : ''}. ` : 'Set by hand. '}Type a number to set this section's time yourself.">
+      : `<label class="mins${manualMin(l.key) === null ? '' : ' manual'}" title="${esc(minsTitle(l, plan, counts))}">
           <input class="ctrl num" type="number" min="0" max="300" step="1" value="${rt.loading ? '' : Math.round(w.min)}" data-level-min="${l.key}" aria-label="Minutes of ${esc(l.name)}" /> <span class="muted">min</span>
           ${manualMin(l.key) === null ? '' : `<button type="button" class="ghost icon auto-btn" data-act="min-auto" data-key="${l.key}" title="Back to the automatic time" aria-label="Back to the automatic time of ${esc(l.name)}">↺</button>`}</label>`;
     return `
@@ -1995,8 +2077,8 @@ function lobbyHtml() {
 
   const custom = s.levelOrder.join() !== DEFAULT_ORDER.join();
   const sprintLabels = [...new Set([...rt.cards.values()].flatMap(c => c.labels))].sort((a, b) => a.localeCompare(b));
-  const rulesChanged = JSON.stringify(ruleDefs.map(({ key, name, labels, priority, type, status, assignee }) => [key, name, labels, priority, type, status, assignee]))
-    !== JSON.stringify(mergeDefs(null).map(({ key, name, labels, priority, type, status, assignee }) => [key, name, labels, priority, type, status, assignee]));
+  const ruleShape = defs => JSON.stringify(defs.map(({ key, name, labels, priority, type, status, assignee, min }) => [key, name, labels, priority, type, status, assignee, min]));
+  const rulesChanged = ruleShape(ruleDefs) !== ruleShape(mergeDefs(null));
 
   return `
     <div class="lobby">
@@ -2011,10 +2093,11 @@ function lobbyHtml() {
           ${rt.editRules ? '<button class="ghost" data-act="rule-add">+ Add level</button>' : ''}
           ${rt.editRules && rulesChanged ? '<button class="ghost" data-act="rules-reset">Default grouping</button>' : ''}
           ${custom ? '<button class="ghost" data-act="order-reset">Default order</button>' : ''}</p>
-        ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
+        ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match. Minutes is what the level deserves of the window.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
         <div class="lvl-foot">
           <span class="text2">Starts ${startAt()} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${toMin(endAt()) <= toMin(startAt()) ? ' <span class="warn-text">(the end time is before the start)</span>' : ends > endAt() ? ` <span class="warn-text">(past ${endAt()})</span>` : ''}</span>
-          ${plan.scale < 1 ? `<span class="warn-text">${Math.round(plan.autoSum)} min of stories don't fit ${Math.round(plan.avail)} min${plan.fixed ? ' (after the sections set by hand)' : ''}, so every story gets ${Math.round(plan.scale * 100)}% of its time</span>` : ''}
+          ${plan.cut.length ? `<span class="warn-text">${Math.round(plan.autoSum)} min of stories don't fit ${Math.round(plan.avail)} min${plan.fixed ? ' (after the sections set by hand)' : ''}, so ${esc(cutNames(plan))} ${plan.cut.length === 1 ? 'runs' : 'run'} short — the levels played first keep their time</span>`
+            : plan.spare >= 1 ? `<span class="text2">${Math.round(plan.spare)} min spare</span>` : ''}
           <span class="spacer"></span>
           <button class="primary big" data-act="start"${ready ? '' : ' disabled'}>Start quest</button>
         </div>
@@ -2031,14 +2114,21 @@ function lobbyHtml() {
           <legend>Planning time</legend>
           <label class="per-row"><span>Starts</span><input class="ctrl num" type="time" value="${esc(startAt())}" data-set="startAt" aria-label="Planning starts at" /></label>
           <label class="per-row"><span>Ends</span><input class="ctrl num" type="time" value="${esc(endAt())}" data-set="endAt" aria-label="Planning ends at" /></label>
-          <p class="muted">${Math.max(0, toMin(endAt()) - toMin(startAt()))} min in all. When the stories (plus breaks and ${LOOT_MIN} min of loot) don't fit, every story's time is scaled down to fit.</p>
+          <p class="muted">${Math.max(0, toMin(endAt()) - toMin(startAt()))} min in all, less breaks and ${LOOT_MIN} min of loot. Each level is held to its own target first, so when the stories don't fit it's the levels played last that run short.</p>
         </fieldset>
         <fieldset class="per-story">
-          <legend>Minutes per story</legend>
-          ${BUCKETS.map(b => `<label class="per-row"><span>${esc(b.label)}</span>
-            <input class="ctrl num" type="number" min="0" max="60" step="1" value="${esc(s.perStory[b.key])}" data-per="${b.key}" aria-label="Minutes per ${esc(b.label)} story" />
+          <legend>Minutes per story, by points</legend>
+          ${SIZES.map(b => `<label class="per-row"><span>${esc(b.label)}</span>
+            <input class="ctrl num" type="number" min="0" max="60" step="1" value="${esc(s.perSize[b.key])}" data-per-size="${b.key}" aria-label="Minutes per story of ${esc(b.label)}" />
             <span class="muted">min</span></label>`).join('')}
-          <p class="muted">A level gets the minutes of its stories. Each story's own clock shows on its card.</p>
+          <p class="muted">A level gets the minutes of its stories, up to its own target. Each story's own clock shows on its card.</p>
+        </fieldset>
+        <fieldset class="per-story">
+          <legend>…and when it has no points</legend>
+          ${BUCKETS.map(b => `<label class="per-row"><span>${esc(b.label)}</span>
+            <input class="ctrl num" type="number" min="0" max="60" step="1" value="${esc(s.perStory[b.key])}" data-per="${b.key}" aria-label="Minutes per unpointed ${esc(b.label)} story" />
+            <span class="muted">min</span></label>`).join('')}
+          <p class="muted">Priority sets the order stories are dealt in. It only decides minutes for a story nobody has pointed yet.</p>
         </fieldset>
       </aside>
     </div>`;
@@ -3305,8 +3395,9 @@ document.addEventListener('change', async e => {
     save(); render();
     return;
   }
-  if (t.dataset.per) {
-    s.perStory[t.dataset.per] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
+  if (t.dataset.per || t.dataset.perSize) {
+    const [store, key] = t.dataset.per ? [s.perStory, t.dataset.per] : [s.perSize, t.dataset.perSize];
+    store[key] = Math.max(0, Math.min(60, Math.round(Number(t.value) || 0)));
     save(); render();
     return;
   }
@@ -3413,7 +3504,7 @@ async function init() {
   const stored = got[SESSION_KEY];
   if (stored?.v === 1) {
     const base = freshSession(stored);
-    s = { ...base, ...stored, budgets: base.budgets, perStory: base.perStory };
+    s = { ...base, ...stored, budgets: base.budgets, perStory: base.perStory, perSize: base.perSize };
     for (const d of Object.values(s.decisions)) if (d.d === 'commit') d.d = 'plan';   // sessions from before "Planned"
   }
   applyOrder();
