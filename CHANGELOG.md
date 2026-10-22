@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: a new subtask is created when you click outside its title field, not only on Enter.
 - Opening the status menu or a field's dropdown (assignee, priority, version…) on a work package shows a spinner on it while its choices load, instead of looking frozen.
 - Status changes save faster: the open-subtasks and auto-progress checks reuse the work package already on screen and no longer hold the save for extra requests.
+- Jira style: after a status change in the work-package list, the row pulses while it saves, then the list scrolls to where it landed (another group, say), slides it in and highlights it for a second. If the new status takes it out of the list's filters, a note says so.
 - Jira style: status, assignee and accountable open the same searchable picker everywhere (work-package header, list rows, Details sidebar, Relations tab), not OpenProject's own menus.
 - Jira style: status lozenges, ticket keys (#123), priority icons, avatars and "Unassigned" look the same in the list, Backlogs, Child work items, Relations and the sidebar; "in progress" is blue everywhere, the subtask bar and its popover included.
 - Jira style: the Relations tab is laid out like Child work items, and the confirmation dialogs and settings drawer follow the Jira style look in light and dark.

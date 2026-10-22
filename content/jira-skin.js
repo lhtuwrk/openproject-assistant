@@ -1352,6 +1352,12 @@ html.${WP_CLASS} .blm-jx-children .assignee.error { color: var(--jx-error); box-
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { font-size: 14px; line-height: 20px; }
 /* OpenProject's own status / assignee fields while the picker's choice saves */
 html.${WP_CLASS} .blm-jx-saving { opacity: 0.6; cursor: progress !important; }
+/* A list row whose status is saving breathes until it is redrawn in its new place */
+html.${WP_CLASS} .work-package-table tr.blm-jx-row-saving > td { cursor: progress; opacity: 0.7; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes blm-row-saving { 50% { opacity: 0.45; } }
+  html.${WP_CLASS} .work-package-table tr.blm-jx-row-saving > td { animation: blm-row-saving 1.1s ease-in-out infinite; }
+}
 html.${WP_CLASS} .blm-jx-toast {
   position: fixed; left: 16px; bottom: 16px; z-index: 2147483646; max-width: min(440px, calc(100vw - 32px));
   padding: var(--jx-space-2) var(--jx-space-3); border-radius: var(--jx-radius-panel);
@@ -2248,7 +2254,7 @@ function choose(option) {
   const { wpId, kidId, field, page, button } = picker;
   const current = pickerCurrent();
   closePicker({ refocus: true });
-  if (page) changePageField(button, kidId, field, option.href, current);
+  if (page) changePageField(button, kidId, field, option, current);
   else changeField(wpId, kidId, field, { href: option.href, name: option.name });
 }
 
@@ -2387,21 +2393,116 @@ async function loadPageOptions(id, field, page) {
   return allowedValues((await fetchSchema(id, wp.lockVersion))[field]);
 }
 
-/** Dimmed while saving; OpenProject shows the saved value once its cache reloads. */
-async function changePageField(button, id, field, href, current) {
+/** Dimmed while saving; OpenProject shows the saved value once its cache reloads.
+ *  A status change also follows the work package's list row to where it lands. */
+async function changePageField(button, id, field, { href, name }, current) {
   if (href === current) return;
   pageWrites.add(id);
   button.classList.add('blm-jx-saving');
   button.setAttribute('aria-busy', 'true');
+  const from = field === 'status' ? rowSpot(listRow(id)) : null;
+  from?.row.classList.add('blm-jx-row-saving');
   try {
     await writeWp(id, field, href);
+    if (from) followRow(id, from, name);
   } catch (err) {
+    from?.row.classList.remove('blm-jx-row-saving');
     showToast(`Couldn't change the ${FIELD_LABEL[field]} of #${id}: ${err.message || 'request failed'}`);
   } finally {
     pageWrites.delete(id);
     button.classList.remove('blm-jx-saving');
     button.removeAttribute('aria-busy');
   }
+}
+
+// ─── Following a row after a status change ────────────────────────────────────
+//  In a list grouped or sorted by status, the row jumps to another group once
+//  OpenProject reloads it. Wait until it is drawn with the new status and stops
+//  moving, then scroll it into view, slide it in and highlight it for a second.
+
+const FOLLOW_TIMEOUT_MS = 5000;
+const HIGHLIGHT_MS = 1000;
+
+/** The work package's row in the list (not in an embedded table of the open one). */
+function listRow(id) {
+  for (const row of document.querySelectorAll('.work-package-table tbody tr')) {
+    if (tableRowId(row) === id && !row.closest('.work-packages--details, .work-packages--show-view')) return row;
+  }
+  return null;
+}
+
+function scrollParent(node) {
+  for (let p = node.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
+
+/** { row, box, top }: the row's top measured within its scrolling box, so a
+ *  position before and after a scroll compare. */
+function rowSpot(row) {
+  if (!row) return null;
+  const box = scrollParent(row);
+  const boxTop = box === document.scrollingElement ? 0 : box.getBoundingClientRect().top;
+  return { row, box, top: row.getBoundingClientRect().top - boxTop + box.scrollTop };
+}
+
+function followRow(id, from, statusName) {
+  const wanted = statusName.trim().toLowerCase();
+  const started = Date.now();
+  let last = null;
+  let steady = 0;
+  // OpenProject usually redraws the row, which drops the class; this covers it reusing it.
+  const done = () => from.row.classList.remove('blm-jx-row-saving');
+  const tick = () => {
+    const row = listRow(id);
+    const cell = row?.querySelector('td.status');
+    // Without a Status column, a new row element is the sign it has been redrawn.
+    const shows = !!row && (cell ? textLeaf(cell)?.textContent.trim().toLowerCase() === wanted : row !== from.row);
+    const spot = shows ? rowSpot(row) : null;
+    // Unchanged checks in a row: OpenProject has finished regrouping. The same row
+    // still in its old place may only have had its cell updated so far, and get
+    // regrouped a moment later, so that waits longer.
+    steady = spot && last && spot.row === last.row && Math.abs(spot.top - last.top) < 1 ? steady + 1 : 0;
+    last = spot;
+    const inPlace = spot && spot.row === from.row && Math.abs(spot.top - from.top) < 4;
+    if (steady >= (inPlace ? 10 : 2)) { done(); revealRow(spot, from); return; }
+    if (Date.now() - started < FOLLOW_TIMEOUT_MS) { setTimeout(tick, 100); return; }
+    done();
+    if (spot) revealRow(spot, from);
+    else if (!row) showToast(`#${id} is now ${statusName} and no longer matches this list's filters.`);
+  };
+  setTimeout(tick, 100);
+}
+
+function revealRow(spot, from) {
+  const { row, box, top } = spot;
+  const motion = animationEnabled && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const moved = Math.abs(top - from.top) > 4;
+  if (moved) {
+    const r = row.getBoundingClientRect();
+    const view = box === document.scrollingElement ? { top: 0, bottom: innerHeight } : box.getBoundingClientRect();
+    if (r.top < view.top || r.bottom > view.bottom) row.scrollIntoView({ block: 'center', behavior: motion ? 'smooth' : 'auto' });
+  }
+  const cells = [...row.children];
+  // Enters from the side it came from: from above when it moved down.
+  if (moved && motion) {
+    const dy = top > from.top ? '-12px' : '12px';
+    for (const td of cells) {
+      td.animate([{ opacity: 0.2, translate: `0 ${dy}` }, { opacity: 1, translate: '0 0' }],
+        { duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    }
+  }
+  // Inset shadows, not backgrounds: OpenProject's row backgrounds are !important in places.
+  const tint = 'inset 0 0 0 100vmax color-mix(in srgb, var(--jx-focus) 22%, transparent)';
+  const edge = 'inset 3px 0 0 var(--jx-focus)';
+  const clear = 'inset 0 0 0 100vmax transparent';
+  cells.forEach((td, i) => {
+    const on = i === 0 ? `${edge}, ${tint}` : tint;
+    const off = i === 0 ? `inset 3px 0 0 transparent, ${clear}` : clear;
+    td.animate([{ boxShadow: on }, { boxShadow: on, offset: motion ? 0.6 : 0.99 }, { boxShadow: off }],
+      { duration: HIGHLIGHT_MS, easing: 'ease-out' });
+  });
 }
 
 let toastEl = null;
