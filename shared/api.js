@@ -214,6 +214,19 @@ export function createWorkPackage(body) {
 }
 
 /**
+ * The create form for a new work package in a project: the schema (the types,
+ * priorities, versions and custom-field values it allows) and the defaults
+ * OpenProject would apply. A form POST validates only; it saves nothing.
+ * @param {number|string} projectId
+ * @param {Object} [body]  a partial work package to validate against
+ * @returns {Promise<{schema: Object, payload: Object}>}
+ */
+export async function fetchCreateForm(projectId, body = {}) {
+  const form = await apiWrite('POST', `/api/v3/projects/${projectId}/work_packages/form`, body);
+  return { schema: form?._embedded?.schema ?? {}, payload: form?._embedded?.payload ?? {} };
+}
+
+/**
  * The statuses a work package may move to next (its workflow), read from its
  * edit form. A form POST validates only; it saves nothing.
  * @param {number|string} wpId
