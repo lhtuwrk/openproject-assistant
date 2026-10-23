@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Planning: your own comments on a story can be edited in place, @mentions included.
+- Planning: a subtask's title and type can be edited in place on the Subtasks tab, next to its status and assignee.
 - Planning: the Subtasks tab suggests the subtasks the team usually creates, learned from the project's last three sprints (or a per-project template the facilitator can edit), each with a readable title of its own.
 - Planning: a story can be written straight into the sprint, or cloned from an existing one, in a large dialog laid out like the story: its title, type, story points, assignee, version and rendered description can be changed first, and subtasks (the suggested ones, the original's own or new ones) created with it. A new story also picks its priority and label, which is what puts it in a level, and it joins that level as soon as it is created — mid-session too.
 - Resolving a Bug, or a story related to a Bug, asks for its Fixed in version with the sprint's release already added (2.47 for sprint 26.10.B, one up each sprint), and saves it with the status. The starting sprint, release and types are set in Settings.

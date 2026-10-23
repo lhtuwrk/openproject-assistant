@@ -329,6 +329,7 @@ const rt = {
   sug: null,                   // { for, kind, rows: [{ on, title, assigneeHref }], open, busy, err }: suggested subtasks
   tplEdit: null,               // { kind, rows: [{ title, assignee }] } while the subtask template is edited
   learned: null,               // { projectId, sprints, story, bug }: the team's usual subtasks, from recent sprints
+  kidEdit: null,                // { id, parent, typeHref, subject, busy, err } while a subtask's title/type is edited
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -720,13 +721,16 @@ function queueWrite(wpId, fn) {
   return run;
 }
 
-/** Sets a story's or subtask's status or assignee on OpenProject. */
+/** Sets a story's or subtask's status, assignee, subject or type on OpenProject. */
 async function writeField(wpId, field, href, parentId) {
   const key = `${wpId}:${field}`;
   if (rt.saving.has(key)) return;
   rt.saving.add(key); rt.writeErr.delete(key); render();
   try {
-    const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, field === 'storyPoints' ? { storyPoints: href } : { _links: { [field]: { href } } }));
+    const changes = field === 'storyPoints' ? { storyPoints: href }
+      : field === 'subject' ? { subject: href }
+      : { _links: { [field]: { href } } };
+    const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, changes));
     const d = details.get(parentId ?? wpId);
     if (d?.loading) {
       details.delete(parentId ?? wpId);   // a reload started before the save: load it again after
@@ -765,6 +769,44 @@ async function addSubtask(parentId, subject, { typeHref, assigneeHref, versionHr
   if (live?.kids) live.kids = [...live.kids, kid];
   if (live) loadKidStatuses(parentId);
   return kid;
+}
+
+/** Opens inline editing of a subtask's title and type. One subtask at a time. */
+function startKidEdit(parentId, kidId) {
+  if (rt.kidEdit?.busy) return;
+  const k = details.get(parentId)?.kids?.find(x => String(x.id) === String(kidId));
+  if (!k) return;
+  rt.kidEdit = { id: String(kidId), parent: parentId, typeHref: k._links?.type?.href ?? null, subject: k.subject ?? '', busy: false, err: '' };
+  render();
+  const input = document.querySelector('[data-role="kid-edit-subject"]');
+  if (input) { input.focus(); input.select(); }
+}
+
+function cancelKidEdit() {
+  if (!rt.kidEdit || rt.kidEdit.busy) return;
+  rt.kidEdit = null;
+  render();
+}
+
+/** Saves what changed; writeField records its own error per field, so this leaves
+ *  the edit open (with that error shown) rather than closing on a failed write. */
+async function saveKidEdit() {
+  const ed = rt.kidEdit;
+  if (!ed || ed.busy) return;
+  const subject = ed.subject.replace(/\s+/g, ' ').trim();
+  if (!subject) { ed.err = "a subtask needs a title"; return render(); }
+  ed.err = '';
+  const k = details.get(ed.parent)?.kids?.find(x => String(x.id) === String(ed.id));
+  const subjectChanged = k && subject !== (k.subject ?? '');
+  const typeChanged = k && ed.typeHref && ed.typeHref !== (k._links?.type?.href ?? null);
+  if (!subjectChanged && !typeChanged) { rt.kidEdit = null; return render(); }
+  ed.busy = true; render();
+  if (subjectChanged) await writeField(ed.id, 'subject', subject, ed.parent);
+  if (typeChanged) await writeField(ed.id, 'type', ed.typeHref, ed.parent);
+  ed.busy = false;
+  if (rt.kidEdit === ed && !rt.writeErr.has(`${ed.id}:subject`) && !rt.writeErr.has(`${ed.id}:type`)) rt.kidEdit = null;
+  else if (rt.kidEdit === ed) ed.err = rt.writeErr.get(`${ed.id}:subject`) ?? rt.writeErr.get(`${ed.id}:type`) ?? '';
+  render();
 }
 
 async function createSubtask(parentId, sub = rt.sub, { refocus = true } = {}) {
@@ -1899,6 +1941,7 @@ function render() {
     rt.subFor = did;
     rt.sub = { draft: '', typeHref: rt.sub.typeHref, assigneeHref: undefined, busy: false, err: '' };
     rt.sug = null; rt.tplEdit = null;
+    if (!rt.kidEdit?.busy) rt.kidEdit = null;
     rt.tab = 'desc';
   }
   const scrollTop = document.querySelector('[data-role="all-list"]')?.scrollTop ?? 0;
@@ -2213,20 +2256,41 @@ function descHtml(d) {
   return `<div class="rich">${withChips(d.descSafe)}</div>`;
 }
 
+/** A subtask's row: its title and type as plain text, or — while it's the one being
+ *  edited — as an input and a select, with Save/Cancel on their own line below. */
+function kidRowHtml(id, k, d) {
+  const kid = String(k.id), L = k._links ?? {};
+  const ed = rt.kidEdit?.id === kid ? rt.kidEdit : null;
+  const types = [...(rt.types ?? [])];
+  if (ed && L.type?.href && !types.some(t => t.href === L.type.href)) types.unshift({ href: L.type.href, name: L.type.title });
+  const typeCell = ed
+    ? `<select class="ctrl" data-role="kid-edit-type" aria-label="Type of #${kid}">${types.map(t => `<option value="${esc(t.href)}"${t.href === ed.typeHref ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`
+    : `<span class="kid-type">${esc(L.type?.title ?? '')}</span>`;
+  const subjectCell = ed
+    ? `<input class="ctrl" data-role="kid-edit-subject" value="${esc(ed.subject)}" aria-label="Title of #${kid}"${ed.busy ? ' readonly' : ''} />`
+    : `<span class="kid-subject">${esc(k.subject ?? '')}</span>`;
+  const editBtn = ed
+    ? `<button type="button" class="ghost icon" data-act="kid-edit-cancel" title="Cancel" aria-label="Cancel editing #${kid}"${ed.busy ? ' disabled' : ''}>✕</button>`
+    : `<button type="button" class="ghost icon" data-act="kid-edit-start" data-id="${kid}" data-parent="${esc(id)}" title="Edit title or type" aria-label="Edit #${kid}">✎</button>`;
+  return `<li class="kid-row${ed ? ' kid-editing' : ''}">
+      <a class="num" href="${BACKLOG_URL}/work_packages/${kid}" target="_blank" rel="noopener">#${kid}</a>
+      ${typeCell}
+      ${subjectCell}
+      ${statusSelect(kid, L.status?.href, L.status?.title, d.kidStatuses?.get(kid), id)}
+      ${assigneeSelect(kid, L.assignee?.href, L.assignee?.title, id)}
+      ${editBtn}
+      ${writeErrHtml(`${kid}:status`, 'status')}${writeErrHtml(`${kid}:assignee`, 'assignee')}
+      ${ed ? `<div class="kid-edit-actions">
+        <button type="button" class="primary" data-act="kid-edit-save"${ed.busy ? ' aria-busy="true" disabled' : ''}>${ed.busy ? 'Saving…' : 'Save'}</button>
+        ${ed.err ? `<span class="card-error" role="alert">${esc(ed.err)}</span>` : ''}
+      </div>` : ''}
+    </li>`;
+}
+
 function kidsHtml(id, d) {
   if (!d.kids) return `<p class="card-error">Couldn't load the subtasks.</p>`;
   const done = d.kids.filter(k => k._links?.status?.title && /closed|done|resolved|rejected/i.test(k._links.status.title)).length;
-  const rows = d.kids.map(k => {
-    const kid = String(k.id), L = k._links ?? {};
-    return `<li class="kid-row">
-      <a class="num" href="${BACKLOG_URL}/work_packages/${kid}" target="_blank" rel="noopener">#${kid}</a>
-      <span class="kid-type">${esc(L.type?.title ?? '')}</span>
-      <span class="kid-subject">${esc(k.subject ?? '')}</span>
-      ${statusSelect(kid, L.status?.href, L.status?.title, d.kidStatuses?.get(kid), id)}
-      ${assigneeSelect(kid, L.assignee?.href, L.assignee?.title, id)}
-      ${writeErrHtml(`${kid}:status`, 'status')}${writeErrHtml(`${kid}:assignee`, 'assignee')}
-    </li>`;
-  }).join('');
+  const rows = d.kids.map(k => kidRowHtml(id, k, d)).join('');
   const types = rt.types ?? [];
   const typeHref = rt.sub.typeHref ?? defaultTypeHref();
   const parentAssignee = d.wp._links?.assignee;
@@ -3059,6 +3123,9 @@ async function onAction(act, el) {
       if (rt.tab === 'sub') { const id = detailId(); if (id) loadKidStatuses(id); }
       return render();
     case 'sub-create': return createSubtask(el.dataset.id);
+    case 'kid-edit-start': return startKidEdit(el.dataset.parent, el.dataset.id);
+    case 'kid-edit-cancel': return cancelKidEdit();
+    case 'kid-edit-save': return saveKidEdit();
     case 'sug-open':  if (rt.sug) Object.assign(rt.sug, { open: true, touched: true }); return render();
     case 'sug-close': if (rt.sug) Object.assign(rt.sug, { open: false, touched: true }); return render();
     case 'sug-create': return createSuggested(el.dataset.id);
@@ -3145,6 +3212,7 @@ document.addEventListener('toggle', e => {
 
 document.addEventListener('input', e => {
   if (e.target.dataset.role === 'sub-subject') rt.sub.draft = e.target.value;
+  if (e.target.dataset.role === 'kid-edit-subject' && rt.kidEdit) rt.kidEdit.subject = e.target.value;
   if (e.target.dataset.role === 'comment') {
     rt.commentDrafts.set(e.target.dataset.id, e.target.value);
     const post = document.querySelector(`[data-act="comment-post"][data-id="${CSS.escape(e.target.dataset.id)}"]`);
@@ -3168,6 +3236,12 @@ document.addEventListener('keydown', e => {
   } else if (role === 'sub-subject' && e.key === 'Escape' && !rt.sub.busy) {   // drop the draft, so leaving the field creates nothing
     e.preventDefault(); e.stopImmediatePropagation();
     rt.sub.draft = ''; e.target.value = '';
+  } else if (role === 'kid-edit-subject' && e.key === 'Enter') {
+    e.preventDefault();
+    saveKidEdit();
+  } else if (role === 'kid-edit-subject' && e.key === 'Escape' && !rt.kidEdit?.busy) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    cancelKidEdit();
   }
 });
 
@@ -3380,6 +3454,7 @@ document.addEventListener('change', async e => {
   if (t.dataset.role === 'sug-on') { const r = rt.sug?.rows[t.dataset.i]; if (r) { r.on = t.checked; rt.sug.touched = true; } return render(); }
   if (t.dataset.role === 'tpl-assignee') { const r = rt.tplEdit?.rows[t.dataset.i]; if (r) r.assignee = t.value; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
+  if (t.dataset.role === 'kid-edit-type' && rt.kidEdit) { rt.kidEdit.typeHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
     s.budgets[t.dataset.budget] = Math.max(0, Math.min(180, Math.round(Number(t.value) || 0)));

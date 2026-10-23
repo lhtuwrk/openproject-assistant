@@ -480,13 +480,16 @@
     .kid-sum { font-size: var(--text-sm); padding-bottom: var(--space-xs); }
     .kids { list-style: none; display: grid; }
     .kid-row {
-      display: grid; grid-template-columns: 64px 80px minmax(0, 1fr) 150px 170px; gap: var(--space-xs); align-items: center;
+      display: grid; grid-template-columns: 64px 80px minmax(0, 1fr) 150px 170px 28px; gap: var(--space-xs); align-items: center;
       padding: 6px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm);
     }
     .kid-row a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .kid-row .kid-type { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .kid-row .kid-subject { overflow-wrap: anywhere; }
     .kid-row .card-error { grid-column: 1 / -1; }
+    .kid-row .icon { padding: 0; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+    .kid-edit-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-sm); padding-top: 2px; }
+    .kid-edit-actions .card-error { grid-column: auto; margin: 0; }
     .create-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 170px auto; gap: var(--space-xs); padding-top: var(--space-sm); }
 
     .sug { display: grid; gap: var(--space-xs); margin-top: var(--space-md); padding: var(--space-sm); border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -629,9 +632,10 @@
       .story-side { position: static; max-height: none; overflow: visible; order: -1;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
       .story-main { min-height: 0; }
-      .kid-row { grid-template-columns: 64px minmax(0, 1fr) 150px; }
+      .kid-row { grid-template-columns: 64px minmax(0, 1fr) 150px 28px; }
       .kid-row .kid-type { display: none; }
       .kid-row .ctrl[data-field="assignee"] { grid-column: 2 / -1; }
+      .kid-row select[data-role="kid-edit-type"] { grid-column: 1 / -1; }
     }
     @media (max-width: 900px) {
       .lobby, .arena, .all, .wrap { grid-template-columns: minmax(0, 1fr); }
