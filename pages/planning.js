@@ -1473,11 +1473,11 @@ async function openStoryDialog(card) {
   closeClone();
   if (cloneEl) return;   // one is still being created
   const isNew = !card;
-  let wp = null, kids = [], form = null;
+  let wp = null, kids = [], createForm = null;
   try {
     // The lobby may not have needed the people list yet, and a new story wants it.
     if (isNew && !rt.people && s.projectId) await loadPeople().catch(() => { /* Unassigned only */ });
-    if (isNew) form = await fetchCreateForm(s.projectId);
+    if (isNew) createForm = await fetchCreateForm(s.projectId);
     else {
       wp = details.get(card.id)?.wp ?? await fetchWorkPackage(card.id);
       kids = details.get(card.id)?.kids ?? await fetchChildWorkPackages(card.id).catch(() => []);
@@ -1485,7 +1485,7 @@ async function openStoryDialog(card) {
   } catch (err) { return toast(isNew ? `Couldn't start a new story: ${err.message}` : `Couldn't open #${card.id}: ${err.message}`); }
   const L = wp?._links ?? {};
   const types = [...(rt.types ?? [])];
-  if (isNew && !types.length) types.push(...allowedOf(form.schema, 'type'));   // the project's types aren't loaded yet
+  if (isNew && !types.length) types.push(...allowedOf(createForm.schema, 'type'));   // the project's types aren't loaded yet
   if (L.type?.href && !types.some(t => t.href === L.type.href)) types.unshift({ href: L.type.href, name: L.type.title });
   const people = [...(rt.people ?? [])];
   if (L.assignee?.href && !people.some(p => p.href === L.assignee.href)) people.unshift({ href: L.assignee.href, name: L.assignee.title });
@@ -1496,10 +1496,10 @@ async function openStoryDialog(card) {
   // A copy keeps these as they are; a new story picks the two that decide its level.
   const kept = isNew ? [] : [['Priority', L.priority?.title], ['Label', wpLabels(wp).join(', ')], ['Parent', L.parent?.title], ['Category', L.category?.title]]
     .filter(([, v]) => v);
-  const priorities = isNew ? allowedOf(form.schema, 'priority') : [];
-  const labelChoices = isNew ? allowedOf(form.schema, LABEL_FIELD) : [];
-  const labelIsList = /^\[\]/.test(form?.schema?.[LABEL_FIELD]?.type ?? '');
-  const defaultPriority = form?.payload?._links?.priority?.href
+  const priorities = isNew ? allowedOf(createForm.schema, 'priority') : [];
+  const labelChoices = isNew ? allowedOf(createForm.schema, LABEL_FIELD) : [];
+  const labelIsList = /^\[\]/.test(createForm?.schema?.[LABEL_FIELD]?.type ?? '');
+  const defaultPriority = createForm?.payload?._links?.priority?.href
     ?? priorities.find(p => /normal|medium/i.test(p.name))?.href ?? priorities[0]?.href ?? '';
   const html = wp?.description?.html ?? '';
   const hasDesc = !!(html.replace(/<[^>]*>/g, '').trim() || /<img/i.test(html));

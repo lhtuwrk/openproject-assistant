@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Jira style: a subtask's status picker on the story page offers the moves allowed from its current status and assignee, not the ones from before its last change.
 - Planning: a subtask's or story's status list refreshes after its assignee changes, and no longer shows the moves from its previous status.
 - Jira style: after changing a subtask's status, assignee or title on the story page, the story's own status button opens again instead of doing nothing.
+- Burndown: removing a tracked version while the versions sheet is still loading no longer leaves the list of versions to add empty and stuck.
 - Burndown: today's Scope tab keeps naming the stories that moved in, moved out or changed points; the live sync no longer wipes them a second after the chart opens, and a scope change during the day is named at the next sync.
 - Jira style dark mode: avatar initials, error states and popup shadows are readable on the dark background.
 - Jira style: the quote no longer overlaps the page count, the work-package page no longer scrolls sideways, the heading above the tabs names the open tab, and child rows you can't edit no longer look clickable.

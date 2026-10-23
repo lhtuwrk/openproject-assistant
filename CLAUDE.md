@@ -12,9 +12,15 @@ There is no build or test suite. CI (`.gitea/workflows/ci.yml`) only does:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"   # manifest is valid JSON
-git ls-files '*.js' | while read f; do node --check "$f"; done              # syntax check every JS file
+tmp=$(mktemp -d); for f in $(git ls-files '*.js'); do cp "$f" "$tmp/t.mjs"; node --check "$tmp/t.mjs" || echo "FAIL $f"; done; rm -rf "$tmp"
 node .gitea/scripts/check-manifest.js                                       # every manifest-referenced path exists
 ```
+
+**Check the syntax through a `.mjs` copy, not `node --check <file>.js` directly.** On a `.js`
+file V8 parses function bodies lazily, so an error inside a function — a duplicate `const`,
+say — passes the check and only blows up in Chrome. Module mode parses eagerly and catches it.
+Every file in this repo passes module-mode parsing, Chrome-API globals and all, because the
+check never runs the code.
 
 Run those before pushing. To try changes: `chrome://extensions` → Developer mode → **Load unpacked** on the repo root, then reload the extension.
 

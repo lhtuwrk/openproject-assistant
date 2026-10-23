@@ -2960,6 +2960,14 @@ async function loadVersionPanel() {
     return;
   }
 
+  // The tracked list above is already clickable while the versions load, and removing one
+  // from it redraws this list — so what that redraw reads has to exist before the await,
+  // and the redraw itself waits for the versions rather than wiping the placeholder.
+  let projectsWithVers = [];
+  let selectedProjects = new Set();
+  let showClosed = false;
+  let loaded = false;
+
   const results = await Promise.all(
     projects.map(p =>
       fetchAllVersions(p.id)
@@ -2967,14 +2975,14 @@ async function loadVersionPanel() {
         .catch(() => ({ project: p, versions: [] }))
     )
   );
-  const projectsWithVers = results.filter(r => r.versions.length);
+  projectsWithVers = results.filter(r => r.versions.length);
 
   // Selected projects: saved filter OR default (Credit Utility + Valiant)
   const savedFilter = stored[PROJECT_FILTER_KEY];
-  let selectedProjects = new Set(
+  selectedProjects = new Set(
     savedFilter ?? projectsWithVers.filter(r => isDefaultProject(r.project.name)).map(r => r.project.id)
   );
-  let showClosed = false;
+  loaded = true;
 
   renderProjectChips(projectsWithVers, selectedProjects, (newSet) => {
     selectedProjects = newSet;
@@ -2983,6 +2991,7 @@ async function loadVersionPanel() {
   }, () => { showClosed = !showClosed; renderAvailable(); });
 
   function renderAvailable() {
+    if (!loaded) return;   // still loading: the placeholder stays until the versions are in
     const q = search.value.trim().toLowerCase();
     const trackedIds = new Set(tracked.map(t => t.versionId));
     body.innerHTML = '';
