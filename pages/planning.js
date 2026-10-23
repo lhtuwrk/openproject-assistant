@@ -53,26 +53,29 @@ const escRe = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Editable in the lobby and saved under LEVELS_KEY; these are the defaults.
 const DEFAULT_DEFS = [
   { key: 'goal',  name: 'Boss: the sprint goal', short: 'Goal',         sub: 'Label goal',
-    min: 55, labels: ['goal'], priority: '' },
+    rate: 10, labels: ['goal'], priority: '' },
   { key: 'big3',  name: 'The big three',         short: 'Big three',    sub: 'Pilot · Chiron · VAB',
-    min: 45, labels: ['pilot', 'chiron', 'vab'], priority: '' },
+    rate: 8, labels: ['pilot', 'chiron', 'vab'], priority: '' },
   { key: 'break', name: 'Coffee respawn',        short: 'Coffee',       sub: 'Ten minutes, no tickets',
     min: 10, isBreak: true },
   { key: 'fire',  name: 'Fire drill',            short: 'Fire drill',   sub: 'Immediate priority',
-    min: 40, labels: [], priority: 'Immediate' },
+    rate: 6, labels: [], priority: 'Immediate' },
   { key: 'high',  name: 'High voltage',          short: 'High voltage', sub: 'High priority',
-    min: 30, labels: [], priority: 'High' },
+    rate: 5, labels: [], priority: 'High' },
   { key: 'rest',  name: 'Side quests',           short: 'Side quests',  sub: 'Every other story, by priority',
-    min: 15, catchAll: true },
+    rate: 3, catchAll: true },
 ];
 
 const ruleSub = d => d.isBreak ? d.sub : d.catchAll ? 'Every other story, by priority'
   : [d.labels?.length ? `Label ${d.labels.join(' · ')}` : '', d.priority ? `${d.priority} priority` : '', d.type ? `Type ${d.type}` : '',
      d.status ? `Status ${d.status}` : '', d.assignee ? (d.assignee === NONE ? 'Unassigned' : `Assignee ${d.assignee}`) : ''].filter(Boolean).join(' · ') || 'No rule yet';
 
-/** A level's target in minutes, kept in range; falls back when the value is not a number. */
-const levelTarget = (v, fallback) =>
-  Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(300, Math.round(Number(v)))) : fallback;
+/** What one story in a level is worth, in minutes, kept in range. This is a rate, not a
+ *  timebox: it ranks the levels against each other and the session is shared out in those
+ *  proportions, so a goal story always gets more of the hour than a side quest. */
+const DEFAULT_RATE = 5;
+const levelRate = (v, fallback) =>
+  Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(60, Math.round(Number(v)))) : fallback;
 
 function compile(d) {
   const re = d.labels?.length ? new RegExp(`\\b(${d.labels.map(escRe).join('|')})\\b`, 'i') : null;
@@ -92,7 +95,7 @@ function mergeDefs(saved) {
   const builtIn = DEFAULT_DEFS.map(d => {
     const o = byKey.get(d.key);
     return o ? { ...d, name: String(o.name || d.name).slice(0, 40), short: undefined,
-      min: d.isBreak ? d.min : levelTarget(o.min, d.min),
+      ...(d.isBreak ? {} : { rate: levelRate(o.rate, d.rate) }),
       labels: d.isBreak || d.catchAll ? d.labels : (o.labels ?? []).map(String), priority: d.isBreak || d.catchAll ? d.priority : (o.priority ?? ''),
       ...(d.isBreak || d.catchAll ? {} : Object.fromEntries(EXTRA.map(k => [k, String(o[k] ?? '')]))) } : d;
   });
@@ -100,7 +103,7 @@ function mergeDefs(saved) {
     .map(d => d.isBreak
       ? { key: String(d.key), custom: true, isBreak: true, name: String(d.name || 'Break').slice(0, 40), sub: 'No tickets', min: 10 }
       : { key: String(d.key), custom: true, name: String(d.name || 'New level').slice(0, 40),
-      min: levelTarget(d.min, 15), labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
+      rate: levelRate(d.rate, DEFAULT_RATE), labels: (d.labels ?? []).map(String), priority: d.priority ?? '',
       ...Object.fromEntries(EXTRA.map(k => [k, String(d[k] ?? '')])) });
   return [...custom, ...builtIn];
 }
@@ -286,7 +289,7 @@ function freshSession(prev) {
     versionId:   prev?.versionId ?? null,
     versionName: prev?.versionName ?? '',
     versionHref: prev?.versionHref ?? null,
-    budgets:     { ...Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l.min])), ...prev?.budgets },   // minutes; play levels are set at Start
+    budgets:     { ...Object.fromEntries(LEVEL_DEFS.map(l => [l.key, l.min ?? 0])), ...prev?.budgets },   // minutes; play levels are set at Start
     cardSpent: {},             // wpId -> ms discussed
     levelOrder:  normalizeOrder(prev?.levelOrder),
     level: 0,
@@ -360,27 +363,18 @@ const hhmm = total => {
 /** Minutes of every break (the ones you added and the coffee one). */
 const breakMin = () => LEVELS.filter(l => l.isBreak).reduce((t, l) => t + (Number(s.budgets[l.key]) || 0), 0);
 
-/** What each play level deserves of the window, from its grouping rule. A level
- *  split into parts shares its target between them, by how many stories each holds,
- *  so every part gives its stories the same minutes. */
-function targetsOf(count) {
-  const baseOf = l => l.of ?? l.key;
-  const whole = {};
-  for (const l of PLAY_LEVELS) whole[baseOf(l)] = (whole[baseOf(l)] ?? 0) + count[l.key];
-  return Object.fromEntries(PLAY_LEVELS.map(l => {
-    const base = baseOf(l);
-    const target = Math.max(0, Number(DEF[base]?.min) || 0);
-    return [l.key, whole[base] > 0 ? target * (count[l.key] / whole[base]) : target / (l.parts || 1)];
-  }));
-}
+/** What one story in this level is worth; the parts of a split level share the rate,
+ *  so a story gets the same time whichever part it was dealt into. */
+const rateOf = l => Math.max(0, Number(DEF[l.of ?? l.key]?.rate) || 0);
 
 /** How the window is shared out among the play levels.
  *  Planning is what produces the estimates, so a story's points can't decide its time,
- *  and its priority has already had its say: it chose the level the story is in. The
- *  level is the unit — each one has a target from its grouping rule, and the levels
- *  share the window in proportion to those targets, so the sprint goal always outranks
- *  the long tail however many stories the tail holds. A level with no stories takes
- *  nothing, and inside a level every story gets the same share. */
+ *  and its priority has already had its say: it chose the level the story is in. What
+ *  ranks a story is the level it landed in, so each level carries a rate — the minutes
+ *  one of its stories is worth — and the whole session is shared out in those
+ *  proportions. A goal story is therefore always worth more of the hour than a side
+ *  quest by the same ratio the facilitator set, however many stories each level holds,
+ *  while a level with more stories still takes more of the clock than one with few. */
 function timePlan() {
   const count = Object.fromEntries(PLAY_LEVELS.map(l => [l.key, levelCount(l.key)]));
   // Sections set by hand keep their minutes; the others share what is left of the window.
@@ -388,14 +382,18 @@ function timePlan() {
   const fixed = PLAY_LEVELS.reduce((t, l) => t + (manualMin(l.key) ?? 0), 0);
   const avail = Math.max(0, toMin(endAt()) - toMin(startAt()) - LOOT_MIN - breakMin() - fixed);
 
-  const target = targetsOf(count);
-  // The targets of the levels that hold stories stretch or shrink together to fill the window.
-  const asked = auto.reduce((t, l) => t + (count[l.key] ? target[l.key] : 0), 0);
-  const fit = asked > 0 ? avail / asked : 0;
-  const got = Object.fromEntries(auto.map(l => [l.key, count[l.key] ? target[l.key] * fit : 0]));
+  const rate = Object.fromEntries(PLAY_LEVELS.map(l => [l.key, rateOf(l)]));
+  // What the levels are worth at those rates. A rate is a ceiling, so a sprint that fits
+  // gets exactly it and the session ends early; a crowded one shrinks every level together,
+  // which keeps the spread between a goal story and a side quest to the rates' own ratio.
+  const worth = Object.fromEntries(auto.map(l => [l.key, rate[l.key] * count[l.key]]));
+  const asked = auto.reduce((t, l) => t + worth[l.key], 0);
+  const fit = asked > 0 ? Math.min(1, avail / asked) : 0;
+  const got = Object.fromEntries(auto.map(l => [l.key, worth[l.key] * fit]));
   const minutes = key => manualMin(key) ?? got[key] ?? 0;
   return {
-    count, target, fixed, avail, fit, minutes,
+    count, rate, fixed, avail, fit, minutes,
+    spare: Math.max(0, avail - auto.reduce((t, l) => t + got[l.key], 0)),
     /** The minutes each story in a level gets. */
     each: key => (count[key] ? minutes(key) / count[key] : 0),
   };
@@ -946,8 +944,8 @@ function setOrder(order) {
 const splitLabels = text => [...new Set(String(text).split(/[,;\n]/).map(x => x.trim()).filter(Boolean))];
 
 /** Stores the rules and re-deals the sprint's stories into the levels they now describe. */
-const persistRules = () => chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom, isBreak, min }) =>
-  ({ key, name, labels, priority, type, status, assignee, custom, min, ...(isBreak && custom ? { isBreak } : {}) })) });
+const persistRules = () => chrome.storage.local.set({ [LEVELS_KEY]: ruleDefs.map(({ key, name, labels, priority, type, status, assignee, custom, isBreak, rate }) =>
+  ({ key, name, labels, priority, type, status, assignee, custom, rate, ...(isBreak && custom ? { isBreak } : {}) })) });
 
 function applyRules(next) {
   if (s.phase !== 'lobby') return;
@@ -965,14 +963,14 @@ function editRule(key, field, value) {
     : field === 'name' ? { ...d, name: value.trim().slice(0, 40) || d.name, short: undefined }
     : field === 'labels' ? { ...d, labels: splitLabels(value) }
     : field === 'priority' ? { ...d, priority: PRIORITIES.includes(value) ? value : '' }
-    : field === 'min' ? { ...d, min: levelTarget(value, d.min) }
+    : field === 'rate' ? { ...d, rate: levelRate(value, d.rate) }
     : EXTRA.includes(field) ? { ...d, [field]: value }
     : d));
 }
 
 function addRule() {
   const key = `c${Date.now().toString(36)}`;
-  applyRules([{ key, custom: true, name: 'New level', min: 15, labels: [], priority: '' }, ...ruleDefs]);
+  applyRules([{ key, custom: true, name: 'New level', rate: DEFAULT_RATE, labels: [], priority: '' }, ...ruleDefs]);
   document.querySelector(`[data-rule="name"][data-key="${key}"]`)?.focus();
 }
 
@@ -1937,9 +1935,9 @@ function renderBanner() {
 function ruleEditor(l) {
   const field = (cap, inner) => `<label class="rf"><span>${cap}</span>${inner}</label>`;
   const name = field('Name', `<input class="ctrl" data-rule="name" data-key="${l.key}" value="${esc(ruleDefs.find(d => d.key === l.key)?.name ?? l.name)}" maxlength="40" />`);
-  const minutes = field('Minutes', `<input class="ctrl num" data-rule="min" data-key="${l.key}" type="number" min="0" max="300" step="5" value="${esc(l.min)}"
-    title="What this level deserves of the window. It never gets more than its stories need, and the levels played first are served first." />`);
-  if (l.catchAll) return `<div class="rule-edit catch-all">${name}${minutes}</div>`;
+  const rate = field('Min/story', `<input class="ctrl num" data-rule="rate" data-key="${l.key}" type="number" min="0" max="60" step="1" value="${esc(l.rate)}"
+    title="What one story in this level is worth, against the other levels. The session is shared out in these proportions, so doubling this doubles a story's time next to the rest." />`);
+  if (l.catchAll) return `<div class="rule-edit catch-all">${name}${rate}</div>`;
   const more = [['type', 'Type', 'type'], ['status', 'Status', 'status'], ['assignee', 'Assignee', 'assigneeName']].map(([k, cap, f]) => {
     const vals = [...new Set([...rt.cards.values()].map(c => c[f]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if (l[k] && l[k] !== NONE && !vals.includes(l[k])) vals.unshift(l[k]);
@@ -1953,7 +1951,7 @@ function ruleEditor(l) {
     ${field('Labels', `<input class="ctrl" data-rule="labels" data-key="${l.key}" value="${esc((l.labels ?? []).join(', '))}" placeholder="goal, pilot" />`)}
     ${field('Priority', `<select class="ctrl" data-rule="priority" data-key="${l.key}"><option value="">Any</option>
       ${PRIORITIES.map(p => `<option value="${p}"${l.priority === p ? ' selected' : ''}>${p}</option>`).join('')}</select>`)}
-    ${minutes}
+    ${rate}
     <details class="rule-more" data-key="${l.key}"${open ? ' open' : ''}><summary>More filters (type, status, assignee)</summary><div class="rule-more-grid">${more}</div></details>
     ${l.custom ? `<button class="ghost" data-act="rule-remove" data-key="${l.key}" aria-label="Remove ${esc(l.name)}">Remove level</button>` : ''}
   </div>`;
@@ -1968,7 +1966,7 @@ function minsTitle(l, plan) {
   const tail = 'Type a number to set this section’s time yourself.';
   const each = `${plan.count[l.key]} stories, ${eachMin(plan.each(l.key))} min each.`;
   if (manualMin(l.key) !== null) return `${each} Set by hand. ${tail}`;
-  return `${each} Its target is ${Math.round(plan.target[l.key])} min of the window, next to the other levels' targets — change it under Edit grouping. ${tail}`;
+  return `${each} A story here is worth ${plan.rate[l.key]} against the other levels' rates — change that under Edit grouping. ${tail}`;
 }
 
 /** The levels too rushed to plan in, named for the warning line. */
@@ -2032,7 +2030,7 @@ function lobbyHtml() {
 
   const custom = s.levelOrder.join() !== DEFAULT_ORDER.join();
   const sprintLabels = [...new Set([...rt.cards.values()].flatMap(c => c.labels))].sort((a, b) => a.localeCompare(b));
-  const ruleShape = defs => JSON.stringify(defs.map(({ key, name, labels, priority, type, status, assignee, min }) => [key, name, labels, priority, type, status, assignee, min]));
+  const ruleShape = defs => JSON.stringify(defs.map(({ key, name, labels, priority, type, status, assignee, rate }) => [key, name, labels, priority, type, status, assignee, rate]));
   const rulesChanged = ruleShape(ruleDefs) !== ruleShape(mergeDefs(null));
 
   return `
@@ -2048,10 +2046,11 @@ function lobbyHtml() {
           ${rt.editRules ? '<button class="ghost" data-act="rule-add">+ Add level</button>' : ''}
           ${rt.editRules && rulesChanged ? '<button class="ghost" data-act="rules-reset">Default grouping</button>' : ''}
           ${custom ? '<button class="ghost" data-act="order-reset">Default order</button>' : ''}</p>
-        ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match. Minutes is what the level deserves of the window.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
+        ${rt.editRules ? `<p class="muted order-note">Labels: comma-separated, any one matches. Priority, type, status, assignee: pick one, or leave on any. Every criterion that's set must match. Min/story is what one story here is worth against the other levels.${sprintLabels.length ? ` Labels in this sprint: ${esc(sprintLabels.join(', '))}.` : ''}</p>` : ''}
         <div class="lvl-foot">
           <span class="text2">Starts ${startAt()} · <span class="num">${total}</span> min of levels + ${LOOT_MIN} min loot · ends <b class="num ${late ? 'warn-text' : ''}">${ends}</b>${toMin(endAt()) <= toMin(startAt()) ? ' <span class="warn-text">(the end time is before the start)</span>' : ends > endAt() ? ` <span class="warn-text">(past ${endAt()})</span>` : ''}</span>
-          ${thin.length ? `<span class="warn-text">${esc(thinNames(thin))} ${thin.length === 1 ? 'gives' : 'give'} each story under ${THIN_MIN} min — lengthen the session, take stories out of the sprint, or raise ${thin.length === 1 ? 'its' : 'their'} target under Edit grouping</span>` : ''}
+          ${thin.length ? `<span class="warn-text">${esc(thinNames(thin))} ${thin.length === 1 ? 'gives' : 'give'} each story under ${THIN_MIN} min — lengthen the session, take stories out of the sprint, or raise ${thin.length === 1 ? 'its' : 'their'} Min/story under Edit grouping</span>`
+            : plan.spare >= 1 ? `<span class="text2">every story gets its full Min/story, with ${Math.round(plan.spare)} min to spare</span>` : ''}
           <span class="spacer"></span>
           <button class="primary big" data-act="start"${ready ? '' : ' disabled'}>Start quest</button>
         </div>
@@ -2068,7 +2067,7 @@ function lobbyHtml() {
           <legend>Planning time</legend>
           <label class="per-row"><span>Starts</span><input class="ctrl num" type="time" value="${esc(startAt())}" data-set="startAt" aria-label="Planning starts at" /></label>
           <label class="per-row"><span>Ends</span><input class="ctrl num" type="time" value="${esc(endAt())}" data-set="endAt" aria-label="Planning ends at" /></label>
-          <p class="muted">${Math.max(0, toMin(endAt()) - toMin(startAt()))} min in all, less breaks and ${LOOT_MIN} min of loot. The levels share what's left in proportion to their targets, and every story in a level gets the same slice of it. Set a level's target under Edit grouping.</p>
+          <p class="muted">${Math.max(0, toMin(endAt()) - toMin(startAt()))} min in all, less breaks and ${LOOT_MIN} min of loot. What's left is shared out so that a story is worth its level's Min/story next to every other story, whether the sprint is small or crowded. Set that under Edit grouping.</p>
         </fieldset>
       </aside>
     </div>`;
