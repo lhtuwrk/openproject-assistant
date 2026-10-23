@@ -485,7 +485,11 @@
     }
     .kid-row a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .kid-row .kid-type { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .kid-row .kid-subject { overflow-wrap: anywhere; }
+    .kid-row .kid-subject {
+      overflow-wrap: anywhere; text-align: left; background: none; border: none; padding: 0; margin: 0;
+      font: inherit; color: inherit; cursor: pointer; border-radius: var(--radius-sm);
+    }
+    .kid-row .kid-subject:hover, .kid-row .kid-subject:focus-visible { text-decoration: underline; outline-offset: 2px; }
     .kid-row .card-error { grid-column: 1 / -1; }
     .kid-row .icon { padding: 0; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
     .kid-edit-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-sm); padding-top: 2px; }

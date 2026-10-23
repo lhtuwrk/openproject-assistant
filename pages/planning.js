@@ -2268,10 +2268,10 @@ function kidRowHtml(id, k, d) {
     : `<span class="kid-type">${esc(L.type?.title ?? '')}</span>`;
   const subjectCell = ed
     ? `<input class="ctrl" data-role="kid-edit-subject" value="${esc(ed.subject)}" aria-label="Title of #${kid}"${ed.busy ? ' readonly' : ''} />`
-    : `<span class="kid-subject">${esc(k.subject ?? '')}</span>`;
+    : `<button type="button" class="kid-subject" data-act="kid-edit-start" data-id="${kid}" data-parent="${esc(id)}" title="Click to edit">${esc(k.subject ?? '')}</button>`;
   const editBtn = ed
     ? `<button type="button" class="ghost icon" data-act="kid-edit-cancel" title="Cancel" aria-label="Cancel editing #${kid}"${ed.busy ? ' disabled' : ''}>✕</button>`
-    : `<button type="button" class="ghost icon" data-act="kid-edit-start" data-id="${kid}" data-parent="${esc(id)}" title="Edit title or type" aria-label="Edit #${kid}">✎</button>`;
+    : '';
   return `<li class="kid-row${ed ? ' kid-editing' : ''}">
       <a class="num" href="${BACKLOG_URL}/work_packages/${kid}" target="_blank" rel="noopener">#${kid}</a>
       ${typeCell}
