@@ -2416,9 +2416,11 @@ async function changePageField(button, id, field, { href, name }, current) {
 }
 
 // ─── Following a row after a status change ────────────────────────────────────
-//  In a list grouped or sorted by status, the row jumps to another group once
-//  OpenProject reloads it. Wait until it is drawn with the new status and stops
-//  moving, then scroll it into view, slide it in and highlight it for a second.
+//  Our write goes straight to the API, not through OpenProject's own edit field,
+//  so its table never regroups the row by itself the way it does after an edit
+//  made through its own UI. Once the row's own status badge repaints with the new
+//  value, move it under the matching group header ourselves (grouped by status),
+//  animate the jump, and highlight it for a second.
 
 const FOLLOW_TIMEOUT_MS = 5000;
 const HIGHLIGHT_MS = 1000;
@@ -2450,29 +2452,99 @@ function rowSpot(row) {
 function followRow(id, from, statusName) {
   const wanted = statusName.trim().toLowerCase();
   const started = Date.now();
-  let last = null;
-  let steady = 0;
-  // OpenProject usually redraws the row, which drops the class; this covers it reusing it.
   const done = () => from.row.classList.remove('blm-jx-row-saving');
   const tick = () => {
     const row = listRow(id);
-    const cell = row?.querySelector('td.status');
-    // Without a Status column, a new row element is the sign it has been redrawn.
-    const shows = !!row && (cell ? textLeaf(cell)?.textContent.trim().toLowerCase() === wanted : row !== from.row);
-    const spot = shows ? rowSpot(row) : null;
-    // Unchanged checks in a row: OpenProject has finished regrouping. The same row
-    // still in its old place may only have had its cell updated so far, and get
-    // regrouped a moment later, so that waits longer.
-    steady = spot && last && spot.row === last.row && Math.abs(spot.top - last.top) < 1 ? steady + 1 : 0;
-    last = spot;
-    const inPlace = spot && spot.row === from.row && Math.abs(spot.top - from.top) < 4;
-    if (steady >= (inPlace ? 10 : 2)) { done(); revealRow(spot, from); return; }
-    if (Date.now() - started < FOLLOW_TIMEOUT_MS) { setTimeout(tick, 100); return; }
+    if (!row) {
+      if (Date.now() - started < FOLLOW_TIMEOUT_MS) { setTimeout(tick, 100); return; }
+      done();
+      showToast(`#${id} is now ${statusName} and no longer matches this list's filters.`);
+      return;
+    }
+    const cell = row.querySelector('td.status');
+    const painted = cell ? textLeaf(cell)?.textContent.trim().toLowerCase() === wanted : true;
+    if (!painted && Date.now() - started < FOLLOW_TIMEOUT_MS) { setTimeout(tick, 100); return; }
     done();
-    if (spot) revealRow(spot, from);
-    else if (!row) showToast(`#${id} is now ${statusName} and no longer matches this list's filters.`);
+    moveRowToGroup(row, from, wanted);
   };
   setTimeout(tick, 100);
+}
+
+/** A group-header row: OpenProject renders it as one cell spanning every column,
+ *  unlike a data row, which has one cell per column. */
+function isGroupHeaderRow(tr) {
+  return tr.children.length === 1 && tr.children[0].hasAttribute('colspan');
+}
+
+/** A header's group name, with its trailing "(count)" stripped. */
+function groupHeaderLabel(tr) {
+  return tr.textContent.replace(/\(\d+\)\s*$/, '').trim().toLowerCase();
+}
+
+/** The group header a row currently sits under, or null outside a grouped table. */
+function groupHeaderOf(row) {
+  for (let r = row.previousElementSibling; r; r = r.previousElementSibling) {
+    if (isGroupHeaderRow(r)) return r;
+  }
+  return null;
+}
+
+/** Nudges a header's "(count)" by delta, wherever that leaf text sits in it. */
+function adjustGroupCount(header, delta) {
+  if (!header) return;
+  for (const node of header.querySelectorAll('*')) {
+    if (node.children.length) continue;
+    const m = /\((\d+)\)/.exec(node.textContent);
+    if (m) { node.textContent = node.textContent.replace(/\(\d+\)/, `(${Math.max(0, +m[1] + delta)})`); return; }
+  }
+}
+
+/** Moves a row under the group header matching its new status (when the table
+ *  is grouped by status) with a flying animation; otherwise just highlights it
+ *  in place, the same as a plain reorder within its current group. */
+function moveRowToGroup(row, from, wanted) {
+  const table = row.closest('table');
+  const headers = table ? [...table.querySelectorAll('tbody > tr')].filter(isGroupHeaderRow) : [];
+  const target = headers.find(h => groupHeaderLabel(h) === wanted);
+  const currentHeader = groupHeaderOf(row);
+  if (!target || target === currentHeader) { revealRow(rowSpot(row), from); return; }
+
+  const before = row.getBoundingClientRect();
+  adjustGroupCount(currentHeader, -1);
+  target.after(row);
+  adjustGroupCount(target, 1);
+
+  const motion = animationEnabled && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const view = () => {
+    const box = scrollParent(row);
+    return box === document.scrollingElement ? { top: 0, bottom: innerHeight } : box.getBoundingClientRect();
+  };
+  const r = row.getBoundingClientRect();
+  const v = view();
+  if (r.top < v.top || r.bottom > v.bottom) row.scrollIntoView({ block: 'center', behavior: motion ? 'smooth' : 'auto' });
+  if (motion) {
+    const after = row.getBoundingClientRect();
+    row.animate(
+      [{ transform: `translate(${before.left - after.left}px, ${before.top - after.top}px)` }, { transform: 'translate(0, 0)' }],
+      { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    );
+  }
+  highlightRow(row);
+}
+
+/** Inset shadows, not backgrounds: OpenProject's row backgrounds are !important
+ *  in places. Sweeps a focus tint across the row's cells for a second. */
+function highlightRow(row) {
+  const motion = animationEnabled && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tint = 'inset 0 0 0 100vmax color-mix(in srgb, var(--jx-focus) 22%, transparent)';
+  const edge = 'inset 3px 0 0 var(--jx-focus)';
+  const clear = 'inset 0 0 0 100vmax transparent';
+  for (const [i, td] of [...row.children].entries()) {
+    const on = i === 0 ? `${edge}, ${tint}` : tint;
+    const off = i === 0 ? `inset 3px 0 0 transparent, ${clear}` : clear;
+    td.animate([{ boxShadow: on }, { boxShadow: on, offset: motion ? 0.6 : 0.99 }, { boxShadow: off }],
+      { duration: HIGHLIGHT_MS, easing: 'ease-out' });
+  }
 }
 
 function revealRow(spot, from) {
@@ -2484,25 +2556,15 @@ function revealRow(spot, from) {
     const view = box === document.scrollingElement ? { top: 0, bottom: innerHeight } : box.getBoundingClientRect();
     if (r.top < view.top || r.bottom > view.bottom) row.scrollIntoView({ block: 'center', behavior: motion ? 'smooth' : 'auto' });
   }
-  const cells = [...row.children];
   // Enters from the side it came from: from above when it moved down.
   if (moved && motion) {
     const dy = top > from.top ? '-12px' : '12px';
-    for (const td of cells) {
+    for (const td of row.children) {
       td.animate([{ opacity: 0.2, translate: `0 ${dy}` }, { opacity: 1, translate: '0 0' }],
         { duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
     }
   }
-  // Inset shadows, not backgrounds: OpenProject's row backgrounds are !important in places.
-  const tint = 'inset 0 0 0 100vmax color-mix(in srgb, var(--jx-focus) 22%, transparent)';
-  const edge = 'inset 3px 0 0 var(--jx-focus)';
-  const clear = 'inset 0 0 0 100vmax transparent';
-  cells.forEach((td, i) => {
-    const on = i === 0 ? `${edge}, ${tint}` : tint;
-    const off = i === 0 ? `inset 3px 0 0 transparent, ${clear}` : clear;
-    td.animate([{ boxShadow: on }, { boxShadow: on, offset: motion ? 0.6 : 0.99 }, { boxShadow: off }],
-      { duration: HIGHLIGHT_MS, easing: 'ease-out' });
-  });
+  highlightRow(row);
 }
 
 let toastEl = null;
