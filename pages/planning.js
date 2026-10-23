@@ -1532,7 +1532,7 @@ async function openStoryDialog(card) {
         </section>
         <aside class="cl-side">
           <label class="dlg-fld"><span>Type</span><select class="ctrl" name="type">${types.map(t => option(t.href, t.name, t.href === L.type?.href)).join('')}</select></label>
-          <label class="dlg-fld"><span>Story points</span><input class="ctrl" name="points" type="number" min="0" step="1" inputmode="numeric" value="${typeof wp.storyPoints === 'number' ? wp.storyPoints : ''}" placeholder="–" /></label>
+          <label class="dlg-fld"><span>Story points</span><input class="ctrl" name="points" type="number" min="0" step="1" inputmode="numeric" value="${typeof wp?.storyPoints === 'number' ? wp.storyPoints : ''}" placeholder="–" /></label>
           <label class="dlg-fld"><span>Assignee</span><select class="ctrl" name="assignee">${option('', 'Unassigned', !L.assignee?.href)}${people.map(p => option(p.href, p.href === rt.me?.href ? `${p.name} (me)` : p.name, p.href === L.assignee?.href)).join('')}</select></label>
           <label class="dlg-fld"><span>Version</span><select class="ctrl" name="version">${versions.map((v, i) => option(v.href, v.name, i === 0)).join('')}</select></label>
           ${isNew && priorities.length ? `<label class="dlg-fld"><span>Priority</span><select class="ctrl" name="priority">${priorities.map(p => option(p.href, p.name, p.href === defaultPriority)).join('')}</select></label>` : ''}
