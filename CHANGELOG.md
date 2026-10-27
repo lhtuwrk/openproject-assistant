@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.2]
 
 ### Added
+- A sprint or saved view in the project sidebar can be pinned for one-click access from anywhere on the backlog, via a pin icon on the entry and quick-jump tabs added to the header.
 - Planning: your own comments on a story can be edited in place, @mentions included.
 - Planning: a subtask's title and type can be edited in place on the Subtasks tab, next to its status and assignee.
 - Planning: the Subtasks tab suggests the subtasks the team usually creates, learned from the project's last three sprints (or a per-project template the facilitator can edit), each with a readable title of its own.

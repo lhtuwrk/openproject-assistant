@@ -636,6 +636,8 @@ async function doRegisterHostScripts() {
       js: ['content/content.js'], runAt: 'document_idle' },
     { id: `${HOST_SCRIPT_PREFIX}skin`, matches: [all],
       js: ['content/quotes.js', 'shared/wp-chips.js', 'content/jira-skin.js'], runAt: 'document_start' },
+    { id: `${HOST_SCRIPT_PREFIX}pinned-backlog`, matches: [all],
+      js: ['content/pinned-backlog.js'], runAt: 'document_idle' },
     { id: `${HOST_SCRIPT_PREFIX}relay`, matches: [all],
       js: ['content/progress-hook-relay.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}hook`, matches: [all],
