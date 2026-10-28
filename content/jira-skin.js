@@ -175,6 +175,8 @@ function tagCells() {
     const text = t.textContent.trim().toLowerCase();
     if (text) ensureIcon(t, 'type', typeKind(text));
   }
+  renderBacklogLabels();
+  renderColumnHeads();
 
   // Type field beside the summary (split view and full page): tagged only;
   // the icon is drawn by CSS on the field itself.
@@ -233,7 +235,116 @@ function greet() {
   renderWelcome();
 }
 
+// Backlogs page: the story's Label (custom field 6) as a column before the status.
+// The page doesn't render it, so it is read through the API, once per story.
+const LABEL_FIELD = 'customField6';
+const labelCache = new Map();   // work-package id -> { label, assignee, assigneeHref }
+const BLANK_FIELDS = { label: '', assignee: '', assigneeHref: null };
+let labelsInFlight = false;
+
+function rowStoryId(li) {
+  const href = li.querySelector(':scope > .id a')?.getAttribute('href') ?? '';
+  return href.match(/work_packages\/(\d+)/)?.[1] ?? li.id.match(/(\d+)$/)?.[1] ?? null;
+}
+
+function labelText(wp) {
+  const link = wp._links?.[LABEL_FIELD];
+  if (Array.isArray(link)) return link.map(l => l?.title).filter(Boolean).join(', ');
+  if (link?.title) return link.title;
+  const val = wp[LABEL_FIELD];
+  if (typeof val === 'string') return val.trim();
+  return val?.raw?.trim() ?? '';
+}
+
+function renderBacklogLabels() {
+  const rows = [...document.querySelectorAll('#rb li.story')];
+  const missing = new Set();
+  for (const li of rows) {
+    const id = rowStoryId(li);
+    if (!id) continue;
+    let cell = li.querySelector(':scope > .blm-jx-label');
+    let who = li.querySelector(':scope > .blm-jx-assignee');
+    if (!cell) {
+      who = document.createElement('div');
+      who.className = 'blm-jx-assignee';
+      cell = document.createElement('div');
+      cell.className = 'blm-jx-label';
+      const status = li.querySelector(':scope > .status_id');
+      if (status) status.before(who, cell);
+      else li.append(who, cell);
+    }
+    const data = labelCache.get(id);
+    if (!data) { missing.add(id); continue; }
+    if (cell.textContent !== data.label) cell.textContent = data.label;
+    cell.title = data.label;
+    if (who.dataset.name !== data.assignee) {
+      who.dataset.name = data.assignee;
+      who.replaceChildren();
+      if (data.assignee) {
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = data.assignee;
+        who.append(avatar(data.assignee, data.assigneeHref, { small: true }), name);
+      }
+      who.title = data.assignee;
+    }
+  }
+  if (!missing.size || labelsInFlight) return;
+  labelsInFlight = true;
+  const ids = [...missing];
+  (async () => {
+    try {
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100);
+        const filters = encodeURIComponent(JSON.stringify([{ id: { operator: '=', values: chunk } }]));
+        const data = await getJson(`/api/v3/work_packages?filters=${filters}&pageSize=100`);
+        for (const wp of data._embedded?.elements ?? []) {
+          const a = wp._links?.assignee;
+          labelCache.set(String(wp.id), { label: labelText(wp), assignee: a?.title ?? '', assigneeHref: a?.href ?? null });
+        }
+        for (const id of chunk) if (!labelCache.has(id)) labelCache.set(id, BLANK_FIELDS);
+      }
+    } catch {
+      for (const id of ids) if (!labelCache.has(id)) labelCache.set(id, BLANK_FIELDS);   // don't retry in a loop
+    } finally {
+      labelsInFlight = false;
+      schedule();
+    }
+  })();
+}
+
+const COLUMN_HEADS = [['c-type', 'Type'], ['c-id', 'ID'], ['c-subject', 'Summary'], ['c-assignee', 'Assignee'], ['c-label', 'Label'], ['c-status', 'Status'], ['c-points', 'Points']];
+
+// Names the columns under each backlog's name row; hidden while its list is
+// empty or folded away.
+function renderColumnHeads() {
+  for (const backlog of document.querySelectorAll('#rb .backlog')) {
+    const list = backlog.querySelector(':scope > ul.stories');
+    if (!list) continue;
+    let head = backlog.querySelector(':scope > .blm-jx-colhead');
+    if (!head) {
+      head = document.createElement('div');
+      head.className = 'blm-jx-colhead';
+      head.setAttribute('aria-hidden', 'true');
+      for (const [cls, text] of COLUMN_HEADS) {
+        const s = document.createElement('span');
+        s.className = cls;
+        s.textContent = text;
+        head.append(s);
+      }
+      list.before(head);
+    }
+    head.hidden = !list.querySelector('li.story') || getComputedStyle(list).display === 'none';
+  }
+}
+
+// Folding a backlog changes style, not the tree, so the observer doesn't see it.
+document.addEventListener('click', e => {
+  if (e.target.closest?.('#rb .backlog > .header')) setTimeout(renderColumnHeads, 450);
+});
+
 function untagCells() {
+  document.querySelectorAll('.blm-jx-label, .blm-jx-assignee, .blm-jx-colhead').forEach(el => el.remove());
   welcomeEl?.remove();
   welcomeEl = null;
   document.querySelectorAll('.blm-jx-icon').forEach(el => el.remove());
@@ -1123,8 +1234,64 @@ html.${BL_CLASS} #rb li.story > .subject {
   order: 3; flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-html.${BL_CLASS} #rb li.story > .status_id { order: 4; flex: none; }
-html.${BL_CLASS} #rb li.story > .story_points { order: 5; flex: none; }
+/* Fixed column widths, shared by the rows and the column header so they line up. */
+html.${BL_CLASS} #rb {
+  --blm-col-type: 48px; --blm-col-id: 72px; --blm-col-label: 200px;
+  --blm-col-status: 130px; --blm-col-points: 64px; --blm-col-assignee: 180px;
+}
+html.${BL_CLASS} #rb li.story > .blm-jx-assignee {
+  order: 4; flex: none; box-sizing: border-box; width: var(--blm-col-assignee) !important;
+  display: flex; align-items: center; gap: var(--jx-space-2); min-width: 0;
+  font-size: 13px; line-height: 20px; color: var(--jx-text);
+}
+html.${BL_CLASS} #rb li.story > .blm-jx-assignee .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.${BL_CLASS} #rb li.story > .blm-jx-label {
+  order: 5; flex: none; box-sizing: border-box; width: var(--blm-col-label) !important; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; line-height: 20px; color: var(--jx-text-subtle);
+}
+html.${BL_CLASS} #rb li.story > .status_id { order: 6; flex: none; box-sizing: border-box; width: var(--blm-col-status) !important; text-align: left; }
+html.${BL_CLASS} #rb li.story > .story_points { order: 7; flex: none; box-sizing: border-box; width: var(--blm-col-points) !important; text-align: center; }
+html.${BL_CLASS} #rb li.story > .type_id { box-sizing: border-box; width: var(--blm-col-type) !important; }
+html.${BL_CLASS} #rb li.story > .id { box-sizing: border-box; width: var(--blm-col-id) !important; min-width: 0; }
+html.${BL_CLASS} #rb li.story > .id,
+html.${BL_CLASS} #rb li.story > .id .t { text-align: left !important; }
+
+/* Column header under each backlog's name row; same padding and gap as a row. */
+html.${BL_CLASS} #rb .blm-jx-colhead {
+  display: flex; align-items: center; gap: var(--jx-space-3);
+  min-height: 28px; padding: 0 calc(var(--jx-space-3) + 1px);
+  font-size: 12px; font-weight: 600; line-height: 16px; letter-spacing: 0.02em;
+  color: var(--jx-text-subtlest); text-transform: uppercase;
+}
+html.${BL_CLASS} #rb .blm-jx-colhead[hidden] { display: none !important; }
+html.${BL_CLASS} #rb .blm-jx-colhead > span { flex: none; box-sizing: border-box; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-type { width: var(--blm-col-type); }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-id { width: var(--blm-col-id); }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-subject { flex: 1 1 auto; min-width: 0; }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-assignee { width: var(--blm-col-assignee); }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-label { width: var(--blm-col-label); }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-status { width: var(--blm-col-status); }
+html.${BL_CLASS} #rb .blm-jx-colhead .c-points { width: var(--blm-col-points); text-align: center; }
+
+/* One backlog per row, top down, each the full width (OpenProject floats the
+   sprints and the product backlog into two columns). */
+html.${BL_CLASS} #rb,
+html.${BL_CLASS} #rb > div,
+html.${BL_CLASS} #rb div:has(> .backlog) {
+  display: block !important; float: none !important;
+  width: 100% !important; max-width: none !important; min-width: 0 !important;
+  margin-left: 0 !important; margin-right: 0 !important; box-sizing: border-box;
+}
+/* The page floats the sprints left and the product backlogs right although the
+   product backlogs come first in the markup: keep column 1 before column 2. */
+html.${BL_CLASS} #rb #backlogs_container { display: flex !important; flex-direction: column; }
+html.${BL_CLASS} #rb #sprint_backlogs_container { order: 1; }
+html.${BL_CLASS} #rb #owner_backlogs_container { order: 2; }
+html.${BL_CLASS} #rb .backlog {
+  float: none !important; clear: both;
+  width: 100% !important; max-width: none !important; box-sizing: border-box;
+}
 html.${BL_CLASS} #rb li.story .id a {
   color: var(--jx-text-subtle); font-weight: 500; text-decoration: none;
   font-variant-numeric: tabular-nums;
@@ -1292,25 +1459,25 @@ html.${WP_CLASS} .blm-jx-children .assignee .name,
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Avatars: initials first, the picture fades in over them once loaded */
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar {
   position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; border-radius: 50%; overflow: hidden;
   background: var(--jx-avatar-0); color: var(--jx-on-primary);
   font-family: var(--jx-font); font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0;
   text-transform: uppercase;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar img {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
   opacity: 0; transition: opacity var(--jx-dur) var(--jx-ease-out);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-avatar.none {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.none {
   background: transparent; border: 1.5px dashed var(--jx-text-subtlest); box-sizing: border-box;
 }
 :is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
