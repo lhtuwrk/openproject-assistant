@@ -1277,7 +1277,7 @@ html.${BL_CLASS} #rb .blm-jx-colhead .c-points { width: var(--blm-col-points); t
 /* One backlog per row, top down, each the full width (OpenProject floats the
    sprints and the product backlog into two columns). */
 html.${BL_CLASS} #rb,
-html.${BL_CLASS} #rb > div,
+html.${BL_CLASS} #rb > #backlogs_container,
 html.${BL_CLASS} #rb div:has(> .backlog) {
   display: block !important; float: none !important;
   width: 100% !important; max-width: none !important; min-width: 0 !important;
