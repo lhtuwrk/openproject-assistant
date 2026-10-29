@@ -129,6 +129,29 @@ export async function fetchProjectWorkPackages(projectId, filters) {
 }
 
 /**
+ * Fetches work packages of every project matching OpenProject filters, most recently
+ * updated first, stopping after maxPages pages (200 each) so a wide query stays bounded.
+ * @param {Array<Object>} filters  OpenProject filter objects
+ * @param {number} maxPages
+ * @returns {Promise<Array>}
+ */
+export async function fetchRecentWorkPackages(filters, maxPages) {
+  const filter = encodeURIComponent(JSON.stringify(filters));
+  const sort   = encodeURIComponent(JSON.stringify([['updatedAt', 'desc']]));
+
+  const items = [];
+  for (let offset = 1; offset <= maxPages; offset++) {
+    const data = await apiFetch(
+      `/api/v3/work_packages?filters=${filter}&sortBy=${sort}&pageSize=200&offset=${offset}`
+    );
+    const elements = data._embedded?.elements ?? [];
+    items.push(...elements);
+    if (items.length >= (data.total ?? 0) || elements.length < (data.pageSize ?? 200)) break;
+  }
+  return items;
+}
+
+/**
  * Fetches a single work package by id (regardless of which version it currently
  * belongs to).  Used to re-fetch stories that have LEFT a tracked version so their
  * activity can still be replayed.  Throws HTTP 404 if the WP was deleted.

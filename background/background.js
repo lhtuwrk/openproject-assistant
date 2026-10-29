@@ -23,6 +23,7 @@
 import {
   fetchWorkPackagesByVersion,
   fetchProjectWorkPackages,
+  fetchRecentWorkPackages,
   fetchWorkPackageActivities,
   fetchWorkPackage,
   fetchVersion,
@@ -213,17 +214,24 @@ async function updateMemberLedger(versionName, currentWps, dateStr) {
 //
 //  trackCurrentSprint()      adds the current sprint's version to the tracked list on its
 //                            own; the ledger then follows it with every sync.
-//  discoverEarlyDepartures() for a ledger that started late: one look-back, once per
-//                            version, for stories that left before this install saw them.
+//  startLookBack()           for a ledger that started late: one look-back, once per
+//                            version, for stories that left before this install saw them,
+//                            trickled in by stepLookBack() a few requests a minute.
 
 const MAIN_VIEW_PROJECT_KEY = '__blm_main_view_project';        // viewer's project choice
 const MAIN_VIEW_LAST_KEY    = '__blm_main_view_project_last';   // last project the viewer resolved
 const AUTOTRACK_TRY_KEY     = '__blm_autotrack_try';
 const AUTOTRACK_RETRY_MS    = 3 * 60 * 60 * 1000;   // a failed or empty lookup waits this long
 const DISCOVER_RETRY_MS     = 6 * 60 * 60 * 1000;   // a failed look-back waits this long
-const DISCOVER_MAX          = 300;                  // candidates looked at per version, newest first
-
-const discovering = new Set();   // versions with a look-back in flight (alarm and sync-now can overlap)
+const DISCOVER_VERSION      = 2;                    // bump when the look-back finds more, so ledgers built by the old one run it again
+const DISCOVER_MAX          = 150;                  // activity requests per version in all, newest first
+const DISCOVER_RESERVE      = 50;                   // of them, kept for stories handed to other projects
+const DISCOVER_OTHER_PAGES  = 2;                    // pages (200 each) read from the other projects
+const DISCOVER_STEP         = 8;                    // activity requests per alarm tick (one a minute)
+const DISCOVER_PARALLEL     = 4;                    // of them in flight at once
+const LOOKBACK_PREFIX       = '__blm_lookback__';   // the queue of a version's running look-back
+const LEDGER_ON_SINCE_KEY   = '__blm_ledger_on_since';   // first day this install followed the sprint on its own
+const ALARM_LOOKBACK        = 'blm-lookback';
 
 /** Version names compare with runs of spaces collapsed ("Credit Utility  26.12.C"). */
 function sameVersion(a, b) {
@@ -236,7 +244,20 @@ function sameVersion(a, b) {
  * work assigned in. Nothing is fetched while the version is tracked; a lookup that finds
  * nothing is not repeated for AUTOTRACK_RETRY_MS.
  */
+/**
+ * The first day this install followed the current sprint on its own. Sprints that start
+ * on or after it are covered by the ledger from their first day, so only the one already
+ * running then ever needs the look-back.
+ */
+async function ledgerOnSince() {
+  const since = (await chrome.storage.local.get(LEDGER_ON_SINCE_KEY))[LEDGER_ON_SINCE_KEY];
+  if (since) return since;
+  await chrome.storage.local.set({ [LEDGER_ON_SINCE_KEY]: todayStr() });
+  return todayStr();
+}
+
 async function trackCurrentSprint() {
+  await ledgerOnSince();   // set on the very first run, before any later sprint can start
   const sprint = sprintInfo(sprintIndexForDate(todayStr()));
   const stored = await chrome.storage.local.get([MAIN_VIEW_PROJECT_KEY, MAIN_VIEW_LAST_KEY, AUTOTRACK_TRY_KEY]);
   const known  = stored[MAIN_VIEW_PROJECT_KEY] ?? stored[MAIN_VIEW_LAST_KEY];
@@ -280,39 +301,87 @@ async function syncMembershipOnly() {
 }
 
 /**
- * Finds stories that left the version before this install's ledger began, from the
- * "Version changed from <sprint>" lines in their activity. Runs at most once per version
- * (and only when the ledger started after the sprint did), looks at no more than
- * DISCOVER_MAX stories changed since the start, and waits DISCOVER_RETRY_MS after a
- * failure. Snapshots already locked without these stories are dropped so they rebuild.
- * Returns true when it found any.
+ * Look-back for a ledger that started after its sprint did: stories that left the version
+ * before this install saw them, found from the "Version changed from <sprint>" lines in
+ * their activity. It never holds up the chart, which draws from what the ledger knows now,
+ * and it never bursts. startLookBack() only lists the candidates — the sprint's project
+ * first, then stories with points in other projects, DISCOVER_MAX at most — and queues
+ * them; the ALARM_LOOKBACK alarm then reads DISCOVER_STEP of their activities a minute.
+ * When the queue is done and found any, the version's snapshots are rebuilt once with them.
+ * Only for a sprint already running when this install began following sprints on its own
+ * (ledgerOnSince), so in practice once per install; a failed listing waits DISCOVER_RETRY_MS.
  */
-async function discoverEarlyDepartures(v, settings, today) {
-  if (!v.startDate || discovering.has(v.versionName)) return false;
+async function startLookBack(v, settings, today) {
+  if (!v.startDate || v.startDate >= await ledgerOnSince()) return;   // the ledger has followed it from the start
   const lkey   = MEMBERS_PREFIX + v.versionName;
-  const ledger = (await chrome.storage.local.get(lkey))[lkey] ?? { current: {}, departed: {}, since: today };
-  if (ledger.discoveredAt) return false;
-  if (ledger.since && ledger.since <= v.startDate) return false;   // the ledger saw the whole sprint
-  if (ledger.discoverTriedAt && Date.now() - ledger.discoverTriedAt < DISCOVER_RETRY_MS) return false;
+  const qkey   = LOOKBACK_PREFIX + v.versionName;
+  const stored = await chrome.storage.local.get([lkey, qkey]);
+  if (stored[qkey]) { await ensureLookBackAlarm(); return; }   // already queued
+  const ledger = stored[lkey] ?? { current: {}, departed: {}, since: today };
+  if (ledger.discovered >= DISCOVER_VERSION) return;
+  if (ledger.since && ledger.since <= v.startDate) return;     // the ledger saw the whole sprint
+  if (ledger.discoverTriedAt && Date.now() - ledger.discoverTriedAt < DISCOVER_RETRY_MS) return;
+  ledger.discoverTriedAt = Date.now();
+  await chrome.storage.local.set({ [lkey]: ledger });
 
-  discovering.add(v.versionName);
   try {
-    ledger.discoverTriedAt = Date.now();
-    await chrome.storage.local.set({ [lkey]: ledger });
-
-    const known      = new Set([...Object.keys(ledger.current), ...Object.keys(ledger.departed)]);
-    const normTarget = normalizeVer(v.versionName);
-    const candidates = (await fetchProjectWorkPackages(v.projectId, [
+    const known   = new Set([...Object.keys(ledger.current), ...Object.keys(ledger.departed)]);
+    const changed = [
       { updatedAt:  { operator: '<>d', values: [v.startDate, today] } },
       { version_id: { operator: '!',   values: [String(v.versionId)] } },
-    ]))
-      .filter(w => wpIncluded(w, settings) && !known.has(String(w.id)))
-      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-      .slice(0, DISCOVER_MAX);
+    ];
+    const newestFirst = (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt));
+    const unseen      = w => wpIncluded(w, settings) && !known.has(String(w.id));
 
-    const activities = await batchFetchActivities(candidates.map(w => w.id));
-    let found = 0;
-    candidates.forEach((wp, i) => {
+    // Stories also move to ANOTHER project (a bug handed to the bank's issues project):
+    // read those too, but only ones with points, since a pointless story can't move the chart.
+    const inProject = (await fetchProjectWorkPackages(v.projectId, changed))
+      .filter(unseen).sort(newestFirst).slice(0, DISCOVER_MAX - DISCOVER_RESERVE);
+    const elsewhere = (await fetchRecentWorkPackages(
+      [...changed, { project: { operator: '!', values: [String(v.projectId)] } }], DISCOVER_OTHER_PAGES)
+      .catch(() => []))   // no access to a wider search: the project's own are still checked
+      .filter(w => unseen(w) && w.storyPoints > 0).slice(0, DISCOVER_MAX - inProject.length);
+
+    const queue = [...inProject, ...elsewhere].map(w => ({
+      id:      w.id,
+      points:  typeof w.storyPoints === 'number' ? w.storyPoints : 0,
+      subject: w.subject ?? '',
+      type:    w._links?.type?.title ?? '',
+    }));
+    if (!queue.length) { await finishLookBack(v.versionName, []); return; }
+    await chrome.storage.local.set({ [qkey]: { queue, found: [] } });
+    await ensureLookBackAlarm();
+  } catch { /* discoverTriedAt is stored: retried after the wait */ }
+}
+
+async function ensureLookBackAlarm() {
+  if (!(await chrome.alarms.get(ALARM_LOOKBACK)))
+    chrome.alarms.create(ALARM_LOOKBACK, { delayInMinutes: 1, periodInMinutes: 1 });
+}
+
+let lookBackStepping = false;   // a slow step must not overlap the next tick
+
+/** One alarm tick: reads the activity of the next DISCOVER_STEP queued stories of one version. */
+async function stepLookBack() {
+  if (lookBackStepping) return;
+  lookBackStepping = true;
+  try {
+    const all  = await chrome.storage.local.get(null);
+    const qkey = Object.keys(all).find(k => k.startsWith(LOOKBACK_PREFIX));
+    if (!qkey) { await chrome.alarms.clear(ALARM_LOOKBACK); return; }
+    const versionName      = qkey.slice(LOOKBACK_PREFIX.length);
+    const normTarget       = normalizeVer(versionName);
+    const { queue, found } = all[qkey];
+    const batch            = queue.slice(0, DISCOVER_STEP);
+
+    const activities = [];
+    for (let i = 0; i < batch.length; i += DISCOVER_PARALLEL) {
+      activities.push(...await Promise.all(batch.slice(i, i + DISCOVER_PARALLEL)
+        .map(c => fetchWorkPackageActivities(c.id).catch(() => null))));
+    }
+    if (activities.every(a => a === null)) return;   // offline or signed out: the same stories next tick
+
+    batch.forEach((c, i) => {
       let leftAt = null;
       for (const act of activities[i] ?? []) {
         for (const d of act.details ?? []) {
@@ -320,33 +389,39 @@ async function discoverEarlyDepartures(v, settings, today) {
           if (m && normalizeVer(m[1]) === normTarget) leftAt = (act.createdAt ?? '').slice(0, 10) || leftAt;
         }
       }
-      if (!leftAt) return;
-      ledger.departed[wp.id] = {
-        points:  typeof wp.storyPoints === 'number' ? wp.storyPoints : 0,
-        subject: wp.subject ?? '',
-        type:    wp._links?.type?.title ?? '',
-        leftAt,
-      };
-      found++;
+      if (leftAt) found.push({ ...c, leftAt });
     });
 
-    ledger.discoveredAt = Date.now();
-    await chrome.storage.local.set({ [lkey]: ledger });
-    if (!found) return false;
-
-    const all  = await chrome.storage.local.get(null);
-    const drop = [];
-    for (const [key, snap] of Object.entries(all)) {
-      if (!/^\d{4}-\d{2}-\d{2}__/.test(key) || versionOfSnapshotKey(key) !== v.versionName) continue;
-      if (snap?.source !== 'csv' && snap?.source !== 'json') drop.push(key, DETAIL_PREFIX + key);
-    }
-    if (drop.length) await chrome.storage.local.remove(drop);
-    return true;
-  } catch {
-    return false;   // discoverTriedAt is stored: retried after the wait
+    const rest = queue.slice(batch.length);
+    if (rest.length) { await chrome.storage.local.set({ [qkey]: { queue: rest, found } }); return; }
+    if (await finishLookBack(versionName, found)) await reconstructMissingDays();
   } finally {
-    discovering.delete(v.versionName);
+    lookBackStepping = false;
   }
+}
+
+/**
+ * Adds what the look-back found to the ledger and marks the version done. Snapshots
+ * locked without those stories are dropped so the next reconstruction rebuilds them.
+ * Returns true when it found any.
+ */
+async function finishLookBack(versionName, found) {
+  const lkey   = MEMBERS_PREFIX + versionName;
+  const ledger = (await chrome.storage.local.get(lkey))[lkey] ?? { current: {}, departed: {}, since: todayStr() };
+  for (const { id, ...rest } of found) if (!ledger.current[id]) ledger.departed[id] = rest;
+  ledger.discovered = DISCOVER_VERSION;
+  await chrome.storage.local.set({ [lkey]: ledger });
+  await chrome.storage.local.remove(LOOKBACK_PREFIX + versionName);
+  if (!found.length) return false;
+
+  const all  = await chrome.storage.local.get(null);
+  const drop = [];
+  for (const [key, snap] of Object.entries(all)) {
+    if (!/^\d{4}-\d{2}-\d{2}__/.test(key) || versionOfSnapshotKey(key) !== versionName) continue;
+    if (snap?.source !== 'csv' && snap?.source !== 'json') drop.push(key, DETAIL_PREFIX + key);
+  }
+  if (drop.length) await chrome.storage.local.remove(drop);
+  return true;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -681,7 +756,8 @@ async function reconstructMissingDays() {
   for (const v of tracked) {
     await refreshVersionDates(v);
     if (!v.startDate) continue;
-    await discoverEarlyDepartures(v, settings, today);   // before the missing days are worked out: it may unlock some
+    // A running sprint only: queues the look-back, which then trickles in on its own alarm
+    if (!(v.endDate && v.endDate < today)) await startLookBack(v, settings, today);
 
     // From the day before the start: the chart's first point is the state at the start
     // of the first day, i.e. the end of the day before
@@ -751,6 +827,7 @@ async function cleanupExpiredSprints() {
     // Per-version aggregates
     if (key.startsWith(MEMBERS_PREFIX) && expiredNames.has(key.slice(MEMBERS_PREFIX.length))) toRemove.push(key);
     if (key.startsWith(FLOW_PREFIX)    && expiredNames.has(key.slice(FLOW_PREFIX.length)))    toRemove.push(key);
+    if (key.startsWith(LOOKBACK_PREFIX) && expiredNames.has(key.slice(LOOKBACK_PREFIX.length))) toRemove.push(key);
   }
 
   if (toRemove.length) await chrome.storage.local.remove(toRemove);
@@ -842,6 +919,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_SYNC)        syncTracked();
+  if (alarm.name === ALARM_LOOKBACK)    stepLookBack();
   if (alarm.name === ALARM_RECONSTRUCT) {
     await cleanupExpiredSprints();      // daily purge, just after midnight ICT
     reconstructMissingDays();
