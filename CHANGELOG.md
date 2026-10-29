@@ -13,7 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: a story can be written straight into the sprint, or cloned from an existing one, in a large dialog laid out like the story: its title, type, story points, assignee, version and rendered description can be changed first, and subtasks (the suggested ones, the original's own or new ones) created with it. A new story also picks its priority and label, which is what puts it in a level, and it joins that level as soon as it is created — mid-session too.
 - Resolving a Bug, or a story related to a Bug, asks for its Fixed in version with the sprint's release already added (2.47 for sprint 26.10.B, one up each sprint), and saves it with the status. The starting sprint, release and types are set in Settings.
 
+- The current sprint's version is now tracked from its first day even if the chart is never opened, so everyone's Burndown names the same stories that moved out. Someone who starts late gets one look-back for the stories that left before, instead of a chart that differs from their teammates'.
+
 ### Changed
+- Burndown keeps the current sprint and the one before it; older sprints are cleared.
 - Planning: planning a story that is still New or Reopened asks for confirmation first.
 - Planning: a new subtask is created when you click outside its title field, not only on Enter.
 - Planning: how long a story gets no longer depends on its points or its priority — planning is what produces the estimates, and a story's priority has already had its say by choosing the level it sits in. Each level now carries a Min/story rate, set under Edit grouping, so a sprint-goal story is always worth more of the session than a side quest by the ratio you chose. A sprint that fits gets exactly those minutes and ends early; a crowded one shrinks every level together, and the lobby warns when a level is down to under 2 minutes a story.

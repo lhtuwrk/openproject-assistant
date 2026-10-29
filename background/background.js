@@ -22,11 +22,16 @@
 
 import {
   fetchWorkPackagesByVersion,
+  fetchProjectWorkPackages,
   fetchWorkPackageActivities,
   fetchWorkPackage,
   fetchVersion,
+  fetchActiveProjects,
+  fetchAllVersions,
+  fetchAssignedProjectNames,
   aggregateWorkPackages,
 } from '../shared/api.js';
+import { sprintInfo, sprintIndexForDate } from '../shared/sprint.js';
 import { setupReminder } from './reminder.js';
 import { getHost, HOST_KEY, SETUP_URL } from '../shared/config.js';
 
@@ -176,7 +181,7 @@ async function refreshVersionDates(v) {
  */
 async function updateMemberLedger(versionName, currentWps, dateStr) {
   const lkey   = MEMBERS_PREFIX + versionName;
-  const ledger = (await chrome.storage.local.get(lkey))[lkey] ?? { current: {}, departed: {} };
+  const ledger = (await chrome.storage.local.get(lkey))[lkey] ?? { current: {}, departed: {}, since: dateStr };
 
   const seen       = new Set();
   const nextCurrent = {};
@@ -198,6 +203,150 @@ async function updateMemberLedger(versionName, currentWps, dateStr) {
   ledger.current = nextCurrent;
   await chrome.storage.local.set({ [lkey]: ledger });
   return Object.keys(ledger.departed).map(Number);
+}
+
+// ─── Membership from the start of the sprint ────────────────────────────────────
+//
+// The ledger can only name stories this install has seen in the sprint, so it has to be
+// running when the sprint starts — whether or not the user ever opens the chart.  Two
+// pieces make that so:
+//
+//  trackCurrentSprint()      adds the current sprint's version to the tracked list on its
+//                            own; the ledger then follows it with every sync.
+//  discoverEarlyDepartures() for a ledger that started late: one look-back, once per
+//                            version, for stories that left before this install saw them.
+
+const MAIN_VIEW_PROJECT_KEY = '__blm_main_view_project';        // viewer's project choice
+const MAIN_VIEW_LAST_KEY    = '__blm_main_view_project_last';   // last project the viewer resolved
+const AUTOTRACK_TRY_KEY     = '__blm_autotrack_try';
+const AUTOTRACK_RETRY_MS    = 3 * 60 * 60 * 1000;   // a failed or empty lookup waits this long
+const DISCOVER_RETRY_MS     = 6 * 60 * 60 * 1000;   // a failed look-back waits this long
+const DISCOVER_MAX          = 300;                  // candidates looked at per version, newest first
+
+const discovering = new Set();   // versions with a look-back in flight (alarm and sync-now can overlap)
+
+/** Version names compare with runs of spaces collapsed ("Credit Utility  26.12.C"). */
+function sameVersion(a, b) {
+  return !!a && !!b && normalizeVer(a) === normalizeVer(b);
+}
+
+/**
+ * Tracks the current sprint's version of the user's project ("<project> <sprint>") when
+ * it isn't tracked yet. The project is the viewer's choice, else the one the user has
+ * work assigned in. Nothing is fetched while the version is tracked; a lookup that finds
+ * nothing is not repeated for AUTOTRACK_RETRY_MS.
+ */
+async function trackCurrentSprint() {
+  const sprint = sprintInfo(sprintIndexForDate(todayStr()));
+  const stored = await chrome.storage.local.get([MAIN_VIEW_PROJECT_KEY, MAIN_VIEW_LAST_KEY, AUTOTRACK_TRY_KEY]);
+  const known  = stored[MAIN_VIEW_PROJECT_KEY] ?? stored[MAIN_VIEW_LAST_KEY];
+  if (known && (await getTracked()).some(t => sameVersion(t.versionName, `${known} ${sprint.name}`))) return;
+
+  const tried = stored[AUTOTRACK_TRY_KEY];
+  if (tried?.sprint === sprint.name && Date.now() - tried.at < AUTOTRACK_RETRY_MS) return;
+  await chrome.storage.local.set({ [AUTOTRACK_TRY_KEY]: { sprint: sprint.name, at: Date.now() } });
+
+  try {
+    const projectName = known ?? (await fetchAssignedProjectNames(sprint.name))[0];
+    if (!projectName) return;
+    const project = (await fetchActiveProjects()).find(p => p.name === projectName);
+    if (!project) return;
+    const v = (await fetchAllVersions(project.id)).find(x => sameVersion(x.name, `${projectName} ${sprint.name}`));
+    if (!v) return;
+
+    const tracked = await getTracked();   // re-read: the list may have changed meanwhile
+    if (!tracked.some(t => t.versionId === v.id)) {
+      await chrome.storage.local.set({ [TRACKED_KEY]: [{
+        projectId: project.id, projectName: project.name,
+        versionId: v.id,       versionName: v.name,
+        startDate: v.startDate ?? null, endDate: v.endDate ?? null,
+      }, ...tracked] });
+    }
+    if (!known) await chrome.storage.local.set({ [MAIN_VIEW_LAST_KEY]: project.name });
+  } catch { /* offline or signed out: the next sync tries again after the wait */ }
+}
+
+/** Records who is in each running sprint without writing snapshots (burndown sync is off). */
+async function syncMembershipOnly() {
+  const settings = await loadSettings();
+  const today    = todayStr();
+  for (const v of await getTracked()) {
+    if (v.endDate && v.endDate < today) continue;   // finished: nobody joins or leaves anymore
+    try {
+      const wps = (await fetchWorkPackagesByVersion(v.projectId, v.versionId)).filter(w => wpIncluded(w, settings));
+      if (wps.length) await updateMemberLedger(v.versionName, wps, today);
+    } catch { /* retried with the next sync */ }
+  }
+}
+
+/**
+ * Finds stories that left the version before this install's ledger began, from the
+ * "Version changed from <sprint>" lines in their activity. Runs at most once per version
+ * (and only when the ledger started after the sprint did), looks at no more than
+ * DISCOVER_MAX stories changed since the start, and waits DISCOVER_RETRY_MS after a
+ * failure. Snapshots already locked without these stories are dropped so they rebuild.
+ * Returns true when it found any.
+ */
+async function discoverEarlyDepartures(v, settings, today) {
+  if (!v.startDate || discovering.has(v.versionName)) return false;
+  const lkey   = MEMBERS_PREFIX + v.versionName;
+  const ledger = (await chrome.storage.local.get(lkey))[lkey] ?? { current: {}, departed: {}, since: today };
+  if (ledger.discoveredAt) return false;
+  if (ledger.since && ledger.since <= v.startDate) return false;   // the ledger saw the whole sprint
+  if (ledger.discoverTriedAt && Date.now() - ledger.discoverTriedAt < DISCOVER_RETRY_MS) return false;
+
+  discovering.add(v.versionName);
+  try {
+    ledger.discoverTriedAt = Date.now();
+    await chrome.storage.local.set({ [lkey]: ledger });
+
+    const known      = new Set([...Object.keys(ledger.current), ...Object.keys(ledger.departed)]);
+    const normTarget = normalizeVer(v.versionName);
+    const candidates = (await fetchProjectWorkPackages(v.projectId, [
+      { updatedAt:  { operator: '<>d', values: [v.startDate, today] } },
+      { version_id: { operator: '!',   values: [String(v.versionId)] } },
+    ]))
+      .filter(w => wpIncluded(w, settings) && !known.has(String(w.id)))
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+      .slice(0, DISCOVER_MAX);
+
+    const activities = await batchFetchActivities(candidates.map(w => w.id));
+    let found = 0;
+    candidates.forEach((wp, i) => {
+      let leftAt = null;
+      for (const act of activities[i] ?? []) {
+        for (const d of act.details ?? []) {
+          const m = RE_VERSION_CHANGED.exec((d.raw ?? '').trim());
+          if (m && normalizeVer(m[1]) === normTarget) leftAt = (act.createdAt ?? '').slice(0, 10) || leftAt;
+        }
+      }
+      if (!leftAt) return;
+      ledger.departed[wp.id] = {
+        points:  typeof wp.storyPoints === 'number' ? wp.storyPoints : 0,
+        subject: wp.subject ?? '',
+        type:    wp._links?.type?.title ?? '',
+        leftAt,
+      };
+      found++;
+    });
+
+    ledger.discoveredAt = Date.now();
+    await chrome.storage.local.set({ [lkey]: ledger });
+    if (!found) return false;
+
+    const all  = await chrome.storage.local.get(null);
+    const drop = [];
+    for (const [key, snap] of Object.entries(all)) {
+      if (!/^\d{4}-\d{2}-\d{2}__/.test(key) || versionOfSnapshotKey(key) !== v.versionName) continue;
+      if (snap?.source !== 'csv' && snap?.source !== 'json') drop.push(key, DETAIL_PREFIX + key);
+    }
+    if (drop.length) await chrome.storage.local.remove(drop);
+    return true;
+  } catch {
+    return false;   // discoverTriedAt is stored: retried after the wait
+  } finally {
+    discovering.delete(v.versionName);
+  }
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -258,7 +407,8 @@ async function scopeChangedSinceLastSync(versionName, wps) {
 }
 
 async function syncTracked() {
-  if (!(await burndownEnabled())) return;
+  await trackCurrentSprint();   // the ledger must follow the sprint from its first day, chart opened or not
+  if (!(await burndownEnabled())) { await syncMembershipOnly(); return; }
   const tracked  = await getTracked();
   const settings = await loadSettings();
   if (!tracked.length) return;
@@ -516,6 +666,7 @@ async function rebuildVersionDays(v, settings, dates, firstDate, today) {
 
 async function reconstructMissingDays() {
   if (!(await burndownEnabled())) return;
+  await trackCurrentSprint();
   const tracked  = await getTracked();
   const settings = await loadSettings();
   if (!tracked.length) return;
@@ -530,6 +681,7 @@ async function reconstructMissingDays() {
   for (const v of tracked) {
     await refreshVersionDates(v);
     if (!v.startDate) continue;
+    await discoverEarlyDepartures(v, settings, today);   // before the missing days are worked out: it may unlock some
 
     // From the day before the start: the chart's first point is the state at the start
     // of the first day, i.e. the end of the day before
@@ -557,14 +709,15 @@ async function reconstructMissingDays() {
   return reconstructed;
 }
 
-// ─── Job 3: purge sprints older than 1 week past their endDate ───────────────
+// ─── Job 3: keep the current sprint and the one before it ─────────────────────
 //
-// A sprint's data (day snapshots + burn detail + member ledger + flow record) stays
-// live for one week after the sprint's endDate so retros and late reviews can still
-// use it.  After that, everything for that version is wiped and the version is
-// removed from __blm_tracked so it disappears from the dashboard entirely.
+// Per project, the two newest started sprints keep their data (day snapshots + burn
+// detail + member ledger + flow record): the running one, and the one before it for
+// retros and late reviews.  Every older one is wiped and removed from __blm_tracked so
+// it disappears from the dashboard entirely.  Sprints that haven't started, or whose
+// start is unknown, are never purged.
 
-const CLEANUP_GRACE_DAYS = 7;
+const KEEP_SPRINTS = 2;
 
 /** Extracts the versionName suffix from a "<date>__<versionName>" key. */
 function versionOfSnapshotKey(key) {
@@ -574,14 +727,15 @@ function versionOfSnapshotKey(key) {
 
 async function cleanupExpiredSprints() {
   const tracked = await getTracked();
-  const now     = Date.now();
+  const today   = todayStr();
 
-  const expired = tracked.filter(v => {
-    if (!v.endDate) return false;                  // no known end → never auto-purge
-    const cutoff = new Date(v.endDate + 'T23:59:59Z').getTime()
-                 + CLEANUP_GRACE_DAYS * 24 * 60 * 60 * 1000;
-    return now > cutoff;
-  });
+  const byProject = new Map();
+  for (const v of tracked) {
+    if (!v.startDate || v.startDate > today) continue;
+    byProject.set(v.projectId, [...(byProject.get(v.projectId) ?? []), v]);
+  }
+  const expired = [...byProject.values()].flatMap(group =>
+    group.sort((a, b) => b.startDate.localeCompare(a.startDate)).slice(KEEP_SPRINTS));
   if (!expired.length) return 0;
 
   const expiredNames = new Set(expired.map(v => v.versionName));
