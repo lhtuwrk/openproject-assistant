@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.6.2]
+## [1.6.2] - 2026-10-30
 
 ### Added
 - A sprint or saved view in the project sidebar can be pinned for one-click access from anywhere on the backlog, via a pin icon on the entry and quick-jump tabs added to the header.
