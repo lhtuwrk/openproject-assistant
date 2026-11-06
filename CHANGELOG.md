@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: a story can be written straight into the sprint, or cloned from an existing one, in a large dialog laid out like the story: its title, type, story points, assignee, version and rendered description can be changed first, and subtasks (the suggested ones, the original's own or new ones) created with it. A new story also picks its priority and label, which is what puts it in a level, and it joins that level as soon as it is created — mid-session too.
 - Resolving a Bug, or a story related to a Bug, asks for its Fixed in version with the sprint's release already added (2.47 for sprint 26.10.B, one up each sprint), and saves it with the status. The starting sprint, release and types are set in Settings.
 
-- The current sprint's version is now tracked from its first day even if the chart is never opened, so everyone's Burndown names the same stories that moved out. Someone who starts late sees the chart at once, and the stories that left before, including ones handed to another project, are looked up a few a minute in the background and added when done, so the chart ends up the same as their teammates'.
+- The current sprint's version is now tracked from its first day even if the chart is never opened, so everyone's Burndown names the same stories that moved out. Someone who starts late sees the chart at once, and the stories that left before, including ones handed to another project, are looked up a few a minute in the background (a chip next to the sprint's name shows how far along) and added when done, so the chart ends up the same as their teammates'.
 
 ### Changed
 - Burndown keeps the current sprint and the one before it; older sprints are cleared.

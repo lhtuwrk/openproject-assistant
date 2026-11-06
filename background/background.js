@@ -349,7 +349,7 @@ async function startLookBack(v, settings, today) {
       type:    w._links?.type?.title ?? '',
     }));
     if (!queue.length) { await finishLookBack(v.versionName, []); return; }
-    await chrome.storage.local.set({ [qkey]: { queue, found: [] } });
+    await chrome.storage.local.set({ [qkey]: { queue, found: [], total: queue.length } });   // total: the chart's progress chip
     await ensureLookBackAlarm();
   } catch { /* discoverTriedAt is stored: retried after the wait */ }
 }
@@ -371,7 +371,7 @@ async function stepLookBack() {
     if (!qkey) { await chrome.alarms.clear(ALARM_LOOKBACK); return; }
     const versionName      = qkey.slice(LOOKBACK_PREFIX.length);
     const normTarget       = normalizeVer(versionName);
-    const { queue, found } = all[qkey];
+    const { queue, found, total } = all[qkey];
     const batch            = queue.slice(0, DISCOVER_STEP);
 
     const activities = [];
@@ -393,7 +393,7 @@ async function stepLookBack() {
     });
 
     const rest = queue.slice(batch.length);
-    if (rest.length) { await chrome.storage.local.set({ [qkey]: { queue: rest, found } }); return; }
+    if (rest.length) { await chrome.storage.local.set({ [qkey]: { queue: rest, found, total } }); return; }
     if (await finishLookBack(versionName, found)) await reconstructMissingDays();
   } finally {
     lookBackStepping = false;

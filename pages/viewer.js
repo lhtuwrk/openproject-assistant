@@ -8,6 +8,7 @@ const BACKLOG_URL = await requireHost();
 'use strict';
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}__.+$/;
+const LOOKBACK_PREFIX  = '__blm_lookback__';   // keep in step with background/background.js
 const DEFAULT_DONE     = new Set(['resolved', 'closed', 'done', 'rejected']);
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
@@ -1640,6 +1641,11 @@ function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap 
     chip.textContent = 'not synced today';
     chip.title = 'No snapshot for today yet — click Sync Now';
   }
+  // The background's look-back for stories that left before this browser followed the sprint
+  const lookBackChip = document.createElement('span'); lookBackChip.className = 'sync-chip busy';
+  lookBackChip.dataset.lookback = version;
+  lookBackChip.hidden = true;
+  chrome.storage.local.get(LOOKBACK_PREFIX + version).then(r => paintLookBack(lookBackChip, r[LOOKBACK_PREFIX + version]));
   const spacer = document.createElement('span'); spacer.className = 'spacer';
   const COPY_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`;
   const copyImgBtn = document.createElement('button'); copyImgBtn.type = 'button'; copyImgBtn.className='btn-copy-image';
@@ -1647,7 +1653,7 @@ function buildBacklogSection(version, dateMap, sourcesMap = new Map(), movesMap 
   copyImgBtn.title = 'Copy chart as image to clipboard';
   const delVersionBtn = document.createElement('button'); delVersionBtn.type = 'button'; delVersionBtn.className='btn-delete-version'; delVersionBtn.textContent='Delete all';
   delVersionBtn.title = `Delete all snapshots for "${version}"`;
-  bar.append(title, chip, spacer, copyImgBtn, delVersionBtn);
+  bar.append(title, chip, lookBackChip, spacer, copyImgBtn, delVersionBtn);
   section.appendChild(bar);
 
   // Delete a single date snapshot (core + detail)
@@ -3033,10 +3039,26 @@ document.addEventListener('click', e => {
 
 // ─── Storage change listener (sync toast + live refresh) ──────────────────────
 
+/** Shows a version's look-back queue as "checking moved stories 40/150", hidden when there is none. */
+function paintLookBack(chip, q) {
+  chip.hidden = !q;
+  if (!q) return;
+  const total = q.total ?? q.queue.length;
+  chip.textContent = `checking moved stories ${total - q.queue.length}/${total}`;
+  chip.title = 'Looking up stories that left this sprint before this browser started following it, '
+             + 'a few a minute. The chart updates on its own when this is done.';
+}
+
 let liveRenderTimer = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const [key, { oldValue, newValue }] of Object.entries(changes)) {
+    if (key.startsWith(LOOKBACK_PREFIX)) {
+      const version = key.slice(LOOKBACK_PREFIX.length);
+      for (const chip of document.querySelectorAll('[data-lookback]'))
+        if (chip.dataset.lookback === version) paintLookBack(chip, newValue);
+      continue;
+    }
     if (key === '__blm_fetch_progress' && isSyncing && newValue) {
       const { done, total, version } = newValue;
       setProgressFill(done, total, `${version}: fetching activities ${done} / ${total}`);
