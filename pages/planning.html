@@ -520,8 +520,12 @@
 
     .attach-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
 
-    .log-time { display: grid; grid-template-columns: 150px 100px minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--space-sm) var(--space-xs); align-items: end; }
-    .log-time .card-error { grid-column: 1 / -1; margin: 0; }
+    .time-log-total { margin: 0 0 var(--space-sm); }
+    .time-log-rows { list-style: none; display: grid; gap: var(--space-xs); }
+    .time-log-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-sm); padding: var(--space-xs) 0; border-bottom: 1px solid var(--border); }
+    .time-log-date { color: var(--muted); font-size: var(--text-xs); min-width: 90px; }
+    .time-log-user { font-weight: 600; }
+    .time-log-comment { color: var(--text); flex-basis: 100%; }
 
     .files { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-xs); }
     .file {
@@ -663,7 +667,7 @@
       .all-detail { overflow: visible; }
       .create-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .create-row input { grid-column: 1 / -1; grid-row: 1; }
-      .rel-add, .log-time { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .rel-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .play-head { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 767px) {

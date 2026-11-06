@@ -13,8 +13,7 @@ import {
   fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses, fetchEditForm,
   fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchCreateForm, fetchComments, postComment, updateComment,
   fetchUserName, fetchBacklogBlob, sprintCalendar, fetchAllVersions,
-  uploadAttachment, createRelation, searchWorkPackages,
-  fetchTimeEntryForm, createTimeEntry, deleteTimeEntry,
+  uploadAttachment, createRelation, searchWorkPackages, fetchWpTime,
 } from '../shared/api.js';
 import { TEMPLATES_KEY, templateFor, suggestedTemplate, learnTemplates, fillTitle, kindOf } from './subtask-templates.js';
 import { cachedMe, refreshMe, initials, avatarHue, todayStr } from '../shared/me.js';
@@ -342,7 +341,6 @@ const rt = {
   kidEdit: null,                // { id, parent, typeHref, subject, busy, err } while a subtask's title/type is edited
   upload: new Map(),           // wpId -> { busy, err } while files are being attached
   relAdd: null,                 // { type, query, results, targetId, busy, err } the Relations add-row
-  logTime: null,                // { for, spentOn, hours, comment, activityHref, form, formFor, busy, err } the Log time tab
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -588,8 +586,8 @@ function detailId() {
 async function loadDetail(id) {
   const d = { loading: true };
   details.set(id, d);
-  const [wp, kids, relations, files, comments] = await Promise.allSettled([
-    fetchWorkPackage(id), fetchChildWorkPackages(id), fetchRelations(id), fetchAttachments(id), fetchComments(id),
+  const [wp, kids, relations, files, comments, time] = await Promise.allSettled([
+    fetchWorkPackage(id), fetchChildWorkPackages(id), fetchRelations(id), fetchAttachments(id), fetchComments(id), fetchWpTime(id),
   ]);
   d.loading = false;
   if (wp.status === 'rejected') { d.err = wp.reason; requestRender(); return; }
@@ -598,8 +596,9 @@ async function loadDetail(id) {
   d.relations = relations.status === 'fulfilled' ? relations.value : null;
   d.files = files.status === 'fulfilled' ? files.value : null;
   d.comments = comments.status === 'fulfilled' ? comments.value : null;
+  d.timeEntries = time.status === 'fulfilled' ? time.value : null;
   loadCommentAuthors(d.comments);
-  d.partialErr = [kids, relations, files, comments].find(r => r.status === 'rejected')?.reason?.message ?? '';
+  d.partialErr = [kids, relations, files, comments, time].find(r => r.status === 'rejected')?.reason?.message ?? '';
   d.kidStatuses = new Map();
   requestRender();
   loadStatuses(id);
@@ -2005,7 +2004,6 @@ function render() {
     if (!rt.kidEdit?.busy) rt.kidEdit = null;
     rt.tab = 'desc';
     rt.relAdd = { type: 'relates', query: '', results: null, targetId: null, busy: false, err: '' };
-    rt.logTime = { for: did, spentOn: todayStr(), hours: '', comment: '', activityHref: null, form: null, formFor: null, busy: false, err: '' };
   }
   const scrollTop = document.querySelector('[data-role="all-list"]')?.scrollTop ?? 0;
   const pane = document.querySelector('[data-role="all-detail"]');
@@ -2544,64 +2542,26 @@ async function addRelationNow(id) {
   render();
 }
 
-// ─── Log time: bypassing OpenProject's own modal ──────────────────────────────
+// ─── Time logged: a read-only look at what's already on the story ─────────────
 
-let logTimeSeq = 0;
-/** Loads the activities and default one for the open story's chosen day, once per day. */
-async function ensureLogTimeForm(id) {
-  const lt = rt.logTime;
-  if (!lt || lt.for !== id || (lt.form && lt.formFor === lt.spentOn)) return;
-  const seq = ++logTimeSeq;
-  let form;
-  try { form = await fetchTimeEntryForm(id, lt.spentOn); }
-  catch { form = { linkKey: 'workPackage', activities: [], defaultHref: null }; }
-  if (logTimeSeq !== seq || rt.logTime !== lt) return;
-  lt.form = form; lt.formFor = lt.spentOn;
-  lt.activityHref = form.defaultHref ?? form.activities[0]?.href ?? null;
-  render();
-}
-
-function logTimeHtml(id, d) {
-  const lt = rt.logTime;
-  if (!d.wp?._links?.logTime) return '<p class="text2">You can\'t log time on this story.</p>';
-  const form = lt.form, activities = form?.activities ?? [];
-  const hours = Number(lt.hours);
-  const hoursOk = Number.isFinite(hours) && hours > 0 && hours <= 24;
-  const needsActivity = activities.length > 0 && !lt.activityHref;
-  const disabled = lt.busy || !hoursOk || needsActivity;
-  return `<div class="log-time">
-    <label class="dlg-fld"><span>Date</span><input class="ctrl" type="date" data-role="log-date" value="${esc(lt.spentOn)}" aria-label="Day the time was spent"${lt.busy ? ' disabled' : ''} /></label>
-    <label class="dlg-fld"><span>Hours</span><input class="ctrl" type="number" min="0.25" max="24" step="0.25" data-role="log-hours" value="${esc(lt.hours)}" aria-label="Hours"${lt.busy ? ' disabled' : ''} /></label>
-    <label class="dlg-fld"><span>Activity</span><select class="ctrl" data-role="log-activity" aria-label="Activity"${!form || lt.busy ? ' disabled' : ''}>
-      ${activities.map(a => `<option value="${esc(a.href)}"${a.href === lt.activityHref ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}
-    </select></label>
-    <label class="dlg-fld"><span>Comment</span><input class="ctrl" data-role="log-comment" value="${esc(lt.comment)}" aria-label="Comment"${lt.busy ? ' disabled' : ''} /></label>
-    <button type="button" class="primary" data-act="log-time-save" data-id="${esc(id)}"${disabled ? ' disabled' : ''}${lt.busy ? ' aria-busy="true"' : ''}>${lt.busy ? 'Logging…' : 'Save'}</button>
-    ${lt.err ? `<div class="card-error" role="alert">${esc(lt.err)}</div>` : ''}
+function timeHtml(id, d) {
+  const entries = d.timeEntries;
+  if (!entries) return entries === null ? '<p class="card-error">Couldn\'t load logged time.</p>' : '<p class="text2">Loading…</p>';
+  if (!entries.length) return '<p class="text2">No time logged yet.</p>';
+  const total = entries.reduce((t, e) => t + e.hours, 0);
+  const rows = [...entries].sort((a, b) => b.spentOn.localeCompare(a.spentOn));
+  return `<div class="time-log">
+    <p class="time-log-total"><b class="num">${pts(total)} h</b> logged</p>
+    <ul class="time-log-rows">
+      ${rows.map(e => `<li class="time-log-row">
+        <span class="time-log-date">${esc(e.spentOn)}</span>
+        <span class="time-log-user">${esc(e.userName || 'Someone')}</span>
+        <span class="num time-log-hours">${pts(e.hours)} h</span>
+        ${e.activity ? `<span class="muted time-log-activity">${esc(e.activity)}</span>` : ''}
+        ${e.comment ? `<span class="time-log-comment">${esc(e.comment)}</span>` : ''}
+      </li>`).join('')}
+    </ul>
   </div>`;
-}
-
-async function saveLogTime(id) {
-  const lt = rt.logTime;
-  if (!lt || lt.for !== id || lt.busy) return;
-  const hours = Number(lt.hours);
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 24) return;
-  if (lt.form?.activities?.length && !lt.activityHref) return;
-  lt.busy = true; lt.err = ''; render();
-  try {
-    const entry = await createTimeEntry({
-      wpId: id, spentOn: lt.spentOn, hours, linkKey: lt.form?.linkKey ?? 'workPackage',
-      activityHref: lt.activityHref, comment: lt.comment,
-    });
-    lt.hours = ''; lt.comment = '';
-    announce(`Logged ${pts(hours)} h on #${id}`);
-    toast(`Logged ${pts(hours)} h on #${id}`, 'Undo', () => { hideToast(); deleteTimeEntry(entry.id).catch(() => {}); });
-  } catch (err) {
-    lt.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
-  } finally {
-    lt.busy = false;
-    render();
-  }
 }
 
 function detailHtml(id) {
@@ -2894,11 +2854,11 @@ function tabsHtml(id, d) {
     ['rel', 'Relations', d.relations?.length],
     ['files', 'Attachments', d.files?.length],
     ['comments', 'Comments', d.comments?.length],
-    ['time', 'Log time', ''],
+    ['time', 'Time logged', d.timeEntries?.length],
   ];
   const body = rt.tab === 'sub' ? kidsHtml(id, d) : rt.tab === 'rel' ? relationsHtml(id, d)
     : rt.tab === 'files' ? filesHtml(id, d) : rt.tab === 'comments' ? commentsHtml(id, d)
-    : rt.tab === 'time' ? logTimeHtml(id, d) : descHtml(d);
+    : rt.tab === 'time' ? timeHtml(id, d) : descHtml(d);
   return `<div class="tabs" role="tablist">${tabs.map(([k, label, n]) => `<button role="tab" class="tab" data-act="tab" data-tab="${k}" aria-selected="${rt.tab === k}">${label}${n ? ` <span class="num muted">${n}</span>` : ''}</button>`).join('')}</div>
     <div class="tab-body" role="tabpanel" data-key="${esc(id)}:${rt.tab}">${body}</div>
     ${d.partialErr ? `<p class="muted" style="font-size:var(--text-xs)">Some parts didn't load: ${esc(d.partialErr)}</p>` : ''}
@@ -3391,7 +3351,6 @@ async function onAction(act, el) {
       rt.tab = el.dataset.tab;
       const id = detailId();
       if (rt.tab === 'sub' && id) loadKidStatuses(id);
-      if (rt.tab === 'time' && id) ensureLogTimeForm(id);
       return render();
     }
     case 'sub-create': return createSubtask(el.dataset.id);
@@ -3418,7 +3377,6 @@ async function onAction(act, el) {
     case 'files-pick': { const input = ensureFileInput(); input.dataset.for = el.dataset.id; input.click(); return; }
     case 'rel-pick': if (rt.relAdd) { rt.relAdd.targetId = el.dataset.id; rt.relAdd.results = null; } return render();
     case 'rel-add': return addRelationNow(el.dataset.id);
-    case 'log-time-save': return saveLogTime(el.dataset.id);
     case 'end':      return endGame();
     case 'back':     rt.view = null; s.phase = 'play'; s.level = Math.min(s.level, LEVELS.length - 1); save(); return render();
     case 'new':      return newGame();
@@ -3498,14 +3456,6 @@ document.addEventListener('input', e => {
   if (e.target.dataset.role === 'sug-title' && rt.sug?.rows[e.target.dataset.i]) { rt.sug.rows[e.target.dataset.i].title = e.target.value; rt.sug.touched = true; }
   if (e.target.dataset.role === 'tpl-title' && rt.tplEdit?.rows[e.target.dataset.i]) rt.tplEdit.rows[e.target.dataset.i].title = e.target.value;
   if (e.target.dataset.role === 'rel-query') relQueryChanged(e.target.value);
-  if (e.target.dataset.role === 'log-hours' && rt.logTime) {
-    rt.logTime.hours = e.target.value;
-    const n = Number(e.target.value);
-    const ok = Number.isFinite(n) && n > 0 && n <= 24;
-    const btn = document.querySelector('[data-act="log-time-save"]');
-    if (btn) btn.disabled = rt.logTime.busy || !ok || (rt.logTime.form?.activities?.length > 0 && !rt.logTime.activityHref);
-  }
-  if (e.target.dataset.role === 'log-comment' && rt.logTime) rt.logTime.comment = e.target.value;
 });
 document.addEventListener('keydown', e => {
   const role = e.target.dataset?.role;
@@ -3527,10 +3477,6 @@ document.addEventListener('keydown', e => {
   } else if (role === 'kid-edit-subject' && e.key === 'Escape' && !rt.kidEdit?.busy) {
     e.preventDefault(); e.stopImmediatePropagation();
     cancelKidEdit();
-  } else if ((role === 'log-hours' || role === 'log-comment') && e.key === 'Enter') {
-    e.preventDefault();
-    const id = detailId();
-    if (id) saveLogTime(id);
   }
 });
 
@@ -3758,13 +3704,6 @@ document.addEventListener('change', async e => {
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
   if (t.dataset.role === 'kid-edit-type' && rt.kidEdit) { rt.kidEdit.typeHref = t.value || null; return; }
   if (t.dataset.role === 'rel-type') { if (rt.relAdd) rt.relAdd.type = t.value; return; }
-  if (t.dataset.role === 'log-date') {
-    if (rt.logTime) { rt.logTime.spentOn = t.value; rt.logTime.form = null; }
-    const id = detailId();
-    if (id) ensureLogTimeForm(id);
-    return render();
-  }
-  if (t.dataset.role === 'log-activity') { if (rt.logTime) rt.logTime.activityHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
     s.budgets[t.dataset.budget] = Math.max(0, Math.min(180, Math.round(Number(t.value) || 0)));
