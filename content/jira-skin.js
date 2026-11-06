@@ -131,6 +131,116 @@ function ensureIcon(leaf, kind, value) {
   leaf.before(icon);
 }
 
+/** The first number in a cell ("3", "13 h", "50.7 h", "-"), or null. */
+function cellNumber(cell) {
+  if (!cell) return null;
+  const m = /-?\d+(?:[.,]\d+)?/.exec(cell.textContent.replace(/\s/g, ''));
+  return m ? parseFloat(m[0].replace(',', '.')) : null;
+}
+
+// A total is read at a glance, so one decimal is as much as it can carry:
+// "404.6 h", not "404.55 h".
+const fmtTotal = n => String(Math.round(n * 10) / 10);
+
+/** Writes "· 16 pts · 26 h" into a group header and folds away the Sum row that
+ *  carried those numbers. Leaves the header alone when the group holds no rows
+ *  (folded away), so a collapsed group keeps the total it last showed. */
+function writeGroupTotals(header, { rows, points, spent, sumRow }) {
+  const cell = header.children[0];
+  if (!cell || !rows) return;
+  const parts = [];
+  if (points) parts.push(`${fmtTotal(points)} pts`);
+  if (spent) parts.push(`${fmtTotal(spent)} h`);
+  const text = parts.join(' · ');
+  let el = cell.querySelector('.blm-jx-group-sum');
+  if (!text) { el?.remove(); return; }
+  // Inside the element that holds the group name, not the cell: the name sits in
+  // a block, so a span appended to the cell would start its own line.
+  const host = cell.querySelector('.group--value') ?? textLeaf(cell)?.parentElement ?? cell;
+  if (!el) {
+    el = document.createElement('span');
+    el.className = 'blm-jx-group-sum';
+  }
+  if (el.parentElement !== host) host.append(el);
+  if (el.textContent !== text) el.textContent = text;
+  sumRow?.classList.add('blm-jx-sum-folded');
+}
+
+/** Each group's totals move onto its header row, where they sit beside the name
+ *  they belong to instead of on a Sum row a screen-width away. A table-wide Sum
+ *  row (one with no group header above it) is left where it is. */
+function renderGroupTotals() {
+  for (const table of document.querySelectorAll('.work-package-table')) {
+    const body = table.tBodies[0];
+    if (!body) continue;
+    let header = null;
+    let group = null;
+    const flush = () => {
+      if (header && group) writeGroupTotals(header, group);
+      header = null;
+      group = null;
+    };
+    for (const tr of [...body.rows]) {
+      // Sum first: a Sum row can also be a single colspan cell, which would
+      // otherwise read as a group header.
+      if (/sum/i.test(tr.className)) {
+        if (group && !group.sumRow) group.sumRow = tr;
+        continue;
+      }
+      if (isGroupHeaderRow(tr)) { flush(); header = tr; group = { rows: 0, points: 0, spent: 0, sumRow: null }; continue; }
+      if (!group || !tr.classList.contains('wp-table--row')) continue;
+      group.rows++;
+      group.points += cellNumber(tr.querySelector('td.storyPoints')) ?? 0;
+      group.spent += cellNumber(tr.querySelector('td.spentTime')) ?? 0;
+    }
+    flush();
+  }
+}
+
+/** Every column now shrinks to its own content, so a long heading over a short
+ *  value is what makes a column too wide: "Story Points" drives its column ~40 px
+ *  past the single digit underneath it. "Points" is what the Backlogs column head
+ *  already calls it (COLUMN_HEADS), so this borrows the word rather than coining one. */
+const SHORT_HEADS = { storyPoints: 'Points' };
+
+/** The text node holding a heading link's label.
+ *  textLeaf() is the wrong tool here: it returns the LAST leaf with text, and the
+ *  last one in a sort header is the `hidden-for-sighted` "Open menu" span — so it
+ *  renames the screen-reader label and leaves the visible heading alone. */
+function headTextNode(link) {
+  const walk = document.createTreeWalker(link, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (n.data.trim()) return n;
+  }
+  return null;
+}
+
+/** OpenProject gives each sort header's link the column name as its id
+ *  (`<a id="storyPoints">Story Points</a>`), which is an exact handle; the cell
+ *  around it carries the sort icon and the "Open menu" label, neither of which
+ *  this may touch. */
+function shortenColumnHeads() {
+  for (const [col, short] of Object.entries(SHORT_HEADS)) {
+    for (const link of document.querySelectorAll(`a#${col}`)) {
+      const node = headTextNode(link);
+      if (!node || node.data.trim() === short) continue;
+      if (!link.dataset.blmHead) link.dataset.blmHead = node.data;
+      node.data = short;
+    }
+  }
+}
+
+/** A truncated summary is unreadable without opening the item, so the full text
+ *  goes on the cell as a tooltip. */
+function titleSubjects() {
+  for (const cell of document.querySelectorAll('.work-package-table td.subject')) {
+    const text = cell.textContent.trim();
+    if (!text || cell.title === text) continue;
+    cell.title = text;
+    cell.dataset.blmTitled = '1';
+  }
+}
+
 // Idempotent: a second pass over the same rows changes nothing, so the
 // observer below settles after one extra frame.
 function tagCells() {
@@ -177,6 +287,9 @@ function tagCells() {
   }
   renderBacklogLabels();
   renderColumnHeads();
+  renderGroupTotals();
+  shortenColumnHeads();
+  titleSubjects();
 
   // Type field beside the summary (split view and full page): tagged only;
   // the icon is drawn by CSS on the field itself.
@@ -344,7 +457,14 @@ document.addEventListener('click', e => {
 });
 
 function untagCells() {
-  document.querySelectorAll('.blm-jx-label, .blm-jx-assignee, .blm-jx-colhead').forEach(el => el.remove());
+  document.querySelectorAll('.blm-jx-label, .blm-jx-assignee, .blm-jx-colhead, .blm-jx-group-sum').forEach(el => el.remove());
+  document.querySelectorAll('.blm-jx-sum-folded').forEach(el => el.classList.remove('blm-jx-sum-folded'));
+  document.querySelectorAll('[data-blm-titled]').forEach(el => { el.removeAttribute('title'); delete el.dataset.blmTitled; });
+  document.querySelectorAll('[data-blm-head]').forEach(link => {
+    const node = headTextNode(link);
+    if (node) node.data = link.dataset.blmHead;
+    delete link.dataset.blmHead;
+  });
   welcomeEl?.remove();
   welcomeEl = null;
   document.querySelectorAll('.blm-jx-icon').forEach(el => el.remove());
@@ -809,6 +929,87 @@ html.${WP_CLASS} .work-package-table tr[class*="group-header"] .expander { color
 html.${WP_CLASS} .work-package-table tr[class*="sums"] > td {
   height: 32px; background: var(--jx-surface); color: var(--jx-text-subtlest);
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+/* A group's totals, written onto its header by renderGroupTotals(); the Sum row
+   that carried them is then folded away. */
+html.${WP_CLASS} .work-package-table .blm-jx-group-sum {
+  margin-left: 10px; color: var(--jx-text-subtlest);
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.${WP_CLASS} .work-package-table .blm-jx-group-sum::before {
+  content: "·"; margin-right: 10px; color: var(--jx-border);
+}
+html.${WP_CLASS} .work-package-table tr.blm-jx-sum-folded { display: none; }
+
+/* Summary takes the slack. Every other column shrinks to its own content, so the
+   one column people actually read is the last thing to truncate instead of the
+   first — before this the table left 600 px empty and cut the title. */
+html.${WP_CLASS} .work-package-table thead th,
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row > td { width: 1%; white-space: nowrap; }
+html.${WP_CLASS} .work-package-table thead th.subject,
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row > td.subject { width: 100%; }
+
+/* Numbers line up under their own heading, right-aligned so the digits compare. */
+html.${WP_CLASS} .work-package-table :is(thead th, tbody tr.wp-table--row > td):is(.estimatedTime, .remainingTime, .spentTime) {
+  text-align: right;
+}
+html.${WP_CLASS} .work-package-table thead th:is(.estimatedTime, .remainingTime, .spentTime) > * {
+  justify-content: flex-end;
+}
+
+/* Points is the exception: a chip is a shape, not a run of digits, so it centres
+   in its column and the heading centres with it. The heading is reached through
+   the sort link's id, the same exact handle shortenColumnHeads() uses, because
+   whether the cell itself carries a storyPoints class is unverified. */
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row > td.storyPoints,
+html.${WP_CLASS} .work-package-table th:has(a#storyPoints) { text-align: center; }
+html.${WP_CLASS} .work-package-table th:has(a#storyPoints) > * { justify-content: center; }
+
+/* An empty editable cell reads as "nothing here" at rest and as "fill me" on row
+   hover: OpenProject's placeholder dash only shows while the row is under the
+   pointer, so 25 dashes stop competing with the data. The assignee placeholder
+   keeps its "Unassigned" wording, which is a value, not an empty cell. */
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row > td
+  .inline-edit--display-field.-placeholder:not(.assignee):not(.responsible) {
+  color: transparent; transition: color var(--jx-dur) var(--jx-ease-out);
+}
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row:is(:hover, :focus-within) > td
+  .inline-edit--display-field.-placeholder:not(.assignee):not(.responsible) {
+  color: var(--jx-text-subtlest);
+}
+
+/* One convention for "this cell writes": a dotted underline while its row is
+   hovered. Links keep the blue they always had, so the page says exactly two
+   things — blue goes somewhere, dotted edits here. */
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row:is(:hover, :focus-within) > td:is(.type, .priority, .version, .estimatedTime, .remainingTime, [class*="customField"])
+  .inline-edit--display-field {
+  text-decoration: underline dotted var(--jx-text-subtlest);
+  text-underline-offset: 3px;
+}
+
+/* Story points are the sprint's currency, but as bare grey digits in a wide column
+   they were the faintest thing on the row. A chip gives them an edge the eye can
+   catch and a target bigger than one character to click — in the grey the status
+   lozenge already uses, so the row gains emphasis without gaining a colour.
+   An empty cell gets no chip: an empty pill would read as a value of its own. */
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row > td.storyPoints
+  .inline-edit--display-field:not(.-placeholder) {
+  display: inline-block; box-sizing: border-box;
+  min-width: 26px; height: 20px; padding: 0 7px;
+  border-radius: 10px; background: var(--jx-todo-bg); color: var(--jx-text);
+  font-size: 12px; font-weight: 700; line-height: 20px; text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--jx-dur) var(--jx-ease-out);
+}
+html.${WP_CLASS} .work-package-table tbody tr.wp-table--row:is(:hover, :focus-within) > td.storyPoints
+  .inline-edit--display-field:not(.-placeholder) {
+  background: var(--jx-todo-bg-hover);
+}
+
+/* Normal is the default on about half the rows; its amber competes with the red
+   of a real priority and with the Bug icon. Only a raised priority gets colour. */
+html.${WP_CLASS} .work-package-table td.priority .blm-jx-icon[data-priority="medium"]::after {
+  background: var(--jx-text-subtlest);
 }
 
 /* Type and priority values: plain ink, not OpenProject's highlight colour
@@ -3574,6 +3775,7 @@ const TIMELOG_DAILY_TARGET = 8;
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 let timelogCard = null;
 let timelogData = null;   // Promise<Map<'YYYY-MM-DD', hours>>; dropped when the dialog closes
+let timelogInitialDraft = null;   // { iso, hours } read when the dialog first appeared; null for a fresh "Log time" (nothing to subtract back out)
 
 const pad2 = n => String(n).padStart(2, '0');
 const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -3652,25 +3854,32 @@ function readDraft(modal) {
   return { iso: /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : '', hours: parseDraftHours(dialogField(modal, /^hours/i, 1)?.value) };
 }
 
-function fillTimelog(card, byDay, draft) {
+/**
+ * The byDay fetch already includes this entry's own saved hours when editing, so
+ * the dialog's current value isn't "new" time — only the move away from what it
+ * started as is. `delta(d)` nets the current draft in against the dialog's
+ * opening value, on whichever day(s) they land, so an edit shows its real +/-
+ * change instead of double-counting the entry being edited.
+ */
+function fillTimelog(card, byDay, draft, initialDraft) {
   const days = timelogDays();
   card.replaceChildren();
   let logged = 0, expected = 0, missing = 0, pending = 0;
   const grid = el('div', 'blm-jx-timelog-grid');
   for (const d of days) {
     const saved = byDay.get(d.iso) ?? 0;
-    const extra = draft.iso === d.iso ? draft.hours : 0;
-    const h = saved + extra;
+    const delta = (draft.iso === d.iso ? draft.hours : 0) - (initialDraft?.iso === d.iso ? initialDraft.hours : 0);
+    const h = saved + delta;
     const state = d.future && !h ? 'future' : h >= TIMELOG_DAILY_TARGET - 0.01 ? 'met' : h > 0 ? 'part' : 'miss';
-    if (!d.future || h) { logged += h; pending += extra; }
+    if (!d.future || h) { logged += h; pending += delta; }
     if (!d.future) { expected += TIMELOG_DAILY_TARGET; if (!h && !d.today) missing++; }
     const tile = el('div', 'blm-jx-timelog-day');
     tile.dataset.state = state;
     if (d.today) tile.dataset.today = '';
-    if (extra) tile.dataset.draft = '';
+    if (delta) tile.dataset.draft = '';
     tile.append(el('span', 'blm-jx-timelog-dname', `${d.name} ${d.num}`),
       el('span', 'blm-jx-timelog-dhours', h ? h.toFixed(2) : d.future ? '·' : '—'));
-    if (extra) tile.append(el('span', 'blm-jx-timelog-dnew', `+${extra.toFixed(2)} new`));
+    if (delta) tile.append(el('span', 'blm-jx-timelog-dnew', `${delta > 0 ? '+' : ''}${delta.toFixed(2)} new`));
     grid.append(tile);
   }
   const head = el('div', 'blm-jx-timelog-head');
@@ -3678,7 +3887,7 @@ function fillTimelog(card, byDay, draft) {
   const sum = el('p', 'blm-jx-timelog-sum');
   sum.append(el('b', null, logged.toFixed(2)), ` h of ${expected.toFixed(2)} h to date`,
     missing ? ` · ${missing} ${missing === 1 ? 'day' : 'days'} missing` : '',
-    pending ? ` · incl. ${pending.toFixed(2)} h not saved yet` : '');
+    pending ? ` · incl. ${pending > 0 ? '+' : ''}${pending.toFixed(2)} h not saved yet` : '');
   card.append(head, grid, sum);
 }
 
@@ -3689,7 +3898,7 @@ function paintTimelog(modal) {
   const sig = `${draft.iso}|${draft.hours}`;
   if (timelogCard.dataset.sig === sig) return;   // the card is in <body>: repainting on every mutation would loop
   timelogCard.dataset.sig = sig;
-  fillTimelog(timelogCard, timelogByDay, draft);
+  fillTimelog(timelogCard, timelogByDay, draft, timelogInitialDraft);
 }
 
 function placeTimelog(modal) {
@@ -3703,12 +3912,14 @@ function placeTimelog(modal) {
 function removeTimelog() {
   timelogCard?.remove();
   timelogCard = null;
+  timelogInitialDraft = null;
 }
 
 function renderTimeLog() {
   const modal = logTimeModal();
   if (!modal) { removeTimelog(); timelogData = null; timelogByDay = null; return; }
   if (!timelogCard?.isConnected) {
+    timelogInitialDraft = readDraft(modal);
     timelogCard = el('aside', 'blm-jx-timelog');
     timelogCard.setAttribute('aria-label', 'My time');
     timelogCard.append(el('div', 'blm-jx-timelog-note', 'Loading your time…'));

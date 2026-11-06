@@ -28,8 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Jira style: status, assignee and accountable open the same searchable picker everywhere (work-package header, list rows, Details sidebar, Relations tab), not OpenProject's own menus.
 - Jira style: status lozenges, ticket keys (#123), priority icons, avatars and "Unassigned" look the same in the list, Backlogs, Child work items, Relations and the sidebar; "in progress" is blue everywhere, the subtask bar and its popover included.
 - Jira style: the Relations tab is laid out like Child work items, and the confirmation dialogs and settings drawer follow the Jira style look in light and dark.
+- Jira style: the work-package list gives its spare width to the Summary column instead of leaving it empty and truncating titles, right-aligns time columns, and shows a group's Points/hours totals on its header row instead of a separate Sum row further down.
+- Jira style: an editable cell shows a dotted underline on hover so it's clear which fields can be clicked to edit, empty fields stay quiet until the row is hovered, Story Points get a visual chip, long Summary text gets a tooltip with the full text, and the "Story Points" column heading is shortened to "Points".
 
 ### Fixed
+- Jira style: editing an existing time entry's Hours in the My time card no longer double-counts it as new time on top of what was already logged for that day — the card now shows the real change, not the entry's whole value again.
 - Planning: after creating a subtask or posting a comment, the field no longer keeps the old text, so the next subtask doesn't reuse the previous title.
 - Jira style: a subtask's status picker on the story page offers the moves allowed from its current status and assignee, not the ones from before its last change.
 - Planning: a subtask's or story's status list refreshes after its assignee changes, and no longer shows the moves from its previous status.
