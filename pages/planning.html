@@ -507,10 +507,21 @@
     .sug-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
     .sug-foot { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; padding-top: var(--space-xs); }
 
+    .rel-add { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: var(--space-xs); align-items: start; margin-bottom: var(--space-sm); }
+    .rel-add .ctrl { width: 100%; }
+    .rel-add .card-error { grid-column: 1 / -1; margin: 0; }
+    .rel-hits { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+    .rel-hit { font-size: var(--text-sm); padding: 2px 8px; }
+
     .rel-group + .rel-group { margin-top: var(--space-sm); }
     .rel-group h4 { font-size: var(--text-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
     .rel-group ul { list-style: none; display: grid; gap: 4px; }
     .rel-group a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+    .attach-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+
+    .log-time { display: grid; grid-template-columns: 150px 100px minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--space-sm) var(--space-xs); align-items: end; }
+    .log-time .card-error { grid-column: 1 / -1; margin: 0; }
 
     .files { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-xs); }
     .file {
@@ -652,6 +663,7 @@
       .all-detail { overflow: visible; }
       .create-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .create-row input { grid-column: 1 / -1; grid-row: 1; }
+      .rel-add, .log-time { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .play-head { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 767px) {

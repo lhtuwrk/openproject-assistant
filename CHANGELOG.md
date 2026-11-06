@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - The current sprint's version is now tracked from its first day even if the chart is never opened, so everyone's Burndown names the same stories that moved out. Someone who starts late sees the chart at once, and the stories that left before, including ones handed to another project, are looked up a few a minute in the background (a chip next to the sprint's name shows how far along) and added when done, so the chart ends up the same as their teammates'.
+- Planning: edit priority/label, upload attachments, link related stories, and log time without leaving the sprint board.
 
 ### Changed
 - Jira style: the work-package list gives its spare width to the Summary column instead of leaving it empty and truncating titles, right-aligns time columns, and shows a group's Points/hours totals on its header row instead of a separate Sum row further down.

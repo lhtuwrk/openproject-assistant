@@ -10,9 +10,11 @@
 
 import {
   fetchActiveProjects, fetchOpenVersions, fetchProjectWorkPackages, fetchWorkPackage,
-  fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses,
+  fetchAvailableAssignees, patchWorkPackage, createWorkPackage, fetchAllowedStatuses, fetchEditForm,
   fetchChildWorkPackages, fetchRelations, fetchAttachments, fetchProjectTypes, fetchCreateForm, fetchComments, postComment, updateComment,
   fetchUserName, fetchBacklogBlob, sprintCalendar, fetchAllVersions,
+  uploadAttachment, createRelation, searchWorkPackages,
+  fetchTimeEntryForm, createTimeEntry, deleteTimeEntry,
 } from '../shared/api.js';
 import { TEMPLATES_KEY, templateFor, suggestedTemplate, learnTemplates, fillTitle, kindOf } from './subtask-templates.js';
 import { cachedMe, refreshMe, initials, avatarHue, todayStr } from '../shared/me.js';
@@ -165,6 +167,14 @@ const RELATION_LABEL = {
   blocks: 'Blocks', blocked: 'Blocked by', precedes: 'Precedes', follows: 'Follows',
   includes: 'Includes', partof: 'Part of', requires: 'Requires', required: 'Required by',
 };
+
+/** What kind of control the Label custom field needs: a list of options (single or
+ *  multiple choice) or free text. */
+function labelKind(type) {
+  if (type === 'CustomOption') return 'single';
+  if (/^\[\]/.test(type ?? '')) return 'multi';
+  return 'text';
+}
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -330,6 +340,9 @@ const rt = {
   tplEdit: null,               // { kind, rows: [{ title, assignee }] } while the subtask template is edited
   learned: null,               // { projectId, sprints, story, bug }: the team's usual subtasks, from recent sprints
   kidEdit: null,                // { id, parent, typeHref, subject, busy, err } while a subtask's title/type is edited
+  upload: new Map(),           // wpId -> { busy, err } while files are being attached
+  relAdd: null,                 // { type, query, results, targetId, busy, err } the Relations add-row
+  logTime: null,                // { for, spentOn, hours, comment, activityHref, form, formFor, busy, err } the Log time tab
 };
 const details = new Map();     // wpId -> { wp, statuses, kids, kidStatuses, relations, files, err, loading }
 const blobs = new Map();       // backlog path -> object URL | 'loading' | 'failed'
@@ -456,8 +469,11 @@ function syncOrder(key) {
   // Where the card's first rule label sits in the level's label list: the list is the label order.
   const labelRank = c => { const i = wanted.findIndex(re => c.labels.some(l => re.test(l))); return i < 0 ? wanted.length : i; };
   const byPriority = (a, b) => PRIORITY_RANK(a.priority) - PRIORITY_RANK(b.priority) || labelRank(a) - labelRank(b);
+  // A story already placed in another level (its priority/label changed after it was dealt)
+  // doesn't also join this one until the next real deal.
+  const placed = new Set(Object.entries(s.order).filter(([k]) => k !== key).flatMap(([, ids]) => ids));
   const fresh = [...rt.cards.values()]
-    .filter(c => levelOf(c) === key)
+    .filter(c => levelOf(c) === key && !placed.has(c.id))
     .sort((a, b) => (s.sortBy === 'points' ? (b.points ?? -1) - (a.points ?? -1) : s.sortBy === 'id' ? 0 : byPriority(a, b)) || Number(a.id) - Number(b.id))
     .map(c => c.id);
   const kept = (s.order[key] ?? []).filter(id => rt.cards.has(id) || s.decisions[id]);
@@ -594,11 +610,24 @@ async function loadStatuses(id) {
   const d = details.get(id);
   if (!d?.wp) return;
   const ask = d.statusesAsk = {};   // only the latest request may answer
-  let statuses;
-  try { statuses = await fetchAllowedStatuses(id); }
-  catch { statuses = null; }
+  let schema = null;
+  try { ({ schema } = await fetchEditForm(id)); } catch { schema = null; }
   if (d.statusesAsk !== ask) return;
-  d.statuses = statuses;
+  if (!schema) {
+    d.statuses = null; d.priorities = null; d.priorityWritable = null; d.label = null;
+    return requestRender();
+  }
+  d.statuses = allowedOf(schema, 'status');
+  d.priorities = allowedOf(schema, 'priority');
+  d.priorityWritable = schema.priority?.writable !== false;
+  const labelType = schema[LABEL_FIELD]?.type ?? null;
+  d.label = {
+    choices: allowedOf(schema, LABEL_FIELD),
+    type: labelType,
+    kind: labelKind(labelType),
+    formattable: labelType === 'Formattable',
+    writable: !!schema[LABEL_FIELD] && schema[LABEL_FIELD].writable !== false,
+  };
   requestRender();
 }
 
@@ -721,17 +750,38 @@ function queueWrite(wpId, fn) {
   return run;
 }
 
-/** Sets a story's or subtask's status, assignee, subject or type on OpenProject. */
-async function writeField(wpId, field, href, parentId) {
+/** The body a label write needs, depending on whether the field is a single choice,
+ *  a multiple choice (an array of hrefs) or free text. */
+function labelChanges(d, value) {
+  const kind = d?.label?.kind;
+  if (kind === 'multi') {
+    const hrefs = Array.isArray(value) ? value : (value ? [value] : []);
+    return { _links: { [LABEL_FIELD]: hrefs.map(h => ({ href: h })) } };
+  }
+  if (kind === 'text') return { [LABEL_FIELD]: d?.label?.formattable ? { raw: value } : value };
+  return { _links: { [LABEL_FIELD]: { href: value || null } } };
+}
+
+/** The label's names from the hrefs just written, for when the saved work package's
+ *  own links don't carry titles. */
+function labelNamesFromHrefs(d, value) {
+  const choices = d?.label?.choices ?? [];
+  const hrefs = Array.isArray(value) ? value : (value ? [value] : []);
+  return hrefs.map(h => choices.find(c => c.href === h)?.name).filter(Boolean);
+}
+
+/** Sets a story's or subtask's status, assignee, priority, label, subject or type on OpenProject. */
+async function writeField(wpId, field, value, parentId) {
   const key = `${wpId}:${field}`;
   if (rt.saving.has(key)) return;
   rt.saving.add(key); rt.writeErr.delete(key); render();
+  const d = details.get(parentId ?? wpId);
   try {
-    const changes = field === 'storyPoints' ? { storyPoints: href }
-      : field === 'subject' ? { subject: href }
-      : { _links: { [field]: { href } } };
+    const changes = field === 'storyPoints' ? { storyPoints: value }
+      : field === 'subject' ? { subject: value }
+      : field === LABEL_FIELD ? labelChanges(d, value)
+      : { _links: { [field]: { href: value } } };
     const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, changes));
-    const d = details.get(parentId ?? wpId);
     if (d?.loading) {
       details.delete(parentId ?? wpId);   // a reload started before the save: load it again after
     } else if (parentId) {
@@ -741,9 +791,20 @@ async function writeField(wpId, field, href, parentId) {
     } else {
       if (d) d.wp = saved;
       const card = rt.cards.get(String(wpId));
-      if (card) rt.cards.set(card.id, { ...toCard(saved), labels: card.labels });
+      const fresh = toCard(saved);
+      if (card) {
+        const labels = field !== LABEL_FIELD ? card.labels
+          : fresh.labels.length ? fresh.labels
+          : d?.label?.kind === 'text' ? card.labels
+          : labelNamesFromHrefs(d, value);
+        rt.cards.set(card.id, { ...fresh, labels });
+        if (s.decisions[wpId]?.card) {
+          if (field === 'priority') s.decisions[wpId].card.priority = fresh.priority;
+          if (field === LABEL_FIELD) s.decisions[wpId].card.labels = labels;
+        }
+      }
       if (field === 'status' || field === 'assignee') loadStatuses(wpId);
-      if (field === 'storyPoints' && s.decisions[wpId]) s.decisions[wpId].card.points = toCard(saved).points;
+      if (field === 'storyPoints' && s.decisions[wpId]) s.decisions[wpId].card.points = fresh.points;
     }
     announce(`#${wpId} ${field} saved`);
   } catch (err) {
@@ -1943,6 +2004,8 @@ function render() {
     rt.sug = null; rt.tplEdit = null;
     if (!rt.kidEdit?.busy) rt.kidEdit = null;
     rt.tab = 'desc';
+    rt.relAdd = { type: 'relates', query: '', results: null, targetId: null, busy: false, err: '' };
+    rt.logTime = { for: did, spentOn: todayStr(), hours: '', comment: '', activityHref: null, form: null, formFor: null, busy: false, err: '' };
   }
   const scrollTop = document.querySelector('[data-role="all-list"]')?.scrollTop ?? 0;
   const pane = document.querySelector('[data-role="all-detail"]');
@@ -2205,9 +2268,51 @@ function assigneeSelect(wpId, currentHref, currentName, parentId, { field = 'ass
   </select>`;
 }
 
+/** A select of one field's allowed choices, like statusSelect but for any field. */
+function choiceSelect(id, field, currentHref, currentTitle, choices, extraOption = '') {
+  const opts = [...(choices ?? [])];
+  if (currentHref && !opts.some(o => o.href === currentHref)) opts.unshift({ href: currentHref, name: currentTitle });
+  const key = `${id}:${field}`;
+  return `<select class="ctrl${savingCls(key)}" data-field="${field}" data-wp="${esc(id)}"
+    data-orig="${esc(currentHref ?? '')}" aria-label="${esc(field)} of #${esc(id)}"${rt.saving.has(key) ? ' aria-busy="true"' : ''}>
+    ${extraOption}${opts.map(o => `<option value="${esc(o.href)}"${o.href === currentHref ? ' selected' : ''}>${esc(o.name)}</option>`).join('')}
+  </select>`;
+}
+
+/** The Label custom field: a select for a single or multiple choice, a text input, or — until
+ *  the edit form is known, or when it isn't writable — the current value as plain text. */
+function labelFieldHtml(id, d) {
+  const wp = d.wp, label = d.label;
+  const key = `${id}:${LABEL_FIELD}`;
+  if (!label?.writable) return `<div class="fld"><span>Label</span><b>${esc(wpLabels(wp).join(', ') || '—')}</b></div>`;
+  if (label.kind === 'single') {
+    const cur = wp._links?.[LABEL_FIELD];
+    const none = `<option value=""${cur?.href ? '' : ' selected'}>None</option>`;
+    return `<div class="fld"><span>Label</span>${choiceSelect(id, LABEL_FIELD, cur?.href ?? null, cur?.title ?? '', label.choices, none)}${writeErrHtml(key, 'label')}</div>`;
+  }
+  if (label.kind === 'multi') {
+    const links = Array.isArray(wp._links?.[LABEL_FIELD]) ? wp._links[LABEL_FIELD] : [];
+    const hrefs = links.map(l => l.href).filter(Boolean);
+    const opts = [...label.choices];
+    for (const l of links) if (l.href && !opts.some(o => o.href === l.href)) opts.unshift({ href: l.href, name: l.title });
+    return `<div class="fld"><span>Label</span><select multiple size="4" class="ctrl${savingCls(key)}" data-field="${LABEL_FIELD}" data-wp="${esc(id)}"
+      data-orig="${esc([...hrefs].sort().join('|'))}" aria-label="Label of #${esc(id)}">
+      ${opts.map(o => `<option value="${esc(o.href)}"${hrefs.includes(o.href) ? ' selected' : ''}>${esc(o.name)}</option>`).join('')}
+    </select>${writeErrHtml(key, 'label')}</div>`;
+  }
+  const current = typeof wp[LABEL_FIELD] === 'string' ? wp[LABEL_FIELD] : (wp[LABEL_FIELD]?.raw ?? '');
+  return `<div class="fld"><span>Label</span><input class="ctrl${savingCls(key)}" data-field="${LABEL_FIELD}" data-wp="${esc(id)}"
+    data-orig="${esc(current)}" value="${esc(current)}" aria-label="Label of #${esc(id)}" />${writeErrHtml(key, 'label')}</div>`;
+}
+
 function fieldsHtml(id, d) {
   const wp = d.wp, L = wp._links ?? {};
+  const priorityRow = d.priorities?.length && d.priorityWritable
+    ? `<div class="fld"><span>Priority</span>${choiceSelect(id, 'priority', L.priority?.href ?? null, L.priority?.title ?? '', d.priorities)}${writeErrHtml(`${id}:priority`, 'priority')}</div>`
+    : `<div class="fld"><span>Priority</span><b>${esc(L.priority?.title ?? '—')}</b></div>`;
   return `<div class="fields">
+    ${priorityRow}
+    ${labelFieldHtml(id, d)}
     <div class="fld"><span>Author</span><b>${esc(L.author?.title ?? '—')}</b></div>
     <div class="fld"><span>Updated</span><b>${esc(shortDate(wp.updatedAt))}</b></div>
     ${L.parent?.href ? `<div class="fld"><span>Parent</span><a href="${BACKLOG_URL}/work_packages/${esc(idOf(L.parent.href))}" target="_blank" rel="noopener">${esc(L.parent.title ?? `#${idOf(L.parent.href)}`)} ↗</a></div>` : ''}
@@ -2309,9 +2414,27 @@ function kidsHtml(id, d) {
     ${suggestHtml(id, d)}`;
 }
 
+/** The inline add-row shown under Relations when the story allows it: a type, a target
+ *  (an id or a text search) and Add. Typing 2+ non-numeric characters debounces into a search. */
+function relAddRowHtml(id, d) {
+  const ra = rt.relAdd ?? { type: 'relates', query: '', results: null, targetId: null, busy: false, err: '' };
+  const already = new Set((d.relations ?? []).map(r => idOf((idOf(r._links?.from?.href) === String(id) ? r._links?.to : r._links?.from)?.href)));
+  const hits = (ra.results ?? []).filter(r => r.id !== String(id) && !already.has(r.id));
+  return `<div class="rel-add">
+    <select class="ctrl" data-role="rel-type" aria-label="Relation type"${ra.busy ? ' disabled' : ''}>
+      ${Object.entries(RELATION_LABEL).map(([k, label]) => `<option value="${k}"${k === ra.type ? ' selected' : ''}>${esc(label)}</option>`).join('')}
+    </select>
+    <input class="ctrl" data-role="rel-query" placeholder="#id or search text" value="${esc(ra.query)}" aria-label="Work package to relate"${ra.busy ? ' readonly' : ''} />
+    <button type="button" class="primary" data-act="rel-add" data-id="${esc(id)}"${ra.busy || !ra.targetId ? ' disabled' : ''}${ra.busy ? ' aria-busy="true"' : ''}>${ra.busy ? 'Adding…' : 'Add'}</button>
+    ${hits.length ? `<div class="rel-hits">${hits.map(r => `<button type="button" class="ghost rel-hit" data-act="rel-pick" data-id="${esc(r.id)}">#${esc(r.id)} ${esc(r.title)}</button>`).join('')}</div>` : ''}
+    ${ra.err ? `<div class="card-error" role="alert">Couldn't add the relation: ${esc(ra.err)}</div>` : ''}
+  </div>`;
+}
+
 function relationsHtml(id, d) {
-  if (!d.relations) return `<p class="card-error">Couldn't load the relations.</p>`;
-  if (!d.relations.length) return '<p class="text2">No relations.</p>';
+  const addRow = d.wp?._links?.addRelation ? relAddRowHtml(id, d) : '';
+  if (!d.relations) return `${addRow}<p class="card-error">Couldn't load the relations.</p>`;
+  if (!d.relations.length) return `${addRow}<p class="text2">No relations.</p>`;
   const groups = new Map();
   for (const r of d.relations) {
     const fromId = idOf(r._links?.from?.href);
@@ -2322,19 +2445,163 @@ function relationsHtml(id, d) {
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label).push({ id: idOf(other?.href), title: other?.title ?? '', note: r.description ?? '' });
   }
-  return [...groups.entries()].map(([label, items]) => `<div class="rel-group"><h4>${esc(label)}</h4><ul>
+  return addRow + [...groups.entries()].map(([label, items]) => `<div class="rel-group"><h4>${esc(label)}</h4><ul>
     ${items.map(x => `<li><a class="num" href="${BACKLOG_URL}/work_packages/${esc(x.id)}" target="_blank" rel="noopener">#${esc(x.id)}</a> ${esc(x.title)}${x.note ? ` <span class="muted">· ${esc(x.note)}</span>` : ''}</li>`).join('')}
   </ul></div>`).join('');
 }
 
-function filesHtml(d) {
-  if (!d.files) return `<p class="card-error">Couldn't load the attachments.</p>`;
-  if (!d.files.length) return '<p class="text2">No attachments.</p>';
-  return `<ul class="files">${d.files.map(f => `<li><a class="file" href="${BACKLOG_URL}${esc(f.href)}" target="_blank" rel="noopener"${f.type.startsWith('image/') ? ` data-viewer="${esc(f.href)}" data-name="${esc(f.name)}"` : ''}>
+function filesHtml(id, d) {
+  const up = rt.upload.get(id);
+  const attachRow = d.wp?._links?.addAttachment ? `<div class="attach-row">
+      <button type="button" class="ghost" data-act="files-pick" data-id="${esc(id)}"${up?.busy ? ' aria-busy="true" disabled' : ''}>${up?.busy ? 'Uploading…' : 'Attach files'}</button>
+      ${up?.err ? `<span class="card-error" role="alert">Couldn't upload: ${esc(up.err)}</span>` : ''}
+    </div>` : '';
+  if (!d.files) return `${attachRow}<p class="card-error">Couldn't load the attachments.</p>`;
+  if (!d.files.length) return `${attachRow}<p class="text2">No attachments.</p>`;
+  return `${attachRow}<ul class="files">${d.files.map(f => `<li><a class="file" href="${BACKLOG_URL}${esc(f.href)}" target="_blank" rel="noopener"${f.type.startsWith('image/') ? ` data-viewer="${esc(f.href)}" data-name="${esc(f.name)}"` : ''}>
     <span class="thumb">${f.type.startsWith('image/') ? `<img data-blob="${esc(f.href)}" alt="" />` : icon('file', 22)}</span>
     <span class="f-name">${esc(f.name)}</span>
     <span class="f-meta">${esc([fileSize(f.size), f.author, shortDate(f.created)].filter(Boolean).join(' · '))}</span>
   </a></li>`).join('')}</ul>`;
+}
+
+// ─── Attachments: picking and uploading files ─────────────────────────────────
+// A hidden file input lives on <body>, outside the morphed #view, so a repaint
+// never loses the picker's pending selection.
+
+let fileInputEl = null;
+function ensureFileInput() {
+  if (fileInputEl) return fileInputEl;
+  fileInputEl = document.createElement('input');
+  fileInputEl.type = 'file';
+  fileInputEl.multiple = true;
+  fileInputEl.style.display = 'none';
+  fileInputEl.addEventListener('change', () => {
+    const id = fileInputEl.dataset.for;
+    const files = [...fileInputEl.files];
+    fileInputEl.value = '';
+    if (id && files.length) uploadFiles(id, files);
+  });
+  document.body.append(fileInputEl);
+  return fileInputEl;
+}
+
+/** Uploads files to a story one at a time, stopping and showing the error on first failure. */
+async function uploadFiles(id, files) {
+  const up = rt.upload.get(id) ?? { busy: false, err: '' };
+  up.busy = true; up.err = ''; rt.upload.set(id, up); render();
+  const d = details.get(id);
+  for (const file of files) {
+    try {
+      const row = await uploadAttachment(id, file);
+      if (details.get(id) === d && d.files) d.files = [...d.files, row];
+    } catch (err) {
+      up.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+      break;
+    }
+  }
+  up.busy = false; rt.upload.set(id, up); render();
+}
+
+// ─── Relations: searching for and adding a target ─────────────────────────────
+
+let relSearchTimer = null;
+function relQueryChanged(value) {
+  const ra = rt.relAdd;
+  if (!ra) return;
+  ra.query = value; ra.err = '';
+  const bare = /^#?(\d+)$/.exec(value.trim());
+  clearTimeout(relSearchTimer);
+  if (bare) { ra.targetId = bare[1]; ra.results = null; return render(); }
+  ra.targetId = null;
+  if (value.trim().length < 2) { ra.results = null; return render(); }
+  relSearchTimer = setTimeout(() => runRelSearch(value.trim()), 250);
+  render();
+}
+
+async function runRelSearch(query) {
+  const ra = rt.relAdd;
+  if (!ra || ra.query.trim() !== query) return;
+  try {
+    const rows = await searchWorkPackages(query);
+    if (rt.relAdd === ra && ra.query.trim() === query) { ra.results = rows; render(); }
+  } catch { /* the field keeps what was typed; no hits shown */ }
+}
+
+async function addRelationNow(id) {
+  const ra = rt.relAdd;
+  if (!ra || ra.busy || !ra.targetId) return;
+  ra.busy = true; ra.err = ''; render();
+  try {
+    const rel = await createRelation(id, ra.targetId, ra.type);
+    const d = details.get(id);
+    if (d) d.relations = [...(d.relations ?? []), rel];
+    rt.relAdd = { type: ra.type, query: '', results: null, targetId: null, busy: false, err: '' };
+  } catch (err) {
+    ra.busy = false;
+    ra.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+  }
+  render();
+}
+
+// ─── Log time: bypassing OpenProject's own modal ──────────────────────────────
+
+let logTimeSeq = 0;
+/** Loads the activities and default one for the open story's chosen day, once per day. */
+async function ensureLogTimeForm(id) {
+  const lt = rt.logTime;
+  if (!lt || lt.for !== id || (lt.form && lt.formFor === lt.spentOn)) return;
+  const seq = ++logTimeSeq;
+  let form;
+  try { form = await fetchTimeEntryForm(id, lt.spentOn); }
+  catch { form = { linkKey: 'workPackage', activities: [], defaultHref: null }; }
+  if (logTimeSeq !== seq || rt.logTime !== lt) return;
+  lt.form = form; lt.formFor = lt.spentOn;
+  lt.activityHref = form.defaultHref ?? form.activities[0]?.href ?? null;
+  render();
+}
+
+function logTimeHtml(id, d) {
+  const lt = rt.logTime;
+  if (!d.wp?._links?.logTime) return '<p class="text2">You can\'t log time on this story.</p>';
+  const form = lt.form, activities = form?.activities ?? [];
+  const hours = Number(lt.hours);
+  const hoursOk = Number.isFinite(hours) && hours > 0 && hours <= 24;
+  const needsActivity = activities.length > 0 && !lt.activityHref;
+  const disabled = lt.busy || !hoursOk || needsActivity;
+  return `<div class="log-time">
+    <label class="dlg-fld"><span>Date</span><input class="ctrl" type="date" data-role="log-date" value="${esc(lt.spentOn)}" aria-label="Day the time was spent"${lt.busy ? ' disabled' : ''} /></label>
+    <label class="dlg-fld"><span>Hours</span><input class="ctrl" type="number" min="0.25" max="24" step="0.25" data-role="log-hours" value="${esc(lt.hours)}" aria-label="Hours"${lt.busy ? ' disabled' : ''} /></label>
+    <label class="dlg-fld"><span>Activity</span><select class="ctrl" data-role="log-activity" aria-label="Activity"${!form || lt.busy ? ' disabled' : ''}>
+      ${activities.map(a => `<option value="${esc(a.href)}"${a.href === lt.activityHref ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}
+    </select></label>
+    <label class="dlg-fld"><span>Comment</span><input class="ctrl" data-role="log-comment" value="${esc(lt.comment)}" aria-label="Comment"${lt.busy ? ' disabled' : ''} /></label>
+    <button type="button" class="primary" data-act="log-time-save" data-id="${esc(id)}"${disabled ? ' disabled' : ''}${lt.busy ? ' aria-busy="true"' : ''}>${lt.busy ? 'Logging…' : 'Save'}</button>
+    ${lt.err ? `<div class="card-error" role="alert">${esc(lt.err)}</div>` : ''}
+  </div>`;
+}
+
+async function saveLogTime(id) {
+  const lt = rt.logTime;
+  if (!lt || lt.for !== id || lt.busy) return;
+  const hours = Number(lt.hours);
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 24) return;
+  if (lt.form?.activities?.length && !lt.activityHref) return;
+  lt.busy = true; lt.err = ''; render();
+  try {
+    const entry = await createTimeEntry({
+      wpId: id, spentOn: lt.spentOn, hours, linkKey: lt.form?.linkKey ?? 'workPackage',
+      activityHref: lt.activityHref, comment: lt.comment,
+    });
+    lt.hours = ''; lt.comment = '';
+    announce(`Logged ${pts(hours)} h on #${id}`);
+    toast(`Logged ${pts(hours)} h on #${id}`, 'Undo', () => { hideToast(); deleteTimeEntry(entry.id).catch(() => {}); });
+  } catch (err) {
+    lt.err = err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message;
+  } finally {
+    lt.busy = false;
+    render();
+  }
 }
 
 function detailHtml(id) {
@@ -2627,9 +2894,11 @@ function tabsHtml(id, d) {
     ['rel', 'Relations', d.relations?.length],
     ['files', 'Attachments', d.files?.length],
     ['comments', 'Comments', d.comments?.length],
+    ['time', 'Log time', ''],
   ];
   const body = rt.tab === 'sub' ? kidsHtml(id, d) : rt.tab === 'rel' ? relationsHtml(id, d)
-    : rt.tab === 'files' ? filesHtml(d) : rt.tab === 'comments' ? commentsHtml(id, d) : descHtml(d);
+    : rt.tab === 'files' ? filesHtml(id, d) : rt.tab === 'comments' ? commentsHtml(id, d)
+    : rt.tab === 'time' ? logTimeHtml(id, d) : descHtml(d);
   return `<div class="tabs" role="tablist">${tabs.map(([k, label, n]) => `<button role="tab" class="tab" data-act="tab" data-tab="${k}" aria-selected="${rt.tab === k}">${label}${n ? ` <span class="num muted">${n}</span>` : ''}</button>`).join('')}</div>
     <div class="tab-body" role="tabpanel" data-key="${esc(id)}:${rt.tab}">${body}</div>
     ${d.partialErr ? `<p class="muted" style="font-size:var(--text-xs)">Some parts didn't load: ${esc(d.partialErr)}</p>` : ''}
@@ -3118,10 +3387,13 @@ async function onAction(act, el) {
     case 'defer-sel': return sel && decide(sel, 'defer');
     case 'reopen':   return rt.selected && reopen(rt.selected);
     case 'play-now': return rt.selected && playNow(rt.selected);
-    case 'tab':
+    case 'tab': {
       rt.tab = el.dataset.tab;
-      if (rt.tab === 'sub') { const id = detailId(); if (id) loadKidStatuses(id); }
+      const id = detailId();
+      if (rt.tab === 'sub' && id) loadKidStatuses(id);
+      if (rt.tab === 'time' && id) ensureLogTimeForm(id);
       return render();
+    }
     case 'sub-create': return createSubtask(el.dataset.id);
     case 'kid-edit-start': return startKidEdit(el.dataset.parent, el.dataset.id);
     case 'kid-edit-cancel': return cancelKidEdit();
@@ -3143,6 +3415,10 @@ async function onAction(act, el) {
     case 'comment-edit-save': return saveCommentEdit();
     case 'comment-edit-cancel': return cancelCommentEdit();
     case 'detail-retry': details.delete(el.dataset.id); return render();
+    case 'files-pick': { const input = ensureFileInput(); input.dataset.for = el.dataset.id; input.click(); return; }
+    case 'rel-pick': if (rt.relAdd) { rt.relAdd.targetId = el.dataset.id; rt.relAdd.results = null; } return render();
+    case 'rel-add': return addRelationNow(el.dataset.id);
+    case 'log-time-save': return saveLogTime(el.dataset.id);
     case 'end':      return endGame();
     case 'back':     rt.view = null; s.phase = 'play'; s.level = Math.min(s.level, LEVELS.length - 1); save(); return render();
     case 'new':      return newGame();
@@ -3221,6 +3497,15 @@ document.addEventListener('input', e => {
   if (e.target.dataset.role === 'comment-edit') rt.commentDrafts.set(editKey(e.target.dataset.id), e.target.value);
   if (e.target.dataset.role === 'sug-title' && rt.sug?.rows[e.target.dataset.i]) { rt.sug.rows[e.target.dataset.i].title = e.target.value; rt.sug.touched = true; }
   if (e.target.dataset.role === 'tpl-title' && rt.tplEdit?.rows[e.target.dataset.i]) rt.tplEdit.rows[e.target.dataset.i].title = e.target.value;
+  if (e.target.dataset.role === 'rel-query') relQueryChanged(e.target.value);
+  if (e.target.dataset.role === 'log-hours' && rt.logTime) {
+    rt.logTime.hours = e.target.value;
+    const n = Number(e.target.value);
+    const ok = Number.isFinite(n) && n > 0 && n <= 24;
+    const btn = document.querySelector('[data-act="log-time-save"]');
+    if (btn) btn.disabled = rt.logTime.busy || !ok || (rt.logTime.form?.activities?.length > 0 && !rt.logTime.activityHref);
+  }
+  if (e.target.dataset.role === 'log-comment' && rt.logTime) rt.logTime.comment = e.target.value;
 });
 document.addEventListener('keydown', e => {
   const role = e.target.dataset?.role;
@@ -3242,6 +3527,10 @@ document.addEventListener('keydown', e => {
   } else if (role === 'kid-edit-subject' && e.key === 'Escape' && !rt.kidEdit?.busy) {
     e.preventDefault(); e.stopImmediatePropagation();
     cancelKidEdit();
+  } else if ((role === 'log-hours' || role === 'log-comment') && e.key === 'Enter') {
+    e.preventDefault();
+    const id = detailId();
+    if (id) saveLogTime(id);
   }
 });
 
@@ -3424,7 +3713,8 @@ addEventListener('scroll', e => { if (pickEl && !pickEl.contains(e.target)) clos
 
 // Arrow keys on a closed select change its value at once; writing on every
 // change would move a story's status while someone only looks at the options.
-const isWpSelect = t => t?.matches?.('select[data-field="status"], select[data-field="assignee"]');
+const isWpSelect = t => t?.matches?.('select[data-field="status"], select[data-field="assignee"], select[data-field="priority"]')
+  || (t?.matches?.(`select[data-field="${LABEL_FIELD}"]`) && !t.multiple);
 function commitSelect(t) {
   if (!isWpSelect(t) || (t.value || '') === (t.dataset.orig || '')) return;
   const key = `${t.dataset.wp}:${t.dataset.field}`;
@@ -3449,12 +3739,32 @@ document.addEventListener('change', async e => {
     t.dataset.orig = String(n ?? '');
     return writeField(t.dataset.wp, 'storyPoints', n);
   }
+  if (t.dataset.field === LABEL_FIELD && t.matches('select[multiple]')) {
+    const hrefs = [...t.selectedOptions].map(o => o.value).filter(Boolean);
+    const now = [...hrefs].sort().join('|');
+    if (now === (t.dataset.orig || '')) return;
+    t.dataset.orig = now;
+    return writeField(t.dataset.wp, LABEL_FIELD, hrefs);
+  }
+  if (t.dataset.field === LABEL_FIELD && t.tagName === 'INPUT') {
+    if (t.value === (t.dataset.orig ?? '')) return;
+    t.dataset.orig = t.value;
+    return writeField(t.dataset.wp, LABEL_FIELD, t.value);
+  }
   if (t.dataset.field === 'sub-assignee') { rt.sub.assigneeHref = t.value || null; return; }
   if (t.dataset.field === 'sug-assignee') { const r = rt.sug?.rows[t.dataset.wp.slice(4)]; if (r) { r.assigneeHref = t.value || null; rt.sug.touched = true; } return; }
   if (t.dataset.role === 'sug-on') { const r = rt.sug?.rows[t.dataset.i]; if (r) { r.on = t.checked; rt.sug.touched = true; } return render(); }
   if (t.dataset.role === 'tpl-assignee') { const r = rt.tplEdit?.rows[t.dataset.i]; if (r) r.assignee = t.value; return; }
   if (t.dataset.role === 'sub-type') { rt.sub.typeHref = t.value || null; return; }
   if (t.dataset.role === 'kid-edit-type' && rt.kidEdit) { rt.kidEdit.typeHref = t.value || null; return; }
+  if (t.dataset.role === 'rel-type') { if (rt.relAdd) rt.relAdd.type = t.value; return; }
+  if (t.dataset.role === 'log-date') {
+    if (rt.logTime) { rt.logTime.spentOn = t.value; rt.logTime.form = null; }
+    const id = detailId();
+    if (id) ensureLogTimeForm(id);
+    return render();
+  }
+  if (t.dataset.role === 'log-activity') { if (rt.logTime) rt.logTime.activityHref = t.value || null; return; }
   if (t.dataset.rule) return editRule(t.dataset.key, t.dataset.rule, t.value);
   if (t.dataset.budget) {
     s.budgets[t.dataset.budget] = Math.max(0, Math.min(180, Math.round(Number(t.value) || 0)));

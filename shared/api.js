@@ -205,18 +205,20 @@ export async function patchWorkPackage(wpId, changes) {
   return apiWrite('PATCH', `/api/v3/work_packages/${wpId}`, { lockVersion, ...changes });
 }
 
-/** A JSON write with the session cookie; throws with OpenProject's own message when it refuses. */
+/** A JSON (or, for a FormData body, multipart) write with the session cookie; throws
+ *  with OpenProject's own message when it refuses. */
 async function apiWrite(method, path, body) {
   const BASE = await base();
+  const isForm = body instanceof FormData;
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: 'include',
     headers: {
       Accept: 'application/hal+json',
-      'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
     },
-    body: JSON.stringify(body),
+    body: isForm ? body : JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
@@ -250,16 +252,26 @@ export async function fetchCreateForm(projectId, body = {}) {
 }
 
 /**
- * The statuses a work package may move to next (its workflow), read from its
- * edit form. A form POST validates only; it saves nothing.
+ * The edit form for an existing work package: the schema (allowed statuses, priorities,
+ * labels… for its current state) and the payload OpenProject would apply. A form POST
+ * validates only; it saves nothing.
+ * @param {number|string} wpId
+ * @returns {Promise<{schema: Object, payload: Object}>}
+ */
+export async function fetchEditForm(wpId) {
+  const { lockVersion } = await apiFetch(`/api/v3/work_packages/${wpId}`);
+  const form = await apiWrite('POST', `/api/v3/work_packages/${wpId}/form`, { lockVersion });
+  return { schema: form?._embedded?.schema ?? {}, payload: form?._embedded?.payload ?? {} };
+}
+
+/**
+ * The statuses a work package may move to next (its workflow), read from its edit form.
  * @param {number|string} wpId
  * @returns {Promise<Array<{href:string, name:string}>>}
  */
 export async function fetchAllowedStatuses(wpId) {
-  const { lockVersion } = await apiFetch(`/api/v3/work_packages/${wpId}`);
-  const form = await apiWrite('POST', `/api/v3/work_packages/${wpId}/form`, { lockVersion });
-  const allowed = form?._embedded?.schema?.status?._embedded?.allowedValues
-    ?? form?._embedded?.schema?.status?._links?.allowedValues ?? [];
+  const { schema } = await fetchEditForm(wpId);
+  const allowed = schema.status?._embedded?.allowedValues ?? schema.status?._links?.allowedValues ?? [];
   return allowed.map(v => ({ href: v._links?.self?.href ?? v.href, name: v.name ?? v.title ?? '' })).filter(v => v.href);
 }
 
@@ -291,14 +303,8 @@ export async function fetchRelations(wpId) {
   return data._embedded?.elements ?? [];
 }
 
-/**
- * A work package's attachments.
- * @param {number|string} wpId
- * @returns {Promise<Array<{id:string, name:string, size:number, type:string, created:string, author:string, href:string}>>}
- */
-export async function fetchAttachments(wpId) {
-  const data = await apiFetch(`/api/v3/work_packages/${wpId}/attachments`);
-  return (data._embedded?.elements ?? []).map(a => ({
+function attachmentRow(a) {
+  return {
     id:      String(a.id),
     name:    a.fileName ?? `attachment ${a.id}`,
     size:    a.fileSize ?? 0,
@@ -306,7 +312,47 @@ export async function fetchAttachments(wpId) {
     created: a.createdAt ?? '',
     author:  a._links?.author?.title ?? '',
     href:    `/api/v3/attachments/${a.id}/content`,   // redirects to remote storage when attachments live there
-  }));
+  };
+}
+
+/**
+ * A work package's attachments.
+ * @param {number|string} wpId
+ * @returns {Promise<Array<{id:string, name:string, size:number, type:string, created:string, author:string, href:string}>>}
+ */
+export async function fetchAttachments(wpId) {
+  const data = await apiFetch(`/api/v3/work_packages/${wpId}/attachments`);
+  return (data._embedded?.elements ?? []).map(attachmentRow);
+}
+
+/**
+ * Uploads a file as a new attachment of a work package.
+ * @param {number|string} wpId
+ * @param {File} file
+ * @param {{description?: string}} [opts]
+ * @returns {Promise<{id:string, name:string, size:number, type:string, created:string, author:string, href:string}>}
+ */
+export async function uploadAttachment(wpId, file, { description } = {}) {
+  const fd = new FormData();
+  fd.append('metadata', JSON.stringify({ fileName: file.name, ...(description ? { description: { raw: description } } : {}) }));
+  fd.append('file', file, file.name);
+  const a = await apiWrite('POST', `/api/v3/work_packages/${wpId}/attachments`, fd);
+  return attachmentRow(a);
+}
+
+/**
+ * Creates a relation from one work package to another.
+ * @param {number|string} wpId
+ * @param {number|string} toId
+ * @param {string} type  relates, duplicates, duplicated, blocks, blocked, precedes, follows, includes, partof, requires, required
+ * @param {{description?: string}} [opts]
+ * @returns {Promise<Object>}  the new relation
+ */
+export function createRelation(wpId, toId, type, { description } = {}) {
+  return apiWrite('POST', `/api/v3/work_packages/${wpId}/relations`, {
+    type, ...(description ? { description } : {}),
+    _links: { to: { href: `/api/v3/work_packages/${toId}` } },
+  });
 }
 
 /**
