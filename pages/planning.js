@@ -2313,6 +2313,7 @@ function fieldsHtml(id, d) {
     ${labelFieldHtml(id, d)}
     <div class="fld"><span>Author</span><b>${esc(L.author?.title ?? '—')}</b></div>
     <div class="fld"><span>Updated</span><b>${esc(shortDate(wp.updatedAt))}</b></div>
+    <div class="fld"><span>Time logged</span><b>${timeLoggedLabel(d)}</b></div>
     ${L.parent?.href ? `<div class="fld"><span>Parent</span><a href="${BACKLOG_URL}/work_packages/${esc(idOf(L.parent.href))}" target="_blank" rel="noopener">${esc(L.parent.title ?? `#${idOf(L.parent.href)}`)} ↗</a></div>` : ''}
   </div>`;
 }
@@ -2543,6 +2544,13 @@ async function addRelationNow(id) {
 }
 
 // ─── Time logged: a read-only look at what's already on the story ─────────────
+
+/** The running total shown as a field, next to Author/Updated. */
+function timeLoggedLabel(d) {
+  if (d.timeEntries === null) return "couldn't load";
+  if (!d.timeEntries) return '—';
+  return `${pts(d.timeEntries.reduce((t, e) => t + e.hours, 0))} h`;
+}
 
 function timeHtml(id, d) {
   const entries = d.timeEntries;
