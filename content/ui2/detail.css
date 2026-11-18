@@ -1,11 +1,16 @@
-/* UI 2.0 work-package detail: split view (.work-packages--details) and full
-   page (.work-packages--show-view). CSS only: OpenProject's layout is kept and no
-   nodes are moved, so there is nothing to restore when the switch is off.
-   The split panel and the full-page content are glass; their inner containers
-   are transparent. OpenProject-internal selectors: .work-packages--details,
-   .work-packages--show-view, .work-packages-full-view--split-*, .work-package--single-view,
-   .op-tab-row(--link), .attributes-group(--header), .attributes-key-value--*,
-   .inline-edit--display-field, .op-uc-container, wp-status-button. */
+/* UI 2.0 work-package detail, Apple OS 26/27 look: split view (.work-packages--details)
+   and full page (.work-packages--show-view). On the full page the story sits on the
+   grouped grey canvas the way iOS Settings does: a large title, the description in
+   one white card, each attribute group an inset-grouped list (label left, value
+   right, separators inset from the left). Tabs are a segmented control whose
+   thumb slides (.blm-g-tab-ink, ui2.js + motion.css). Status is a tinted capsule.
+   CSS only: no nodes move, so there is nothing to restore when the switch is off.
+   OpenProject-internal selectors: .work-packages--details, .work-packages--show-view,
+   .work-packages-full-view--split-*, .wp-show--header-container, .work-packages-back-button,
+   .work-packages--type-selector, .work-package--single-view, .op-scrollable-tabs,
+   .op-tab-row(--tab|--link|--link_selected), .attributes-group(--header(-text)),
+   .wp-attribute-group, .attributes-key-value(--key|--value-container),
+   .inline-edit--display-field, .op-uc-container, .activity-date, .work-package-comment. */
 
 /* The independent sub-features (Children assign, Activity filter, Attachment
    cards) style themselves with --jx-* tokens that are light unless the Jira skin
@@ -15,31 +20,31 @@ html.blm-ui2.blm-activity,
 html.blm-ui2.blm-files {
   --jx-text: var(--g-text);
   --jx-text-subtle: var(--g-text2);
-  --jx-text-subtlest: var(--g-text2);
+  --jx-text-subtlest: var(--g-text3);
   --jx-link: var(--g-accent);
-  --jx-link-hover: var(--g-accent);
-  --jx-surface: var(--g-surface-solid);
-  --jx-surface-sunken: var(--g-sunken);
-  --jx-surface-raised: var(--g-raised);
-  --jx-hover: var(--g-hover);
-  --jx-selected: var(--g-selected);
-  --jx-border: var(--g-hairline);
-  --jx-btn: var(--g-btn);
-  --jx-btn-hover: var(--g-btn-hover);
+  --jx-link-hover: var(--g-accent-press);
+  --jx-surface: var(--g-surface);
+  --jx-surface-sunken: var(--g-surface2);
+  --jx-surface-raised: var(--g-surface);
+  --jx-hover: var(--g-fill);
+  --jx-selected: var(--g-accent-bg);
+  --jx-border: var(--g-sep);
+  --jx-btn: var(--g-fill);
+  --jx-btn-hover: var(--g-fill2);
   --jx-primary: var(--g-accent);
   --jx-on-primary: var(--g-on-accent);
   --jx-focus: var(--g-focus);
 }
 
-/* Panels: glass, rounded, floating */
-html.blm-ui2-wp .work-packages--details,
-html.blm-ui2-wp .work-packages--show-view {
+/* Split view: one white card on the canvas. Full page: no outer card, the groups
+   inside are the cards. */
+html.blm-ui2-wp .work-packages--details {
   font-family: var(--g-font); color: var(--g-text);
-  background: var(--g-surface);
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
-  border: 1px solid var(--g-border); border-radius: var(--g-radius-lg);
-  box-shadow: var(--g-shadow);
+  background: var(--g-bg); border: 0; border-left: 1px solid var(--g-sep); box-shadow: none;
 }
+html.blm-ui2-wp .work-packages--show-view { font-family: var(--g-font); color: var(--g-text); background: transparent; }
+html.blm-ui2-wp .work-packages-full-view--split-left { background: transparent !important; padding: 4px 24px 32px 8px !important; }
+html.blm-ui2-wp .work-packages-full-view--split-right { background: transparent !important; padding-left: 16px !important; }
 html.blm-ui2-wp .work-packages--details-content,
 html.blm-ui2-wp .work-packages-full-view--split-container,
 html.blm-ui2-wp .work-package--single-view,
@@ -47,104 +52,184 @@ html.blm-ui2-wp .work-packages--panel-inner,
 html.blm-ui2-wp .tabcontent,
 html.blm-ui2-wp .op-uc-container { background: transparent !important; color: var(--g-text); }
 
-/* Breadcrumb, id and type line */
+/* Header: round back button, type capsule, large title */
+html.blm-ui2-wp .wp-show--header-container { display: flex; align-items: center; gap: 12px; padding: 6px 0 14px; }
+html.blm-ui2-wp .work-packages--subject-type-row { align-items: center !important; gap: 10px; }
+html.blm-ui2-wp .work-packages-back-button {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 32px; height: 32px; min-width: 32px; padding: 0 !important; margin: 0 !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: none !important;
+  background: var(--g-fill) !important; color: var(--g-accent) !important;
+}
+html.blm-ui2-wp .work-packages-back-button:hover { background: var(--g-fill2) !important; }
+html.blm-ui2-wp .work-packages-back-button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--g-accent-bg), 0 0 0 1px var(--g-focus) !important; }
+html.blm-ui2-wp .work-packages-back-button .button--icon { margin: 0 !important; font-size: 13px; }
+/* Type: a capsule tinted with the type's own colour */
+html.blm-ui2-wp .work-packages--type-selector .inline-edit--display-field {
+  /* OpenProject forces display: block, which left the text at the capsule's top */
+  display: inline-flex !important; align-items: center; height: 24px; line-height: 24px !important; box-sizing: border-box; padding: 0 10px !important; border-radius: var(--g-capsule);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-family: var(--g-font); font-size: 12px !important; font-weight: 600 !important;
+  text-transform: none !important; letter-spacing: 0 !important; line-height: 1;
+}
+html.blm-ui2-wp .work-packages--type-selector .inline-edit--display-field * { font: inherit !important; text-transform: none !important; }
+
+/* Meta line */
 html.blm-ui2-wp .work-packages--info-row,
 html.blm-ui2-wp .work-packages--info-row *,
 html.blm-ui2-wp .wp-breadcrumb,
 html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 13px; color: var(--g-text2); }
 html.blm-ui2-wp .work-packages--info-row a,
-html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-text2); text-decoration: none; }
+html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-accent); text-decoration: none; }
 html.blm-ui2-wp .work-packages--info-row a:hover,
-html.blm-ui2-wp .wp-breadcrumb a:hover { color: var(--g-accent); text-decoration: underline; }
+html.blm-ui2-wp .wp-breadcrumb a:hover { text-decoration: underline; }
 
-/* Subject */
+/* Subject: a large title */
 html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
-  font-family: var(--g-font); font-size: 22px !important; font-weight: 600 !important;
-  font-style: normal; line-height: 1.3; letter-spacing: -.02em; color: var(--g-text);
-  overflow-wrap: anywhere;
+  font-family: var(--g-font); font-size: 22px !important; font-weight: 700 !important;
+  font-style: normal; line-height: 1.2 !important; letter-spacing: -.02em; color: var(--g-text);
+  overflow-wrap: anywhere; padding-top: 0 !important; padding-bottom: 0 !important;
 }
+html.blm-ui2-wp .work-packages--show-view .work-packages--details--subject .inline-edit--display-field.subject { font-size: 28px !important; }
 
-/* Status button: same chip colours as the list, bigger, pill */
+/* Status: a tinted capsule with its chevron */
 html.blm-ui2-wp .blm-g-status {
-  display: inline-flex !important; align-items: center; gap: 8px;
-  height: 34px !important; min-height: 34px !important; line-height: 1 !important;
+  display: inline-flex !important; align-items: center; gap: 6px;
+  height: 30px !important; min-height: 30px !important; line-height: 1 !important;
   padding: 0 12px 0 14px !important; margin: 0 !important;
-  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  border: 0 !important; border-radius: var(--g-capsule) !important; box-shadow: none !important;
   white-space: nowrap; cursor: pointer;
-  font-family: var(--g-font) !important; font-size: 14px !important; font-weight: 600 !important;
+  font-family: var(--g-font) !important; font-size: 13px !important; font-weight: 600 !important;
   text-transform: none !important; letter-spacing: 0 !important;
-  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
-  transition: filter .14s ease-out;
+  background: var(--g-fill) !important; color: var(--g-text) !important;
 }
-html.blm-ui2-wp .blm-g-status[data-blm-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
-html.blm-ui2-wp .blm-g-status[data-blm-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
-html.blm-ui2-wp .blm-g-status:hover { filter: brightness(.95); }
-html.blm-ui2-wp .blm-g-status:disabled { opacity: .5; cursor: not-allowed; }
+html.blm-ui2-wp .blm-g-status[data-blm-tone="progress"] { background: var(--g-accent-bg) !important; color: var(--g-accent) !important; }
+html.blm-ui2-wp .blm-g-status[data-blm-tone="done"] { background: var(--g-done-bg) !important; color: var(--g-green) !important; }
+html.blm-ui2-wp .blm-g-status:hover { filter: brightness(.96); }
+html.blm-ui2-wp .blm-g-status:disabled { opacity: .4; cursor: not-allowed; }
 html.blm-ui2-wp .blm-g-status * { color: inherit !important; font: inherit !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
-html.blm-ui2-wp .blm-g-status:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ui2-wp .blm-g-status:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--g-accent-bg), 0 0 0 1px var(--g-focus) !important; }
 
-/* Tabs: a segmented pill row */
+/* Tabs: a segmented control. OpenProject fixes the row at ~57 px inside a 40 px
+   overflow-hidden strip, so free the height. The white thumb is .blm-g-tab-ink;
+   the selected segment paints its own until the thumb exists. */
+html.blm-ui2-wp .op-scrollable-tabs { border-bottom: 0 !important; }
 html.blm-ui2-wp .op-tab-row,
 html.blm-ui2-wp .tabrow {
-  display: inline-flex; gap: 2px; padding: 3px; margin: 8px 0;
-  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 0; padding: 2px; margin: 4px 0;
+  height: auto !important; background: var(--g-fill); border: 0; border-radius: 9px;
+}
+html.blm-ui2-wp .op-tab-row--tab {
+  height: auto !important; line-height: normal !important; display: flex; align-items: center;
+  position: relative; z-index: 1;   /* OpenProject's 38 px line-height made the track 42 px in a 40 px clip */
 }
 html.blm-ui2-wp .op-tab-row--link,
 html.blm-ui2-wp .tabrow li a {
+  display: inline-flex !important; align-items: center; gap: 6px;
   font-family: var(--g-font); font-size: 13px; font-weight: 500;
-  padding: 5px 14px; border: 0; border-radius: 999px; box-shadow: none; text-decoration: none;
-  color: var(--g-text2); text-transform: none; letter-spacing: 0;
-  transition: background-color .14s ease-out, color .14s ease-out;
+  height: 28px !important; line-height: 1 !important; padding: 0 14px !important;
+  border: 0; border-radius: 7px; box-shadow: none; text-decoration: none;
+  background: transparent; color: var(--g-text); text-transform: none; letter-spacing: 0;
 }
-html.blm-ui2-wp .op-tab-row--link:hover,
-html.blm-ui2-wp .tabrow li a:hover { color: var(--g-text); }
 html.blm-ui2-wp .op-tab-row--link_selected,
 html.blm-ui2-wp .op-tab-row--link_selected:hover,
-html.blm-ui2-wp .tabrow li.selected a {
-  background: var(--g-surface-solid); color: var(--g-accent); box-shadow: 0 1px 2px rgba(22, 24, 29, .12);
-}
+html.blm-ui2-wp .tabrow li.selected a { background: var(--g-thumb); box-shadow: var(--g-thumb-shadow); font-weight: 600; color: var(--g-text); }
 
-/* Attribute groups: soft cards, no rules */
+/* Attribute groups: inset-grouped lists. A header in secondary text above a white
+   card; each row puts its label left and its value right, separators start 16 px
+   in. Empty values and all-empty groups (Costs, Other…) fade back. */
 html.blm-ui2-wp .attributes-group {
-  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: var(--g-radius);
-  padding: 4px 16px 12px; margin-bottom: 12px;
+  background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0 0 28px;
 }
-html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin-bottom: 4px; padding: 10px 0 2px; }
+html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin: 0 0 6px; padding: 0 0 0 16px; }
 html.blm-ui2-wp .attributes-group--header-text,
 html.blm-ui2-wp .attributes-group--header h3 {
   font-family: var(--g-font); font-size: 13px !important; font-weight: 600 !important;
-  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text2);
+  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text2) !important;
+}
+html.blm-ui2-wp .wp-attribute-group {
+  display: grid !important;
+  /* at most three lists per line (each track at least a third), one on narrow panels */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(380px, calc(33.34% - 1px))), 1fr));
+  gap: 0; margin: 0 !important; overflow: hidden;
+  width: auto !important; max-width: 100% !important;   /* OpenProject widens it by 48 px, which cut the right column off */
+  background: var(--g-surface); border: 0; border-radius: var(--g-radius); box-shadow: var(--g-card-shadow);
+}
+html.blm-ui2-wp .wp-attribute-group > * { width: auto !important; max-width: none !important; min-width: 0; flex: none !important; }
+html.blm-ui2-wp .attributes-key-value {
+  display: flex !important; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 44px; margin: 0 0 -1px 16px !important; padding: 6px 16px 6px 0 !important;
+  border-bottom: 1px solid var(--g-sep);   /* the -1 px margin tucks the last row's line under the card edge */
 }
 html.blm-ui2-wp .attributes-key-value--key {
-  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-text2); text-transform: none;
+  flex: 0 0 auto !important; white-space: nowrap; width: auto !important; max-width: 50% !important; min-width: 0; padding: 0 !important;
+  font-family: var(--g-font); font-size: 14px; font-weight: 400; color: var(--g-text); text-transform: none; letter-spacing: 0;
+}
+html.blm-ui2-wp .attributes-key-value--key * { font: inherit; color: inherit; text-transform: none; letter-spacing: 0; }
+html.blm-ui2-wp .attributes-key-value--value-container {
+  flex: 1 1 auto !important; width: auto !important; max-width: none !important; min-width: 0; padding: 0 !important;
+  display: flex !important; justify-content: flex-end; text-align: right;
 }
 html.blm-ui2-wp .attributes-key-value--value-container,
-html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 14px; color: var(--g-text2); }
+/* OpenProject sizes the edit container to a fixed width; let it shrink to its value so it sits on the right */
+html.blm-ui2-wp .attributes-key-value--value-container > *,
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--container { width: auto !important; min-width: 0; max-width: 100%; }
 html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field {
-  border-radius: 8px; transition: background-color .14s ease-out;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px;
+  max-width: 100%; overflow: hidden; white-space: nowrap; word-break: normal; overflow-wrap: normal;   /* one line, like an iOS list value */
+  padding: 3px 8px; margin-right: -8px; border-radius: var(--g-radius-sm);
 }
-html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:hover { background: var(--g-hover); }
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:hover { background: var(--g-fill); }
 html.blm-ui2-wp .attributes-key-value--value-container a { color: var(--g-accent); }
+/* the assignee's name gave up its last letters to the avatar; keep it whole, cap only long names */
+html.blm-ui2-wp .attributes-key-value--value-container .op-principal--name { flex: none; max-width: 24ch; }
+html.blm-ui2-wp .attributes-key-value--value-container.blm-g-empty,
+html.blm-ui2-wp .attributes-key-value--value-container.blm-g-empty * { color: var(--g-text3) !important; }
+html.blm-ui2-wp .attributes-group.blm-g-quiet { opacity: .55; }
+html.blm-ui2-wp .attributes-group.blm-g-quiet:hover,
+html.blm-ui2-wp .attributes-group.blm-g-quiet:focus-within { opacity: 1; }
 
-/* Description and activity */
+/* Description: one white card of reading text */
+html.blm-ui2-wp .attributes-group:not(:has(.wp-attribute-group)):has(.op-uc-container, .description) {
+  padding: 14px 20px !important; background: var(--g-surface); border-radius: var(--g-radius); box-shadow: var(--g-card-shadow);
+}
 html.blm-ui2-wp .work-packages--details .op-uc-container,
 html.blm-ui2-wp .work-packages--show-view .op-uc-container {
-  font-family: var(--g-font); font-size: 14px; line-height: 1.65; color: var(--g-text);
+  font-family: var(--g-font); font-size: 15px; line-height: 1.55; color: var(--g-text);
 }
+html.blm-ui2-wp .op-uc-container a { color: var(--g-accent); }
+html.blm-ui2-wp .op-uc-container :is(code, pre) { font-family: var(--g-mono); font-size: 13px; background: var(--g-fill); border-radius: 6px; }
+html.blm-ui2-wp .op-uc-container blockquote { border-inline-start: 3px solid var(--g-fill2); padding-inline-start: 12px; color: var(--g-text2); }
+html.blm-ui2-wp .attributes-group .inline-edit--display-field.description,
+html.blm-ui2-wp .attributes-group .description .inline-edit--display-field {
+  background: transparent !important; border: 0 !important; padding: 0 !important;
+}
+
+/* Activity */
 html.blm-ui2-wp .op-user-activity--user-name,
 html.blm-ui2-wp .user-comment--user { font-weight: 600; color: var(--g-text); }
 html.blm-ui2-wp .op-user-activity--date,
-html.blm-ui2-wp .user-comment--date { color: var(--g-text2); }
+html.blm-ui2-wp .user-comment--date { color: var(--g-text2); font-size: 12px; }
+/* hard-coded #ddd / #eee rules turn into bright lines on dark */
+html.blm-ui2-wp .activity-date {
+  border-bottom-color: var(--g-sep) !important; color: var(--g-text2);
+  font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
+}
+html.blm-ui2-wp .work-package-comment,
+html.blm-ui2-wp .work-package-comment--icon { border-color: transparent !important; }
+html.blm-ui2-wp .work-package-comment {
+  background: var(--g-fill) !important; color: var(--g-text2) !important; border-radius: var(--g-capsule) !important;
+}
+html.blm-ui2-wp .work-package-comment:hover { background: var(--g-fill2) !important; }
 
-/* Dark: text that OpenProject keeps grey nearly vanishes on dark glass */
+/* Dark: text that OpenProject keeps grey nearly vanishes */
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--details,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--show-view,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-package--single-view,
 html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container { color: var(--g-text); }
-html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container code,
-html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container pre { background: var(--g-sunken); color: var(--g-text); border-color: var(--g-hairline); }
 html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container table td,
-html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container table th { border-color: var(--g-hairline) !important; }
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-uc-container table th { border-color: var(--g-sep) !important; }
 html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activities"] li,
 html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activities"] li :not(a):not(a *):not(.op-avatar),
 html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activity-contents"] li,
@@ -152,10 +237,100 @@ html.blm-ui2[data-blm-ui2-theme="dark"] [class*="activity-contents"] li :not(a):
 html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li,
 html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li :not(a):not(a *) { color: var(--g-text) !important; }
 html.blm-ui2[data-blm-ui2-theme="dark"] .op-avatar,
-html.blm-ui2[data-blm-ui2-theme="dark"] .op-principal--avatar { background-color: var(--g-raised); }
+html.blm-ui2[data-blm-ui2-theme="dark"] .op-principal--avatar { background-color: var(--g-surface2); }
 
-@media (prefers-reduced-motion: reduce) {
-  html.blm-ui2-wp .op-tab-row--link,
-  html.blm-ui2-wp .blm-g-status,
-  html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none; }
+/* Description editor (CKEditor): its own CSS variables, pointed at the tokens. The
+   toolbar is a grey capsule bar, the writing area a raised white sheet with the
+   system focus ring, and Save / Cancel are round buttons (Save filled blue).
+   OpenProject-internal selectors: .document-editor, .document-editor__editable,
+   .ck-toolbar, .ck-button, .ck-dropdown__panel, .inplace-edit--controls,
+   .inplace-edit--control--save / --cancel. */
+html.blm-ui2 {
+  --ck-font-face: var(--g-font);
+  --ck-border-radius: var(--g-radius-sm);
+  --ck-color-text: var(--g-text);
+  --ck-color-base-foreground: var(--g-fill);
+  --ck-color-base-background: var(--g-raised);
+  --ck-color-base-border: var(--g-sep);
+  --ck-color-focus-border: var(--g-focus);
+  --ck-color-toolbar-background: var(--g-fill);
+  --ck-color-toolbar-border: transparent;
+  --ck-color-panel-background: var(--g-raised);
+  --ck-color-panel-border: var(--g-sep);
+  --ck-color-dropdown-panel-background: var(--g-raised);
+  --ck-color-dropdown-panel-border: var(--g-sep);
+  --ck-color-input-background: var(--g-raised);
+  --ck-color-input-border: var(--g-sep);
+  --ck-color-button-default-background: transparent;
+  --ck-color-button-default-hover-background: var(--g-fill2);
+  --ck-color-button-default-active-background: var(--g-fill2);
+  --ck-color-button-on-background: var(--g-accent-bg);
+  --ck-color-button-on-hover-background: var(--g-accent-bg);
+  --ck-color-button-on-active-background: var(--g-accent-bg);
+  --ck-color-button-on-color: var(--g-accent);
+  --ck-color-list-background: var(--g-raised);
+  --ck-color-list-button-hover-background: var(--g-fill);
+  --ck-color-list-button-on-background: var(--g-accent);
+  --ck-color-list-button-on-text: var(--g-on-accent);
 }
+html.blm-ui2-wp .document-editor .ck-toolbar {
+  /* keep a (transparent) 1 px border: CKEditor's "do the buttons fit" check relies on it,
+     and with none, sub-pixel rounding at browser zoom groups every button under "..." */
+  border: 1px solid transparent !important; border-radius: var(--g-radius-md) !important; padding: 3px 6px !important; margin-bottom: 8px;
+  background: var(--g-fill) !important;
+}
+html.blm-ui2-wp .document-editor .ck-toolbar .ck-button { border-radius: var(--g-radius-sm) !important; color: var(--g-text) !important; }
+html.blm-ui2-wp .document-editor .ck-toolbar .ck-button.ck-on { color: var(--g-accent) !important; }
+html.blm-ui2-wp .document-editor .ck-toolbar__separator { background: var(--g-sep) !important; }
+html.blm-ui2-wp .document-editor__editable,
+html.blm-ui2-wp .document-editor__editable.ck-focused {
+  background: var(--g-raised) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: var(--g-radius-md) !important;
+  box-shadow: 0 0 0 1px var(--g-sep) !important; padding: 12px 16px !important;
+}
+html.blm-ui2-wp .document-editor__editable.ck-focused { box-shadow: 0 0 0 3px var(--g-accent-bg), 0 0 0 1px var(--g-focus) !important; }
+html.blm-ui2 .ck.ck-dropdown__panel,
+html.blm-ui2 .ck.ck-balloon-panel {
+  border: 0 !important; border-radius: 12px !important; box-shadow: var(--g-pop-shadow) !important; overflow: hidden;
+}
+html.blm-ui2-wp .inplace-edit--controls {
+  display: flex !important; justify-content: flex-end; gap: 8px; margin-top: 10px;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+html.blm-ui2-wp .inplace-edit--control {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
+  background: var(--g-fill) !important; color: var(--g-text) !important; box-shadow: none !important; cursor: pointer;
+}
+html.blm-ui2-wp .inplace-edit--control:hover { background: var(--g-fill2) !important; }
+html.blm-ui2-wp .inplace-edit--control--save { background: var(--g-accent) !important; color: var(--g-on-accent) !important; }
+html.blm-ui2-wp .inplace-edit--control--save:hover { background: var(--g-accent-press) !important; }
+html.blm-ui2-wp .inplace-edit--control * { color: inherit !important; }
+html.blm-ui2-wp .inplace-edit--control:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--g-accent-bg), 0 0 0 1px var(--g-focus) !important; }
+
+/* Apply-on-leave conflict note (ui2.js): the field was changed by someone else
+   while it was open, so it was not saved automatically */
+html.blm-ui2-wp .blm-g-conflict {
+  margin: 10px 0 0; padding: 10px 14px; border-radius: var(--g-radius-md);
+  background: var(--g-fill); color: var(--g-text); font-family: var(--g-font); font-size: 13px; line-height: 1.45;
+  box-shadow: inset 3px 0 0 var(--g-orange-dot);
+}
+
+/* Instant apply (ui2.js + progress-hook.js): from the moment a save starts, an open
+   inline editor drops its chrome and reads as the applied value; OpenProject swaps
+   in the saved display field when the server answers. Covers selects (priority,
+   assignee, version…), one-line inputs (title, numbers) and the description. */
+html.blm-ui2 .inline-edit--active-field.blm-g-committing { pointer-events: none; }
+html.blm-ui2 .blm-g-committing :is(.ck-toolbar, .document-editor__toolbar, .inplace-edit--controls, .blm-g-conflict) { display: none !important; }
+html.blm-ui2 .blm-g-committing .document-editor__editable {
+  box-shadow: none !important; background: transparent !important; padding: 0 !important;
+}
+html.blm-ui2 .blm-g-committing input.inline-edit--field,
+html.blm-ui2 .blm-g-committing .ng-select .ng-select-container {
+  border-color: transparent !important; background: transparent !important; box-shadow: none !important;
+}
+html.blm-ui2 .blm-g-committing .ng-select :is(.ng-arrow-wrapper, .ng-clear-wrapper, .ng-input) { display: none !important; }
+html.blm-ui2 .blm-g-committing .ng-select .ng-value-container { padding-left: 0 !important; }
+/* Status just picked: shown on the button (with its tone) before the server answers */
+html.blm-ui2-wp .blm-g-status[data-blm-pending] > .op-wp-status-button--text { display: none !important; }
+html.blm-ui2-wp .blm-g-status[data-blm-pending]::before { content: attr(data-blm-pending); }

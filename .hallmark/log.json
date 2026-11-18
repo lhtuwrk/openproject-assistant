@@ -1,5 +1,21 @@
 [
   {
+    "date": "2026-11-17",
+    "scope": "injected skin",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "studied-DNA (Apple OS 26/27, user's request)",
+    "enrichment": "none",
+    "brief": "UI 2.0 redesign to Apple OS 26/27: grouped canvas, inset-grouped cards, iOS Settings rows on the story page, capsules, segmented tabs, glass menus, spring motion; Backlogs covered; no first-paint skin flash"
+  },
+  {
+    "date": "2026-11-17",
+    "scope": "injected skin",
+    "macrostructure": "Workbench (app, per design.md)",
+    "theme": "preserved palette (design.md, UI 2.0 glass)",
+    "enrichment": "none",
+    "brief": "UI 2.0 redesign: story page as one reading sheet + activity rail, Backlogs cards, pointer-driven motion, no backdrop blur, no first-paint skin flash"
+  },
+  {
     "date": "2026-10-13",
     "scope": "page",
     "macrostructure": "Workbench (app, per design.md)",

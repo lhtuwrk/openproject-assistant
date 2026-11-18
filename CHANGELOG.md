@@ -10,10 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: edit priority/label, upload attachments, link related stories, and see time already logged without leaving the sprint board.
 
 ### Changed
+- UI 2.0 now looks like Apple's OS 26/27: grey grouped background, white rounded cards, capsule buttons and status, a segmented control for tabs, and glass menus. Pages open straight in the chosen skin instead of flashing the Jira look first. The story page reads like iOS Settings (label left, value right, empty fields faded), the Backlogs page joins UI 2.0 with a card per sprint, and tabs, buttons and rows respond to the pointer (Settings → Animations turns it off).
+- UI 2.0: the description (and other long-text fields) applies as soon as you click away, with no check button to press. It is never saved over someone else's change: if the text was changed by another person while you were editing, it stays in the editor with a note instead.
+- UI 2.0: a change shows the moment you make it (picking a status, priority, assignee or other value, pressing Enter in a title or number) instead of after the server answers; if the save fails, the field comes back with a short shake so nothing is lost.
+- UI 2.0 feels smoother: clicking a story answers at once (the row is chosen and the panel dims while it loads, then the new story fades in), a story you rest the pointer on is loaded in the background so it opens almost at once, pages crossfade instead of flashing, loading shows grey placeholder rows instead of a spinner, the side panel and tab content fade in, a just-saved field glows briefly, and long Backlogs and activity lists scroll lighter. The comment box is never posted by clicking away.
 - Jira style: the work-package list gives its spare width to the Summary column instead of leaving it empty and truncating titles, right-aligns time columns, and shows a group's Points/hours totals on its header row instead of a separate Sum row further down.
 - Jira style: an editable cell shows a dotted underline on hover so it's clear which fields can be clicked to edit, empty fields stay quiet until the row is hovered, Story Points get a visual chip, long Summary text gets a tooltip with the full text, and the "Story Points" column heading is shortened to "Points".
 
 ### Fixed
+- UI 2.0 (glass): the soft background and the floating work-package table now show in light mode too, the detail tabs (Overview, Activity…) are no longer cut in half, and in dark mode the page buttons, the view title, the pinned-sprint chips and the comment box no longer show white boxes or bright borders.
 - Jira style: editing an existing time entry's Hours in the My time card no longer double-counts it as new time on top of what was already logged for that day — the card now shows the real change, not the entry's whole value again.
 
 ## [1.6.2] - 2026-10-30

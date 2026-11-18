@@ -1,0 +1,130 @@
+/* UI 2.0 Backlogs page (html.blm-ui2-bl), Apple OS 26/27 look: each sprint and
+   product backlog is an inset-grouped card on the grey canvas, a header row with
+   the name in a headline weight, dates and points as quiet secondary text, then
+   44 px rows (type · id · subject · status capsule · points) with separators
+   inset from the left. OpenProject's two-column float layout, drag-and-drop and
+   inline editing are left as they are; rows only switch from floats to flex.
+   OpenProject-internal selectors: #rb, .backlog, .backlog > .header (.toggler,
+   .sprint .name/.start_date/.effective_date/.id, .velocity, .menu .items),
+   ul.stories, li.story(.closed|.editing|.ui-sortable-helper) > .type_id/.id/
+   .subject/.status_id/.story_points (.t visible text, .v hidden value). */
+
+html.blm-ui2-bl #rb { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ui2-bl .toolbar-container h2,
+html.blm-ui2-bl #content > h2 {
+  font-family: var(--g-font); font-size: 28px; font-weight: 700; font-style: normal;
+  letter-spacing: -.02em; color: var(--g-text);
+}
+
+/* Card per backlog. No overflow: hidden, the header menu drops out of it. */
+html.blm-ui2-bl #rb .backlog {
+  margin: 0 0 20px !important; padding: 0 !important;
+  background: var(--g-surface) !important; color: var(--g-text);
+  border: 0 !important; border-radius: var(--g-radius) !important; box-shadow: var(--g-card-shadow) !important;
+}
+
+/* Header row */
+html.blm-ui2-bl #rb .backlog > .header {
+  display: flex !important; align-items: center; gap: 10px;
+  min-height: 52px; height: auto !important; padding: 0 10px 0 12px !important;
+  background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--g-sep) !important;
+  border-radius: var(--g-radius) var(--g-radius) 0 0;
+}
+html.blm-ui2-bl #rb .backlog > .header > * { float: none !important; position: static !important; }
+html.blm-ui2-bl #rb .backlog > .header .toggler {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 26px; height: 26px !important; border-radius: 50%;
+  color: var(--g-accent) !important; cursor: pointer;
+}
+html.blm-ui2-bl #rb .backlog > .header .toggler:hover { background: var(--g-fill); }
+html.blm-ui2-bl #rb .backlog > .header .sprint { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .id { display: none !important; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .show {
+  display: flex !important; align-items: baseline; gap: 10px; min-width: 0; white-space: nowrap;
+}
+html.blm-ui2-bl #rb .backlog > .header .sprint .show > * { float: none !important; width: auto !important; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .name {
+  order: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-size: 17px; font-weight: 600; letter-spacing: -.01em; color: var(--g-text) !important;
+}
+html.blm-ui2-bl #rb .backlog > .header .sprint .start_date { order: 2; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .effective_date { order: 3; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .date {
+  font-size: 13px; font-weight: 400; color: var(--g-text2) !important; font-variant-numeric: tabular-nums;
+}
+/* ui2.js marks blank dates (they hold whitespace, so :empty never matches) */
+html.blm-ui2-bl #rb .backlog > .header .sprint .start_date:not(.blm-g-empty)::after { content: " –"; }
+html.blm-ui2-bl #rb .backlog > .header .sprint .date.blm-g-empty { display: none !important; }
+html.blm-ui2-bl #rb .backlog > .header .velocity {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 22px; padding: 0 9px; margin: 0 !important; border-radius: var(--g-capsule);
+  background: var(--g-fill) !important; color: var(--g-text2) !important; width: auto !important;
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.blm-ui2-bl #rb .backlog > .header .menu { flex: none; margin: 0 !important; position: relative !important; }
+html.blm-ui2-bl #rb .backlog > .header .menu-trigger { color: var(--g-accent) !important; border-radius: 50%; cursor: pointer; }
+html.blm-ui2-bl #rb .backlog > .header .menu-trigger:hover { background: var(--g-fill); }
+html.blm-ui2-bl #rb .backlog > .header .menu .items {
+  background: var(--g-glass) !important; -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 0 !important; border-radius: 14px !important; box-shadow: var(--g-pop-shadow) !important; padding: 5px !important;
+}
+html.blm-ui2-bl #rb .backlog > .header .menu .items a { color: var(--g-text) !important; padding: 6px 10px !important; border-radius: var(--g-radius-sm); }
+html.blm-ui2-bl #rb .backlog > .header .menu .items a:hover { background: var(--g-accent) !important; color: var(--g-on-accent) !important; }
+
+/* Rows: separators start 14 px in, like an iOS list */
+html.blm-ui2-bl #rb ul.stories { margin: 0 !important; padding: 0 !important; list-style: none; background: transparent !important; }
+html.blm-ui2-bl #rb li.story {
+  display: flex !important; align-items: center; gap: 12px;
+  min-height: 44px; height: auto !important; padding: 0 12px 0 14px !important; margin: 0 !important;
+  background: transparent !important; color: var(--g-text);
+  border: 0 !important; background-image: linear-gradient(var(--g-sep), var(--g-sep)) !important;
+  background-size: calc(100% - 14px) 1px !important; background-position: right bottom !important; background-repeat: no-repeat !important;
+}
+html.blm-ui2-bl #rb li.story:last-child { background-image: none !important; border-radius: 0 0 var(--g-radius) var(--g-radius); }
+html.blm-ui2-bl #rb li.story:hover { background-color: var(--g-fill) !important; }
+html.blm-ui2-bl #rb li.story > * { float: none !important; height: auto !important; line-height: 20px; }
+html.blm-ui2-bl #rb li.story > .type_id {
+  order: 1; flex: none; width: 84px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 13px; color: var(--g-text2);
+}
+html.blm-ui2-bl #rb li.story > .id { order: 2; flex: none; width: 56px; text-align: left !important; }
+html.blm-ui2-bl #rb li.story > .id a {
+  color: var(--g-accent) !important; font-size: 13px; font-weight: 500;
+  font-variant-numeric: tabular-nums; text-decoration: none;
+}
+html.blm-ui2-bl #rb li.story > .id a:hover { text-decoration: underline; }
+html.blm-ui2-bl #rb li.story > .id a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--g-accent-bg), 0 0 0 1px var(--g-focus); border-radius: 4px; }
+html.blm-ui2-bl #rb li.story > .subject {
+  order: 3; flex: 1 1 auto; min-width: 0; width: auto !important;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--g-text);
+}
+html.blm-ui2-bl #rb li.story > .status_id { order: 4; flex: none; width: 116px !important; text-align: left; }
+html.blm-ui2-bl #rb li.story > .story_points {
+  order: 5; flex: none; width: 30px !important; text-align: right;
+  font-weight: 600; font-variant-numeric: tabular-nums; color: var(--g-text2);
+}
+/* OpenProject strikes the whole closed row; a line-through on a parent can't be
+   undone by its children, so lift it from the row and dim the title instead */
+html.blm-ui2-bl #rb li.story.closed { text-decoration: none !important; }
+html.blm-ui2-bl #rb li.story.closed > .subject,
+html.blm-ui2-bl #rb li.story.closed > .subject * { color: var(--g-text3); text-decoration: none !important; }
+
+/* Status capsule (tagged by ui2.js) */
+html.blm-ui2-bl #rb .blm-g-chip {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+  padding: 3px 10px; border-radius: var(--g-capsule);
+  font-size: 12px; font-weight: 600; line-height: 16px; text-transform: none; letter-spacing: 0;
+  background: var(--g-fill) !important; color: var(--g-text2) !important;
+}
+html.blm-ui2-bl #rb .blm-g-chip[data-blm-tone="progress"] { background: var(--g-accent-bg) !important; color: var(--g-accent) !important; }
+html.blm-ui2-bl #rb .blm-g-chip[data-blm-tone="done"] { background: var(--g-done-bg) !important; color: var(--g-green) !important; }
+
+/* Inline edit: OpenProject swaps the row for a form; give it room as a block */
+html.blm-ui2-bl #rb li.story.editing { display: block !important; padding: 12px 14px !important; background-color: var(--g-surface2) !important; }
+/* Drag: the row lifts off the card, the gap it leaves is a tinted slot */
+html.blm-ui2-bl #rb li.story.ui-sortable-helper {
+  background-color: var(--g-raised) !important; background-image: none !important; border-radius: 12px;
+}
+html.blm-ui2-bl #rb .ui-sortable-placeholder {
+  visibility: visible !important; min-height: 44px; background: var(--g-accent-bg) !important; border: 0 !important; border-radius: 12px;
+}
