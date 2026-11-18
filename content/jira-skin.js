@@ -25,7 +25,10 @@ const WP_CLASS      = 'blm-jira-wp';
 const BL_CLASS      = 'blm-jira-bl';
 const MOTION_CLASS  = 'blm-motion';   // animations on the stock UI (neither Jira style nor UI 2.0)
 
-let skinEnabled = true;
+// Cached like the theme below: assuming "on" until chrome.storage answers painted
+// the Jira look for a moment on every load, even with UI 2.0 chosen instead.
+const cacheSkin = (on) => { try { localStorage.setItem(CFG_JIRA_SKIN, on ? '1' : '0'); } catch { /* storage blocked */ } };
+let skinEnabled = (() => { try { return localStorage.getItem(CFG_JIRA_SKIN) !== '0'; } catch { return true; } })();
 
 // "Animations": entrance animations and hover transitions of the skin; on by default.
 const CFG_ANIMATION = '__blm_jira_animation';
@@ -4752,6 +4755,7 @@ chrome.storage.local.get([CFG_JIRA_SKIN, CFG_CHILD_ASSIGN, CFG_ACTIVITY_ON, CFG_
   if (!quoteEnabled) disableQuote();
   animationEnabled = s[CFG_ANIMATION] ?? true;
   skinEnabled     = s[CFG_JIRA_SKIN] ?? true;
+  cacheSkin(skinEnabled);
   assignEnabled   = s[CFG_CHILD_ASSIGN] ?? true;
   activityEnabled = s[CFG_ACTIVITY_ON] ?? true;
   filesEnabled    = s[CFG_FILES_ON] ?? true;
@@ -4776,6 +4780,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (CFG_ANIMATION in changes) animationEnabled = changes[CFG_ANIMATION].newValue ?? true;
   if (CFG_JIRA_SKIN in changes) {
     skinEnabled = changes[CFG_JIRA_SKIN].newValue ?? true;
+    cacheSkin(skinEnabled);
     if (!skinEnabled) disable();
   }
   if (CFG_CHILD_ASSIGN in changes) {

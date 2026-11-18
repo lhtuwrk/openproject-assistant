@@ -229,28 +229,47 @@ The Files tab shows attachments as cards (thumbnail or file-type tile, name,
 size · date · uploader) with a Grid | List toggle (`__blm_file_view`); own switch
 ("Attachment cards", `html.blm-files`), works with Jira style off. Backlogs versions become grey sprint containers of white rows.
 
-## Injected skin 2.0 (liquid glass)
+## Injected skin 2.0 (Apple OS 26/27)
 Planned replacement for the Jira skin on work packages, behind its own switch
 ("UI 2.0", `__blm_ui2`, default off while it rolls out; mutually exclusive with Jira
-style). Covers the work-package list, split view and full page only; Backlogs,
-boards and Gantt stay native. Unlike the Jira skin it follows this system's
-graphite and cobalt: tokens `--g-*` in `content/ui2/tokens.css` derive from
-`tokens.css` (accent #4c7dff / #2f5fe0), scoped under `html.blm-ui2` so nothing
-leaks when the switch is off. Light and dark follow `html[data-blm-ui2-theme]`
-(its own copy of the theme: the Jira skin deletes `data-blm-theme` when it switches off).
-- Glass is for chrome and floating panels only: top bar, toolbar, the split-view
-  panel, pickers. Blur 20 px, saturate 160 %, a 1 px inner hairline
-  (`rgba(255,255,255,.18)`), a soft layered shadow, 14–16 px radii. Never on
-  table rows (OpenProject re-renders them constantly).
-- A calm gradient canvas sits behind; content floats on it. Fewer borders, more
-  whitespace, 44 px rows.
-- Status, type and priority are small tinted glass chips, sentence case, not
-  upper-case lozenges. One signal colour each, as in the rest of the system.
-- Type: system font stack (Geist is not exposed to the host page).
-- Motion: colour, background and transform only; `prefers-reduced-motion` drops
-  transitions to 0. `prefers-reduced-transparency` and browsers without
-  `backdrop-filter` get opaque `--surface` panels. Text on glass keeps 4.5:1
-  contrast over both canvases.
+style). Covers the work-package list, split view, full page and the Backlogs page;
+boards and Gantt stay native. Unlike the rest of this system it deliberately
+follows Apple's OS 26/27 look rather than graphite and cobalt: tokens `--g-*` in
+`content/ui2/tokens.css` are Apple's system colours (systemGroupedBackground
+#f2f2f7 / #000, grouped cards #fff / #1c1c1e, labels, fills, separators, systemBlue
+#007aff / #0a84ff, systemGreen), scoped under `html.blm-ui2` so nothing leaks when
+the switch is off. Light and dark follow `html[data-blm-ui2-theme]` (its own copy of
+the theme: the Jira skin deletes `data-blm-theme` when it switches off).
+The Planning page's components (facts panels, uppercase lozenges, accent card
+edges) stay on the Planning page; UI 2.0 does not borrow them.
+- Grouped grey canvas; content sits in white inset-grouped cards (16 px radius,
+  no border, a near-invisible shadow). The work-package table is one such card.
+- The story page reads like iOS Settings: a 28 px bold title, the description in
+  one card, each attribute group a list with its header in secondary text above,
+  label left and value right on one line, separators inset 16 px, at most two
+  lists side by side. Empty values and all-empty groups fade until hovered.
+- Controls are capsules: grey-fill buttons, one filled blue for Create, status
+  as a tinted capsule in sentence case. Tabs are a segmented control.
+- Glass (blur 30 px, saturate 180 %) only on menus, popovers and pickers, the one
+  place something floats over content; nowhere else (blur over a flat canvas
+  shows nothing and repaints on scroll). `prefers-reduced-transparency` makes it opaque.
+- Motion answers the user, never plays on its own: the segmented thumb glides on
+  the iOS spring curve (`cubic-bezier(.32,.72,0,1)`) to the hovered tab, capsules
+  give (scale .96) under a press, rows highlight while pressed, a dragged backlog
+  row lifts. Colour, opacity and transform only; off with the Animations setting
+  and `prefers-reduced-motion`.
+- Type: the system font stack (SF on macOS, Segoe UI Variable on Windows).
+- Edits read as applied the moment the user acts (an option picked, Enter, the
+  check button): the editor drops its chrome while OpenProject saves; a status
+  just picked shows on its button at once. progress-hook.js announces each save's
+  start / success / failure; a failed save puts the editor back with a short shake.
+- Long-text fields (description, formattable custom fields) apply when you leave
+  them: unchanged closes with no request; changed saves through OpenProject's own
+  check button after confirming nobody else changed that field meanwhile (if they
+  did, nothing is saved and an inline note explains). The CKEditor toolbar keeps a
+  transparent 1 px border: its "do the buttons fit" check needs it.
+- Each skin caches its on/off switch in the host page's localStorage so the first
+  paint is already the chosen skin.
 - Selectors that depend on OpenProject internals are listed once per CSS file so
   an OpenProject upgrade is a one-place fix; `!important` only to beat ng-select
   and Angular specificity.

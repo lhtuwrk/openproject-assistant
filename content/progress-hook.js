@@ -21,6 +21,9 @@
 //
 // Every successful work-package PATCH is also announced to content.js via
 // window.postMessage, so it can refresh cached subtask stats (independent of the flags).
+// Its start and its failure are announced too ('wp-save-start' / 'wp-save-failed'),
+// so UI 2.0 (content/ui2/ui2.js) can show an edit as applied right away and put
+// it back if the save does not go through.
 // It also sends jira-skin.js's status/assignee edits on its behalf (see the end).
 //
 // The on/off flags are relayed from chrome.storage by progress-hook-relay.js as
@@ -170,6 +173,9 @@
 
   function notifyUpdated(wpId) {
     window.postMessage({ source: 'blm-progress-hook', type: 'wp-updated', id: wpId }, location.origin);
+  }
+  function notifySave(type, wpId) {
+    window.postMessage({ source: 'blm-progress-hook', type, id: wpId }, location.origin);
   }
 
   // ─── Confirm resolving with open subtasks ─────────────────────────────────────
@@ -621,6 +627,117 @@
     return null;
   }
 
+  // ─── Prefetch on hover (UI 2.0) ───────────────────────────────────────────────
+  // Opening a story asks for ~10 resources (activities, relations, watchers,
+  // attachments, the edit form…), 250–600 ms each, so the panel takes ~1 s. While
+  // the pointer rests on a story (a list row, a Backlogs story, a link to one) for
+  // PF_HOVER_MS, the same requests are made for it here; when the app asks for one
+  // of them within PF_TTL_MS it is answered from that copy. The shapes asked for
+  // are learnt from the app's own requests (kept in localStorage), the edit form
+  // only when the app sent it with no changes. Any save empties the copies.
+  // Only with UI 2.0 on (html.blm-ui2), one story at a time, never twice in a row.
+
+  const PF_TTL_MS    = 20000;
+  const PF_MAX       = 80;
+  const PF_HOVER_MS  = 150;
+  const PF_SHAPES_KEY = 'blm-prefetch-shapes';
+  const PF_FORM_KEY   = 'blm-prefetch-form';
+  const PF_DEFAULT    = ['/activities', '/relations', '/watchers', '/attachments', '/revisions', '/summarized_costs_by_type'];
+  const PF_SUB_RE     = /^\/api\/v3\/work_packages\/(\d+)(\/[a-z_]+)$/;
+  const pfOn = () => document.documentElement.classList.contains('blm-ui2');
+
+  const pfCache = new Map();   // "METHOD path?search [body]" -> { at, promise<{status, statusText, text} | null> }
+  const pfLoad = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+  const pfSave = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ } };
+  const pfShapes = new Set(pfLoad(PF_SHAPES_KEY, PF_DEFAULT));
+  let pfForm = pfLoad(PF_FORM_KEY, null);   // the edit-form body the app sends with no changes
+
+  function pfKey(method, url, body) {
+    const u = new URL(url, location.href);
+    return `${String(method).toUpperCase()} ${u.pathname}${u.search}${typeof body === 'string' && body ? ` ${body}` : ''}`;
+  }
+
+  /** Remember what the detail view asks for, so a hover can ask for the same. */
+  function pfLearn(method, url, body) {
+    const u = new URL(url, location.href);
+    const m = u.origin === location.origin && PF_SUB_RE.exec(u.pathname);
+    if (!m) return;
+    const verb = String(method).toUpperCase();
+    if (verb === 'GET' && m[2] !== '/form') {
+      const shape = m[2] + u.search;
+      if (!pfShapes.has(shape) && pfShapes.size < 16) { pfShapes.add(shape); pfSave(PF_SHAPES_KEY, [...pfShapes]); }
+    } else if (verb === 'POST' && m[2] === '/form' && typeof body === 'string') {
+      try {
+        const b = JSON.parse(body);
+        const plain = Object.keys(b).every(k => k === 'lockVersion' || k === '_links')
+          && !Object.keys(b._links ?? {}).length && 'lockVersion' in b;
+        if (plain && JSON.stringify(pfForm) !== JSON.stringify({ ...b, lockVersion: 0 })) {
+          pfForm = { ...b, lockVersion: 0 };
+          pfSave(PF_FORM_KEY, pfForm);
+        }
+      } catch { /* not JSON */ }
+    }
+  }
+
+  function pfFetch(method, url, body) {
+    const key = pfKey(method, url, body);
+    const hit = pfCache.get(key);
+    if (hit && Date.now() - hit.at < PF_TTL_MS) return;
+    const promise = nativeFetch(url, {
+      method, body, credentials: 'include',
+      headers: { Accept: 'application/hal+json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(async r => ({ status: r.status, statusText: r.statusText, text: await r.text() }))
+      .then(res => (res.status === 200 && res.text ? res : null))
+      .catch(() => null)
+      .then(res => { if (!res && pfCache.get(key)?.promise === promise) pfCache.delete(key); return res; });
+    pfCache.set(key, { at: Date.now(), promise });
+    if (pfCache.size > PF_MAX) pfCache.delete(pfCache.keys().next().value);
+  }
+
+  /** The prefetched answer for this request, if a fresh one exists (a promise; null = ask the server). */
+  function pfLookup(method, url, body) {
+    if (!pfOn()) return null;
+    const hit = pfCache.get(pfKey(method, url, body));
+    return hit && Date.now() - hit.at < PF_TTL_MS ? hit.promise : null;
+  }
+
+  async function prefetchWp(id) {
+    for (const shape of pfShapes) pfFetch('GET', `/api/v3/work_packages/${id}${shape}`);
+    if (!pfForm) return;
+    let wp = wpSeen.get(id);
+    if (!wp) {
+      try { wp = await getJson(`/api/v3/work_packages/${id}`); rememberWp(wp); } catch { return; }
+    }
+    if (wp?.lockVersion != null) {
+      pfFetch('POST', `/api/v3/work_packages/${id}/form`, JSON.stringify({ ...pfForm, lockVersion: wp.lockVersion }));
+    }
+  }
+
+  function hoverWpId(el) {
+    const row = el.closest?.('tr.wp-table--row');
+    if (row) return /\bwp-row-(\d+)\b/.exec(row.className)?.[1] ?? null;
+    const story = el.closest?.('#rb li.story');
+    if (story) return story.querySelector('.id a, .id .t')?.textContent.replace(/\D/g, '') || null;
+    const a = el.closest?.('a[href*="/work_packages/"]');
+    return a ? /work_packages\/(?:details\/)?(\d+)/.exec(a.getAttribute('href') ?? '')?.[1] ?? null : null;
+  }
+
+  let pfTimer = 0;
+  let pfLast  = null;
+  document.addEventListener('pointerover', (e) => {
+    if (!pfOn() || e.pointerType === 'touch' || document.hidden) return;
+    const id = e.target instanceof Element ? hoverWpId(e.target) : null;
+    if (!id || id === pfLast) return;
+    clearTimeout(pfTimer);
+    pfTimer = setTimeout(() => { pfLast = id; prefetchWp(id); }, PF_HOVER_MS);
+  }, { passive: true });
+  document.addEventListener('pointerout', (e) => {
+    if (e.target instanceof Element && hoverWpId(e.target) && !(e.relatedTarget instanceof Element && hoverWpId(e.relatedTarget))) {
+      clearTimeout(pfTimer);
+    }
+  }, { passive: true });
+
   // ─── Loading feedback ─────────────────────────────────────────────────────────
   // Opening the status menu or an inline field (assignee, priority, version…) first
   // loads the edit form and its allowed values, with nothing on screen meanwhile.
@@ -701,6 +818,20 @@
     }
     const busyDone = req && trackBusy(req.url);
     if (busyDone) this.addEventListener('loadend', busyDone);
+    if (req) {
+      pfLearn(req.method, req.url, body);
+      if (savesData(req.method, req.url)) pfCache.clear();
+      const pf = req.async && pfLookup(req.method, req.url, body);
+      if (pf) {
+        pf.then(res => {
+          let json = null;
+          try { json = res && JSON.parse(res.text); } catch { /* fall through to the server */ }
+          if (json) respondXhr(this, { status: res.status, statusText: res.statusText, json });
+          else origSend.call(this, body);
+        });
+        return;
+      }
+    }
     const listHit = listKey(req);
     const cached  = listHit && listCached(listHit);
     if (cached) {
@@ -713,8 +844,12 @@
     }
     const patchId = req && wpPatchId(req.method, req.url);
     if (patchId) {
+      notifySave('wp-save-start', patchId);
       this.addEventListener('load', () => {
         if (this.status >= 200 && this.status < 300) notifyUpdated(patchId);
+      });
+      this.addEventListener('loadend', () => {
+        if (!(this.status >= 200 && this.status < 300)) notifySave('wp-save-failed', patchId);
       });
     }
     // Forget first, then keep this answer: a PATCH returns the work package as saved.
@@ -736,6 +871,23 @@
   window.fetch = function (input, init) {
     // Request objects carry a stream body we can't cheaply rewrite — pass through.
     if (input instanceof Request) return nativeFetch(input, init);
+    // The detail view loads activities, relations, watchers… with fetch: learn and
+    // answer them from the hover prefetch like the XHR path does.
+    const pfMethod = init?.method ?? 'GET';
+    pfLearn(pfMethod, String(input), init?.body);
+    const pf = pfLookup(pfMethod, String(input), init?.body);
+    if (pf) {
+      return pf.then(res => (res
+        ? new Response(res.text, {
+            status: res.status, statusText: res.statusText,
+            headers: { 'Content-Type': 'application/hal+json; charset=utf-8' },
+          })
+        : hookedFetch(input, init)));
+    }
+    return hookedFetch(input, init);
+  };
+
+  function hookedFetch(input, init) {
     const method  = init?.method ?? 'GET';
     const write   = isApiWrite(method, String(input));
     if (write) listClear();
@@ -756,14 +908,20 @@
     const busyDone = trackBusy(String(input));
     if (busyDone) sent.then(busyDone, busyDone);
     if (write) sent.then(listClear, listClear);
-    if (savesData(method, String(input))) sent.then(forgetWps, forgetWps);
+    if (savesData(method, String(input))) { pfCache.clear(); sent.then(forgetWps, forgetWps); }
     if (!patchId) return sent;
+    notifySave('wp-save-start', patchId);
     return sent.then(res => {
       if (res.ok) {
         notifyUpdated(patchId);
         res.clone().json().then(rememberWp, () => {});
+      } else {
+        notifySave('wp-save-failed', patchId);
       }
       return res;
+    }, err => {
+      notifySave('wp-save-failed', patchId);
+      throw err;
     });
   };
 

@@ -875,8 +875,8 @@ async function doRegisterHostScripts() {
       js: ['content/progress-hook-relay.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}hook`, matches: [all],
       js: ['content/progress-hook.js'], runAt: 'document_start', world: 'MAIN' },
-    { id: `${HOST_SCRIPT_PREFIX}ui2`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`],
-      css: ['content/ui2/tokens.css', 'content/ui2/base.css', 'content/ui2/list.css', 'content/ui2/detail.css'], js: ['content/ui2/ui2.js'], runAt: 'document_start' },
+    { id: `${HOST_SCRIPT_PREFIX}ui2`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`, `${host}/projects/*/backlogs*`],
+      css: ['content/ui2/tokens.css', 'content/ui2/base.css', 'content/ui2/list.css', 'content/ui2/detail.css', 'content/ui2/backlog.css', 'content/ui2/motion.css'], js: ['content/ui2/ui2.js'], runAt: 'document_start' },
   ]);
   console.log('[BacklogMonitor] Content scripts registered for', host);
 }

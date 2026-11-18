@@ -1,0 +1,130 @@
+/* UI 2.0 motion, Apple OS 26/27 feel: everything answers the pointer, nothing
+   plays on its own. The segmented thumb glides on the iOS spring curve to the
+   hovered tab and settles back on the selected one; capsules and buttons give
+   a little under the press; a row highlights while pressed; a dragged backlog
+   row lifts off the card. Off with Settings → Animations (html.blm-no-anim, set
+   by jira-skin.js) and with prefers-reduced-motion. Only transform, opacity and
+   colour animate. OpenProject-internal selectors: .op-tab-row(--link), .button,
+   .op-pagination--item-link, .work-package-table tr.wp-table--row, #rb li.story. */
+
+/* Each element transitions only what it actually changes. Rows and cells change
+   colour only (no shadow or transform transitions on the hundreds of <td>s); the
+   things you press also spring back with transform, which the GPU animates. */
+html.blm-ui2 :is(.work-package-table tbody td, #rb li.story, #main-menu a,
+  .attributes-key-value--value-container .inline-edit--display-field, .work-package-comment,
+  .editable-toolbar-title--input, .top-menu-search--input) {
+  transition: background-color 120ms var(--g-ease), color 120ms var(--g-ease);
+}
+html.blm-ui2 .attributes-group { transition: opacity var(--g-dur) var(--g-ease); }
+html.blm-ui2 :is(.toolbar-items .button, .op-pagination--item-link, .work-packages-back-button,
+  .op-tab-row--link, .blm-g-status) {
+  transition: background-color var(--g-dur) var(--g-ease), color var(--g-dur) var(--g-ease),
+              transform var(--g-dur-med) var(--g-spring);
+}
+
+/* Segmented control: one thumb, slid under the hovered (or selected) segment */
+html.blm-ui2-wp .op-tab-row { position: relative; }
+html.blm-ui2-wp .blm-g-tab-ink {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+  width: 100px; transform-origin: 0 50%;   /* ui2.js scales it to the tab: no layout per frame */
+  border-radius: 7px; background: var(--g-thumb); box-shadow: var(--g-thumb-shadow);
+  transition: transform var(--g-dur-med) var(--g-spring), opacity var(--g-dur) var(--g-ease);
+  will-change: transform;
+}
+html.blm-ui2-wp .blm-g-tab-ink.blm-g-ink-new { transition: none; }   /* first placement: no slide in from 0 */
+html.blm-ui2-wp .op-tab-row:has(.blm-g-tab-ink) .op-tab-row--link_selected,
+html.blm-ui2-wp .op-tab-row:has(.blm-g-tab-ink) .op-tab-row--link_selected:hover { background: transparent !important; box-shadow: none !important; }
+
+/* Press: capsules and buttons give a little */
+html.blm-ui2 :is(.toolbar-items .button, .blm-g-status, .op-pagination--item-link, .work-packages-back-button, .op-tab-row--link):active:not(:disabled) {
+  transform: scale(.96); transition-duration: 80ms;   /* press in fast, spring back on release */
+}
+/* Rows highlight while pressed, the way a list cell does */
+html.blm-ui2-wp .work-package-table tbody tr.wp-table--row:active > td,
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:active { background: var(--g-fill2) !important; }
+html.blm-ui2-bl #rb li.story:active { background-color: var(--g-fill2) !important; }
+
+/* Backlog: a dragged row lifts off the card */
+html.blm-ui2-bl #rb li.story.ui-sortable-helper { transform: scale(1.02); box-shadow: var(--g-lift) !important; }
+
+/* Off switches */
+html.blm-ui2.blm-no-anim * { transition: none !important; }
+html.blm-ui2.blm-no-anim *:active,
+html.blm-ui2.blm-no-anim li.story.ui-sortable-helper { transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ui2 * { transition-duration: 0s !important; }
+  html.blm-ui2 *:active,
+  html.blm-ui2-bl #rb li.story.ui-sortable-helper { transform: none !important; }
+}
+
+/* Instant apply: a save that did not go through puts the editor back with a short shake */
+@keyframes blm-g-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+html.blm-ui2 .blm-g-shake { animation: blm-g-shake .4s var(--g-ease); }
+html.blm-ui2.blm-no-anim .blm-g-shake { animation: none; }
+@media (prefers-reduced-motion: reduce) { html.blm-ui2 .blm-g-shake { animation: none; } }
+
+/* ── Smoothness pass ─────────────────────────────────────────────────────────
+   Loading placeholders instead of OpenProject's blocks spinner; the split panel and
+   a tab's content fade in as they are created; a field that just saved glows softly
+   (ui2.js adds .blm-g-flash).
+   OpenProject-internal selectors: .loading-indicator--background, .loading-indicator,
+   .work-packages--details, .work-package-details-activities-activity, #rb li.story. */
+
+/* Placeholders: grey rows with a sheen, only if loading takes longer than 150 ms */
+html.blm-ui2 .loading-indicator--background {
+  overflow: hidden;
+  background-color: var(--g-bg) !important;
+  background-image: repeating-linear-gradient(180deg, transparent 0 15px, var(--g-fill) 15px 29px, transparent 29px 44px) !important;
+  background-size: calc(100% - 48px) 100% !important; background-position: 24px 56px !important; background-repeat: no-repeat !important;
+  animation: blm-g-appear .2s var(--g-ease) .15s both;
+}
+html.blm-ui2 .loading-indicator--background > .loading-indicator { display: none !important; }
+html.blm-ui2 .loading-indicator--background::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--g-shimmer), transparent);
+  transform: translateX(-100%); animation: blm-g-sheen 1.3s linear infinite;
+}
+@keyframes blm-g-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes blm-g-sheen { to { transform: translateX(100%); } }
+
+/* The split panel, and a tab's content when switching tabs, fade in from the
+   moment they are created (CSS on insertion): an animation started after
+   something was painted resets it to transparent first, and that reads as a jolt.
+   Opacity only, so it never fights OpenProject's layout while it fills in. */
+html.blm-ui2-wp .work-packages--details,
+html.blm-ui2-wp .work-packages--details-content > * { animation: blm-g-appear 180ms var(--g-ease) both; }
+
+/* A field that just saved glows once, then settles */
+html.blm-ui2 .blm-g-flash { position: relative; isolation: isolate; }   /* the glow sits behind the text, inside the field */
+html.blm-ui2 .blm-g-flash::after {
+  content: ""; position: absolute; inset: -2px -4px; z-index: -1; pointer-events: none;
+  border-radius: var(--g-radius-sm); background: var(--g-accent-bg);
+  animation: blm-g-glow 900ms var(--g-ease) forwards;
+}
+@keyframes blm-g-glow { from { opacity: 1; } to { opacity: 0; } }
+
+/* No layout jumps: avatars keep their square before the image arrives */
+html.blm-ui2 img.op-avatar, html.blm-ui2 .op-avatar { aspect-ratio: 1 / 1; flex: none; }
+
+/* Long lists: rows and activity entries off screen are not laid out or painted
+   until they scroll near (sizes estimated so the scrollbar stays steady) */
+html.blm-ui2-bl #rb li.story:not(.ui-sortable-helper):not(.editing) { content-visibility: auto; contain-intrinsic-size: auto 44px; }
+html.blm-ui2-wp .work-package-details-activities-activity { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+
+html.blm-ui2.blm-no-anim :is(.loading-indicator--background, .loading-indicator--background::after, .work-packages--details, .work-packages--details-content > *, .blm-g-flash::after) { animation: none !important; }
+html.blm-ui2.blm-no-anim .blm-g-flash::after { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ui2 :is(.loading-indicator--background, .work-packages--details, .work-packages--details-content > *) { animation: none !important; }
+  html.blm-ui2 .blm-g-flash::after { display: none; }
+  html.blm-ui2 .loading-indicator--background::after { display: none; }
+}
+
+/* Opening a story (ui2.js): the clicked row shows as chosen and the open panel
+   dims for the moment OpenProject spends building the new one */
+html.blm-ui2-wp .work-package-table tr.wp-table--row.blm-g-opening > td { background: var(--g-accent-bg) !important; }
+html.blm-ui2-wp .work-packages--details .work-packages--details-content,
+html.blm-ui2-wp .work-packages--details > :not(.op-work-package-tabs, op-wp-tabs) { transition: opacity 200ms var(--g-ease); }
+html.blm-ui2-wp .work-packages--details.blm-g-switching .work-packages--details-content,
+html.blm-ui2-wp .work-packages--details.blm-g-switching > :not(.op-work-package-tabs, op-wp-tabs) {
+  opacity: .45; transition-duration: 120ms;
+}
