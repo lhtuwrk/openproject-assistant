@@ -254,3 +254,16 @@ leaks when the switch is off. Light and dark follow `html[data-blm-ui2-theme]`
 - Selectors that depend on OpenProject internals are listed once per CSS file so
   an OpenProject upgrade is a one-place fix; `!important` only to beat ng-select
   and Angular specificity.
+- Work-package detail (split view and full page) follows iOS grouped lists:
+  the panel is the grouped background (`--g-grouped`, #f2f2f7 / near-black, glass),
+  content sits on solid `--g-card` cards with 12 px radii. Title 28 px bold (22 px
+  in the split view); type and status are capsules (type tinted with its own
+  OpenProject colour via `currentColor`). Attribute groups: upper-case 12 px grey
+  header, one card, 44 px rows, label left in `--g-text`, value right in
+  `--g-text2`, 1 px `--g-sep` hairlines inset 16 px. While a field is edited its
+  value goes full width and left-aligned so OpenProject's pickers open in place.
+  Empty values ("-") hide behind a "Show N empty fields" footer under the card
+  (`ui2.js`); required fields and a field being edited always show. Tabs are a
+  segmented control (`--g-fill` track, `--g-card` thumb); activity entries are
+  cards under upper-case date headers; the comment field is a 20 px-radius
+  message field. Overdue dates use `--g-red`.

@@ -58,12 +58,79 @@ function tagCells() {
       btn.dataset.blmTone = tone;
     }
   }
+  tagEmptyFields();
+}
+
+// Work-package detail: rows whose value is empty ("-") are hidden behind a
+// "Show N empty fields" footer after their group's card. Required fields and a
+// row being edited always stay visible. Which groups are open is kept by group
+// title for this tab, so it survives Angular re-rendering the group.
+const DETAIL_VIEWS = '.work-packages--details, .work-packages--show-view';
+const openEmptyGroups = new Set();
+
+function isEmptyRow(row) {
+  if (row.querySelector('.inline-edit--container.-active')) return false;
+  const key = row.querySelector('.attributes-key-value--key')?.textContent ?? '';
+  if (key.includes('*')) return false;
+  const field = row.querySelector('.attributes-key-value--value-container .inline-edit--display-field');
+  if (!field || field.closest('[hidden]')) return false;
+  const text = field.textContent.trim();
+  return (text === '-' || text === '') && !field.querySelector('img, .op-avatar');
+}
+
+function setAttr(el, name, on) {
+  if (on) { if (!el.hasAttribute(name)) el.setAttribute(name, ''); }
+  else if (el.hasAttribute(name)) el.removeAttribute(name);
+}
+
+function tagEmptyFields() {
+  for (const group of document.querySelectorAll(
+    `:is(${DETAIL_VIEWS}) .attributes-group:not(.description-group)`
+  )) {
+    const card = group.querySelector('.wp-attribute-group');
+    if (!card) continue;
+    const rows = [...card.querySelectorAll(':scope > .wp-attribute-group--attribute')];
+    let empty = 0;
+    for (const row of rows) {
+      const isEmpty = isEmptyRow(row);
+      setAttr(row, 'data-blm-empty', isEmpty);
+      if (isEmpty) empty++;
+    }
+    const title = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
+    const open = openEmptyGroups.has(title);
+    setAttr(group, 'data-blm-show-empty', open);
+    setAttr(group, 'data-blm-all-empty', rows.length > 0 && empty === rows.length);
+
+    let toggle = group.querySelector(':scope > .blm-g-empty-toggle');
+    if (!empty) { toggle?.remove(); continue; }
+    if (!toggle) {
+      toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'blm-g-empty-toggle';
+      toggle.addEventListener('click', () => {
+        const t = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
+        if (openEmptyGroups.has(t)) openEmptyGroups.delete(t); else openEmptyGroups.add(t);
+        tagEmptyFields();
+      });
+    }
+    if (toggle.previousElementSibling !== card) card.after(toggle);
+    const label = open ? 'Hide empty fields'
+      : `Show ${empty} empty field${empty === 1 ? '' : 's'}`;
+    if (toggle.textContent !== label) toggle.textContent = label;
+    toggle.setAttribute('aria-expanded', String(open));
+  }
 }
 
 function untagCells() {
   document.querySelectorAll('.blm-g-chip, .blm-g-status').forEach(el => {
     el.classList.remove('blm-g-chip', 'blm-g-status');
     delete el.dataset.blmTone;
+  });
+  document.querySelectorAll('.blm-g-empty-toggle').forEach(el => el.remove());
+  document.querySelectorAll('[data-blm-empty], [data-blm-show-empty], [data-blm-all-empty]').forEach(el => {
+    el.removeAttribute('data-blm-empty');
+    el.removeAttribute('data-blm-show-empty');
+    el.removeAttribute('data-blm-all-empty');
   });
 }
 
