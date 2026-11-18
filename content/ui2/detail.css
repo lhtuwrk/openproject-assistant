@@ -168,6 +168,28 @@ html.blm-ui2-wp .work-packages--show-view .op-uc-container {
   font-size: 15px; line-height: 1.55; color: var(--g-text);
 }
 
+/* Editable text (title, description): no outlined box on hover, the iOS way —
+   a soft rounded fill that bleeds just past the text, so nothing shifts. */
+html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
+  .inline-edit--display-field:not(.type):not(.work-package-comment) {
+  border-color: transparent !important; box-shadow: none !important;
+  border-radius: 10px; transition: background-color .14s ease-out;
+}
+html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
+  .inline-edit--display-field.-editable:not(.type):not(.work-package-comment):hover {
+  background: var(--g-fill) !important;
+}
+html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
+  .inline-edit--display-field:not(.type):not(.work-package-comment):focus-visible {
+  outline: 2px solid var(--g-focus); outline-offset: 0;
+}
+html.blm-ui2-wp .description-group .inline-edit--display-field {
+  padding: 8px 10px !important; margin: -8px -10px !important;
+}
+html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
+  padding: 2px 8px !important; margin: -2px -8px !important;
+}
+
 /* ── Attribute groups: inset grouped lists ────────────────────────────────── */
 html.blm-ui2-wp .attributes-group:not(.description-group) {
   background: transparent !important; border: 0 !important; box-shadow: none !important;
@@ -345,5 +367,6 @@ html.blm-ui2[data-blm-ui2-theme="dark"] .op-tab-row--link_selected { box-shadow:
   html.blm-ui2-wp .op-back-button,
   html.blm-ui2-wp #toolbar-items .button,
   html.blm-ui2-wp .work-package-comment.inline-edit--display-field,
+  html.blm-ui2-wp .inline-edit--display-field,
   html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none !important; }
 }
