@@ -66,6 +66,15 @@
     .segmented input:checked + label { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px var(--shadow); }
     .segmented input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 1px; }
 
+    .select {
+      max-width: 160px; height: 28px; padding: 0 var(--space-xs); font: inherit; font-size: var(--text-xs); font-weight: 500;
+      color: var(--text); background: var(--overlay); border: 1px solid var(--border2); border-radius: var(--radius-md);
+      color-scheme: var(--scheme); cursor: pointer;
+      transition: border-color var(--dur-short) var(--ease-out);
+    }
+    .select:hover { border-color: var(--subtle); }
+    .select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
     .note { color: var(--muted); font-size: var(--text-xs); padding: var(--space-md); }
 
     .bar-actions { display: flex; align-items: center; gap: var(--space-xs); }
@@ -81,7 +90,7 @@
     .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
     @media (prefers-reduced-motion: reduce) {
-      .segmented label { transition-duration: 0s; }
+      .segmented label, .select { transition-duration: 0s; }
     }
   </style>
 </head>
