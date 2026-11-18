@@ -195,8 +195,12 @@ html.blm-ui2-wp .wp-attribute-group--attribute.attributes-key-value {
 }
 /* Inset hairline above every visible row that follows a visible row */
 html.blm-ui2-wp .wp-attribute-group--attribute + .wp-attribute-group--attribute::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 0;
-  border-top: 1px solid var(--g-sep); pointer-events: none;
+  content: ""; position: absolute; top: 0; left: 16px; right: 16px;
+  height: 1px; background: var(--g-row-sep); pointer-events: none;
+}
+/* On high-density screens the row divider is a true half-pixel hairline */
+@media (min-resolution: 2dppx) {
+  html.blm-ui2-wp .wp-attribute-group--attribute::before { transform: scaleY(.5); transform-origin: top; }
 }
 html.blm-ui2-wp .attributes-key-value--key {
   flex: 0 0 38% !important; max-width: 38%; min-width: 0; padding: 0 !important; margin: 0 !important;
@@ -243,8 +247,8 @@ html.blm-ui2-wp .attributes-group:not([data-blm-show-empty])[data-blm-all-empty]
 /* With empties hidden, a hairline goes above a visible row only when a visible row precedes it */
 html.blm-ui2-wp .attributes-group:not([data-blm-show-empty]) .wp-attribute-group--attribute + .wp-attribute-group--attribute::before { content: none; }
 html.blm-ui2-wp .attributes-group:not([data-blm-show-empty]) .wp-attribute-group--attribute:not([data-blm-empty]) ~ .wp-attribute-group--attribute:not([data-blm-empty])::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 0;
-  border-top: 1px solid var(--g-sep); pointer-events: none;
+  content: ""; position: absolute; top: 0; left: 16px; right: 16px;
+  height: 1px; background: var(--g-row-sep); pointer-events: none;
 }
 html.blm-ui2-wp .blm-g-empty-toggle {
   display: block; margin: 6px 0 0; padding: 2px 16px; border: 0; background: none;

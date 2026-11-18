@@ -35,6 +35,7 @@ html.blm-ui2 {
   --g-grouped-solid: #f2f2f7;
   --g-card: #ffffff;
   --g-sep: rgba(60, 60, 67, .16);
+  --g-row-sep: rgba(60, 60, 67, .08);
   --g-fill: rgba(118, 118, 128, .12);
   --g-fill-hover: rgba(118, 118, 128, .2);
   --g-text3: #6b707c;
@@ -75,6 +76,7 @@ html.blm-ui2[data-blm-ui2-theme="dark"] {
   --g-grouped-solid: #0e0f12;
   --g-card: #1c1e24;
   --g-sep: rgba(84, 84, 88, .55);
+  --g-row-sep: rgba(84, 84, 88, .3);
   --g-fill: rgba(118, 118, 128, .24);
   --g-fill-hover: rgba(118, 118, 128, .34);
   --g-text3: #8e929c;
