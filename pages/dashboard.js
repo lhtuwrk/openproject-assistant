@@ -122,6 +122,42 @@ async function initFixedVersion() {
   el.related.addEventListener('change', save);
 }
 
+// Style: one dropdown over three exclusive flags. A missing key is "never set":
+// Jira style defaults on, the other two off. "none" turns all three off.
+const SKINS = { jira: '__blm_jira_skin', ui2: '__blm_ui2', ios: '__blm_ios' };
+const SKIN_DEFAULTS = { __blm_jira_skin: true, __blm_ui2: false, __blm_ios: false };
+
+function currentSkin(s) {
+  const on = (k) => s[k] ?? SKIN_DEFAULTS[k];
+  if (on(SKINS.ios)) return 'ios';
+  if (on(SKINS.ui2)) return 'ui2';
+  if (on(SKINS.jira)) return 'jira';
+  return 'none';
+}
+
+async function initSkin() {
+  const select = document.getElementById('f-skin');
+  const show = () => {
+    const opt = select.selectedOptions[0];
+    document.getElementById('skin-desc').textContent = opt?.dataset.desc ?? '';
+    document.getElementById('skin-scope').textContent = opt?.dataset.scope ?? '';
+  };
+  const keys = Object.values(SKINS);
+  const state = await chrome.storage.local.get(keys);
+  select.value = currentSkin(state);
+  show();
+  select.addEventListener('change', async () => {
+    show();
+    await chrome.storage.local.set(Object.fromEntries(keys.map(k => [k, SKINS[select.value] === k])));
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !keys.some(k => k in changes)) return;
+    for (const k of keys) if (k in changes) state[k] = changes[k].newValue;
+    select.value = currentSkin(state);
+    show();
+  });
+}
+
 async function init() {
   initLab();
   initFixedVersion();
@@ -136,6 +172,8 @@ async function init() {
       renderStatuses();
     });
   }
+
+  await initSkin();
 
   const theme = window.blmTheme.get();
   for (const r of document.querySelectorAll('input[name="theme"]')) {

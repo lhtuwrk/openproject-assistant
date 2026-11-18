@@ -1,18 +1,11 @@
 /* UI 2.0 work-package detail: split view (.work-packages--details) and full
-   page (.work-packages--show-view), laid out the iOS way: a large title, status
-   and type capsules, attribute groups as inset grouped lists (white cards of
-   44 px rows, label left, value right, inset hairlines), the tabs as a segmented
-   control and activity entries as cards. CSS only, except the "Show N empty
-   fields" footer that ui2.js adds after a group's card: OpenProject's layout is
-   kept and no nodes are moved, so there is nothing to restore when the switch is off.
-   OpenProject-internal selectors: .work-packages--details, .work-packages--show-view,
-   .work-packages-full-view--split-*, .work-package--single-view, .wp-info-wrapper,
-   .work-packages--info-row, .work-packages--type-selector, .toolbar-container,
-   #toolbar-items, .op-back-button, .add-work-package, .description-group,
-   .attributes-group(--header), .wp-attribute-group(--attribute), .attributes-key-value--*,
-   .inline-edit--container(.-active), .inline-edit--display-field, .__hl_date_overdue,
-   .op-tab-row(--link), .op-scrollable-tabs, .activity-date, .op-user-activity,
-   .comments-number, .work-package-comment, .op-uc-container, wp-status-button. */
+   page (.work-packages--show-view). CSS only: OpenProject's layout is kept and no
+   nodes are moved, so there is nothing to restore when the switch is off.
+   The split panel and the full-page content are glass; their inner containers
+   are transparent. OpenProject-internal selectors: .work-packages--details,
+   .work-packages--show-view, .work-packages-full-view--split-*, .work-package--single-view,
+   .op-tab-row(--link), .attributes-group(--header), .attributes-key-value--*,
+   .inline-edit--display-field, .op-uc-container, wp-status-button. */
 
 /* The independent sub-features (Children assign, Activity filter, Attachment
    cards) style themselves with --jx-* tokens that are light unless the Jira skin
@@ -38,115 +31,47 @@ html.blm-ui2.blm-files {
   --jx-focus: var(--g-focus);
 }
 
-/* ── Panels: a grouped background floating on the canvas ─────────────────── */
+/* Panels: glass, rounded, floating */
 html.blm-ui2-wp .work-packages--details,
 html.blm-ui2-wp .work-packages--show-view {
   font-family: var(--g-font); color: var(--g-text);
-  background: var(--g-grouped);
+  background: var(--g-surface);
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
-  border: 0 !important; border-radius: var(--g-radius-lg);
-  /* Split view: a hairline ring plus a soft lift, no border line */
-  box-shadow: 0 0 0 1px var(--g-hairline), var(--g-shadow);
+  border: 1px solid var(--g-border); border-radius: var(--g-radius-lg);
+  box-shadow: var(--g-shadow);
 }
-/* Full work-package page: one continuous grouped surface, like iOS Settings.
-   Canvas, sidebar and panel share the same grey with no line, shadow or
-   rounded edge between them, so only the white cards stand out. */
-html.blm-ui2-wp:has(.work-packages--show-view),
-html.blm-ui2-wp:has(.work-packages--show-view) body { background: var(--g-grouped-solid) !important; }
-html.blm-ui2-wp:has(.work-packages--show-view) #main-menu {
-  background: transparent !important; border-right: 0 !important; box-shadow: none !important;
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-}
-html.blm-ui2-wp:has(.work-packages--show-view) #content-wrapper,
-html.blm-ui2-wp:has(.work-packages--show-view) #content { background: transparent !important; }
-html.blm-ui2-wp .work-packages--show-view {
-  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
-  border-radius: 0; box-shadow: none;
-}
-html.blm-ui2-wp .work-packages--details *,
-html.blm-ui2-wp .work-packages--show-view * { font-family: var(--g-font); }
 html.blm-ui2-wp .work-packages--details-content,
 html.blm-ui2-wp .work-packages-full-view--split-container,
-html.blm-ui2-wp .work-packages-full-view--split-left,
-html.blm-ui2-wp .work-packages-full-view--split-right,
 html.blm-ui2-wp .work-package--single-view,
 html.blm-ui2-wp .work-packages--panel-inner,
 html.blm-ui2-wp .tabcontent,
 html.blm-ui2-wp .op-uc-container { background: transparent !important; color: var(--g-text); }
-/* No divider lines: the grouped background and the cards already separate the
-   two columns. The resize grip only shows while hovered. */
-html.blm-ui2-wp .work-packages-full-view--split-left,
-html.blm-ui2-wp .work-packages-full-view--split-right { border: 0 !important; }
-html.blm-ui2-wp .work-packages--resizer { opacity: 0; transition: opacity .14s ease-out; }
-html.blm-ui2-wp .work-packages-full-view--resizer:hover .work-packages--resizer { opacity: .6; }
 
-/* Scrollbars: slim, see base.css. */
-
-/* ── Navigation bar (full page) ───────────────────────────────────────────── */
-html.blm-ui2-wp .work-packages--show-view .toolbar-container {
-  background: transparent !important; border: 0 !important;
-}
-html.blm-ui2-wp .work-packages--show-view .op-back-button {
-  border: 0 !important; background: transparent !important; box-shadow: none !important;
-  color: var(--g-accent) !important; border-radius: 999px !important;
-  transition: background-color .14s ease-out;
-}
-html.blm-ui2-wp .work-packages--show-view .op-back-button:hover { background: var(--g-fill) !important; }
-html.blm-ui2-wp .work-packages--show-view .op-back-button * { color: inherit !important; }
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 34px; height: 34px; padding: 0 9px; margin: 0;
-  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
-  background: var(--g-fill) !important; color: var(--g-accent) !important;
-  transition: background-color .14s ease-out;
-}
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button * { color: inherit !important; }
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button:hover { background: var(--g-fill-hover) !important; }
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button.add-work-package {
-  padding: 0 14px; gap: 6px; background: var(--g-accent) !important; color: var(--g-on-accent) !important;
-  font-size: 14px; font-weight: 600;
-}
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button.add-work-package:hover { filter: brightness(1.08); }
-html.blm-ui2-wp .work-packages--show-view #toolbar-items .button:focus-visible,
-html.blm-ui2-wp .work-packages--show-view .op-back-button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
-
-/* ── Title, type, status, caption ─────────────────────────────────────────── */
-html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
-  font-size: 28px !important; font-weight: 700 !important; font-style: normal;
-  line-height: 1.2; letter-spacing: -.02em; color: var(--g-text) !important;
-  overflow-wrap: anywhere;
-}
-html.blm-ui2-wp .work-packages--details .work-packages--details--subject .inline-edit--display-field.subject {
-  font-size: 22px !important;
-}
-/* Type: a capsule tinted with OpenProject's own type colour (currentColor) */
-html.blm-ui2-wp .work-packages--type-selector .inline-edit--display-field.type {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 10px !important;
-  border-radius: 999px; font-size: 12px !important; font-weight: 600 !important;
-  text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap;
-  background: color-mix(in srgb, currentColor 14%, transparent);
-}
-
-/* Breadcrumb and the "#id Created by … Last updated …" caption */
+/* Breadcrumb, id and type line */
 html.blm-ui2-wp .work-packages--info-row,
 html.blm-ui2-wp .work-packages--info-row *,
 html.blm-ui2-wp .wp-breadcrumb,
-html.blm-ui2-wp .wp-breadcrumb * { font-size: 12px !important; color: var(--g-text3) !important; }
+html.blm-ui2-wp .wp-breadcrumb * { font-family: var(--g-font); font-size: 13px; color: var(--g-text2); }
 html.blm-ui2-wp .work-packages--info-row a,
-html.blm-ui2-wp .wp-breadcrumb a,
-html.blm-ui2-wp .wp-breadcrumb button { color: var(--g-accent) !important; text-decoration: none; }
+html.blm-ui2-wp .wp-breadcrumb a { color: var(--g-text2); text-decoration: none; }
 html.blm-ui2-wp .work-packages--info-row a:hover,
-html.blm-ui2-wp .wp-breadcrumb a:hover { text-decoration: underline; }
-html.blm-ui2-wp .wp-info-wrapper { align-items: center; gap: 10px; margin-bottom: 20px; }
+html.blm-ui2-wp .wp-breadcrumb a:hover { color: var(--g-accent); text-decoration: underline; }
 
-/* Status button: same chip colours as the list, a capsule */
+/* Subject */
+html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
+  font-family: var(--g-font); font-size: 22px !important; font-weight: 600 !important;
+  font-style: normal; line-height: 1.3; letter-spacing: -.02em; color: var(--g-text);
+  overflow-wrap: anywhere;
+}
+
+/* Status button: same chip colours as the list, bigger, pill */
 html.blm-ui2-wp .blm-g-status {
-  display: inline-flex !important; align-items: center; gap: 6px;
-  height: 30px !important; min-height: 30px !important; line-height: 1 !important;
-  padding: 0 10px 0 14px !important; margin: 0 !important;
+  display: inline-flex !important; align-items: center; gap: 8px;
+  height: 34px !important; min-height: 34px !important; line-height: 1 !important;
+  padding: 0 12px 0 14px !important; margin: 0 !important;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   white-space: nowrap; cursor: pointer;
-  font-size: 14px !important; font-weight: 600 !important;
+  font-family: var(--g-font) !important; font-size: 14px !important; font-weight: 600 !important;
   text-transform: none !important; letter-spacing: 0 !important;
   background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
   transition: filter .14s ease-out;
@@ -158,228 +83,60 @@ html.blm-ui2-wp .blm-g-status:disabled { opacity: .5; cursor: not-allowed; }
 html.blm-ui2-wp .blm-g-status * { color: inherit !important; font: inherit !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
 html.blm-ui2-wp .blm-g-status:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
-/* ── Description: one card ────────────────────────────────────────────────── */
-html.blm-ui2-wp .description-group {
-  background: var(--g-card); border: 0; border-radius: var(--g-radius-card);
-  padding: 14px 16px; margin: 0 0 28px;
-}
-html.blm-ui2-wp .work-packages--details .op-uc-container,
-html.blm-ui2-wp .work-packages--show-view .op-uc-container {
-  font-size: 15px; line-height: 1.55; color: var(--g-text);
-}
-
-/* Editable text (title, description): no outlined box on hover, the iOS way —
-   a soft rounded fill that bleeds just past the text, so nothing shifts. */
-html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
-  .inline-edit--display-field:not(.type):not(.work-package-comment) {
-  border-color: transparent !important; box-shadow: none !important;
-  border-radius: 10px; transition: background-color .14s ease-out;
-}
-html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
-  .inline-edit--display-field.-editable:not(.type):not(.work-package-comment):hover {
-  background: var(--g-fill) !important;
-}
-html.blm-ui2-wp :is(.work-packages--details, .work-packages--show-view)
-  .inline-edit--display-field:not(.type):not(.work-package-comment):focus-visible {
-  outline: 2px solid var(--g-focus); outline-offset: 0;
-}
-html.blm-ui2-wp .description-group .inline-edit--display-field {
-  padding: 8px 10px !important; margin: -8px -10px !important;
-}
-html.blm-ui2-wp .work-packages--details--subject .inline-edit--display-field.subject {
-  padding: 2px 8px !important; margin: -2px -8px !important;
-}
-
-/* ── Attribute groups: inset grouped lists ────────────────────────────────── */
-html.blm-ui2-wp .attributes-group:not(.description-group) {
-  background: transparent !important; border: 0 !important; box-shadow: none !important;
-  padding: 0 !important; margin: 0 0 28px !important;
-}
-html.blm-ui2-wp .attributes-group--header {
-  border: 0 !important; margin: 0 !important; padding: 0 16px 6px !important;
-}
-html.blm-ui2-wp .attributes-group--header-text,
-html.blm-ui2-wp .attributes-group--header h3 {
-  font-size: 12px !important; font-weight: 500 !important; letter-spacing: .04em !important;
-  text-transform: uppercase !important; color: var(--g-text3) !important;
-}
-/* The card. OpenProject gives it negative side margins and fixed-width rows. */
-html.blm-ui2-wp .wp-attribute-group {
-  display: block !important; columns: auto !important; column-count: auto !important;
-  width: auto !important; margin: 0 !important; padding: 0 !important;
-  background: var(--g-card) !important; border-radius: var(--g-radius-card);
-}
-html.blm-ui2-wp .wp-attribute-group--attribute.attributes-key-value {
-  position: relative; display: flex !important; flex-wrap: nowrap !important;
-  align-items: center; gap: 12px; box-sizing: border-box; width: auto !important; max-width: none !important;
-  min-height: var(--g-row); margin: 0 !important; padding: 0 12px 0 16px !important;
-  border: 0 !important; background: transparent !important;
-}
-/* Inset hairline above every visible row that follows a visible row */
-html.blm-ui2-wp .wp-attribute-group--attribute + .wp-attribute-group--attribute::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 16px;
-  height: 1px; background: var(--g-row-sep); pointer-events: none;
-}
-/* On high-density screens the row divider is a true half-pixel hairline */
-@media (min-resolution: 2dppx) {
-  html.blm-ui2-wp .wp-attribute-group--attribute::before { transform: scaleY(.5); transform-origin: top; }
-}
-html.blm-ui2-wp .attributes-key-value--key {
-  flex: 0 0 38% !important; max-width: 38%; min-width: 0; padding: 0 !important; margin: 0 !important;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-html.blm-ui2-wp .attributes-key-value--key,
-html.blm-ui2-wp .attributes-key-value--key * {
-  font-size: 15px !important; font-weight: 400 !important; text-transform: none !important;
-  color: var(--g-text) !important;
-}
-html.blm-ui2-wp .attributes-key-value--value-container {
-  flex: 1 1 auto !important; min-width: 0; max-width: none !important;
-  display: flex; justify-content: flex-end; text-align: right;
-  padding: 4px 0 !important; margin: 0 !important;
-}
-html.blm-ui2-wp .attributes-key-value--value-container > * { min-width: 0; max-width: 100%; }
-html.blm-ui2-wp .attributes-key-value--value-container,
-html.blm-ui2-wp .attributes-key-value--value-container * { font-size: 15px; color: var(--g-text2); }
-html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field {
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px;
-  max-width: 100%; min-height: 32px; box-sizing: border-box;
-  padding: 4px 8px !important; border-radius: 8px;
-  transition: background-color .14s ease-out;
-}
-html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field.-editable:hover { background: var(--g-fill); }
-html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 0; }
-html.blm-ui2-wp .attributes-key-value--value-container a { color: var(--g-accent) !important; }
-html.blm-ui2-wp .attributes-key-value--value-container .__hl_date_overdue { color: var(--g-red) !important; }
-html.blm-ui2-wp .attributes-key-value--value-container .op-principal--name {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Editing: the value takes the whole row width, left-aligned, so inputs,
-   ng-select and date pickers open where OpenProject expects them. */
-html.blm-ui2-wp .attributes-key-value--value-container:has(.inline-edit--container.-active) {
-  justify-content: flex-start; text-align: left;
-}
-html.blm-ui2-wp .attributes-key-value--value-container:has(.inline-edit--container.-active) > * { flex: 1 1 auto; }
-html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--container.-active * { color: var(--g-text); }
-
-/* Empty values are hidden behind a "Show N empty fields" footer (ui2.js).
-   A group whose fields are all empty keeps only its header and the footer. */
-html.blm-ui2-wp .attributes-group:not([data-blm-show-empty]) .wp-attribute-group--attribute[data-blm-empty] { display: none !important; }
-html.blm-ui2-wp .attributes-group:not([data-blm-show-empty])[data-blm-all-empty] .wp-attribute-group { display: none !important; }
-/* With empties hidden, a hairline goes above a visible row only when a visible row precedes it */
-html.blm-ui2-wp .attributes-group:not([data-blm-show-empty]) .wp-attribute-group--attribute + .wp-attribute-group--attribute::before { content: none; }
-html.blm-ui2-wp .attributes-group:not([data-blm-show-empty]) .wp-attribute-group--attribute:not([data-blm-empty]) ~ .wp-attribute-group--attribute:not([data-blm-empty])::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 16px;
-  height: 1px; background: var(--g-row-sep); pointer-events: none;
-}
-html.blm-ui2-wp .blm-g-empty-toggle {
-  display: block; margin: 6px 0 0; padding: 2px 16px; border: 0; background: none;
-  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-accent);
-  cursor: pointer; border-radius: 6px;
-}
-html.blm-ui2-wp .blm-g-empty-toggle:hover { text-decoration: underline; }
-html.blm-ui2-wp .blm-g-empty-toggle:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
-
-/* ── Tabs: a segmented control ────────────────────────────────────────────── */
-html.blm-ui2-wp .op-scrollable-tabs,
-html.blm-ui2-wp .op-scrollable-tabs--tab-container { border: 0 !important; box-shadow: none !important; }
+/* Tabs: a segmented pill row */
 html.blm-ui2-wp .op-tab-row,
 html.blm-ui2-wp .tabrow {
-  display: inline-flex; gap: 0; padding: 2px; margin: 8px 0 12px;
-  background: var(--g-fill); border: 0 !important; border-radius: 9px;
+  display: inline-flex; gap: 2px; padding: 3px; margin: 8px 0;
+  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: 999px;
 }
 html.blm-ui2-wp .op-tab-row--link,
 html.blm-ui2-wp .tabrow li a {
-  font-size: 13px; font-weight: 500; line-height: 1.2;
-  padding: 6px 14px; border: 0 !important; border-radius: 7px; box-shadow: none;
-  text-decoration: none; text-transform: none; letter-spacing: 0; white-space: nowrap;
-  color: var(--g-text) !important;
-  transition: background-color .14s ease-out;
+  font-family: var(--g-font); font-size: 13px; font-weight: 500;
+  padding: 5px 14px; border: 0; border-radius: 999px; box-shadow: none; text-decoration: none;
+  color: var(--g-text2); text-transform: none; letter-spacing: 0;
+  transition: background-color .14s ease-out, color .14s ease-out;
 }
-html.blm-ui2-wp .op-tab-row--link *,
-html.blm-ui2-wp .tabrow li a * { color: inherit !important; }
 html.blm-ui2-wp .op-tab-row--link:hover,
-html.blm-ui2-wp .tabrow li a:hover { background: var(--g-fill); }
+html.blm-ui2-wp .tabrow li a:hover { color: var(--g-text); }
 html.blm-ui2-wp .op-tab-row--link_selected,
 html.blm-ui2-wp .op-tab-row--link_selected:hover,
 html.blm-ui2-wp .tabrow li.selected a {
-  background: var(--g-card) !important; font-weight: 600;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .04);
+  background: var(--g-surface-solid); color: var(--g-accent); box-shadow: 0 1px 2px rgba(22, 24, 29, .12);
 }
-html.blm-ui2-wp .op-tab-row--link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
 
-/* ── Activity: date section headers and entry cards ───────────────────────── */
-html.blm-ui2-wp .detail-activity .activity-date {
-  border: 0 !important; margin: 18px 0 6px !important; padding: 0 16px !important;
+/* Attribute groups: soft cards, no rules */
+html.blm-ui2-wp .attributes-group {
+  background: var(--g-sunken); border: 1px solid var(--g-hairline); border-radius: var(--g-radius);
+  padding: 4px 16px 12px; margin-bottom: 12px;
 }
-html.blm-ui2-wp .detail-activity .activity-date--label {
-  font-size: 12px !important; font-weight: 500 !important; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--g-text3) !important;
+html.blm-ui2-wp .attributes-group--header { border-bottom: 0; margin-bottom: 4px; padding: 10px 0 2px; }
+html.blm-ui2-wp .attributes-group--header-text,
+html.blm-ui2-wp .attributes-group--header h3 {
+  font-family: var(--g-font); font-size: 13px !important; font-weight: 600 !important;
+  text-transform: none !important; letter-spacing: 0 !important; color: var(--g-text2);
 }
-html.blm-ui2-wp .detail-activity .op-user-activity {
-  position: relative; margin: 0 0 8px !important; padding: 12px 16px !important;
-  background: var(--g-card); border: 0 !important; border-radius: var(--g-radius-card);
+html.blm-ui2-wp .attributes-key-value--key {
+  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-text2); text-transform: none;
 }
-html.blm-ui2-wp .detail-activity .comments-number { top: 14px !important; right: 16px !important; }
-html.blm-ui2-wp .detail-activity .comments-number,
-html.blm-ui2-wp .detail-activity .comments-number * { font-size: 12px; color: var(--g-text3) !important; }
-/* A change-only entry has an empty comment block that still adds its top margin */
-html.blm-ui2-wp .detail-activity .user-comment:not(:has(*)) { display: none; }
-html.blm-ui2-wp .detail-activity .work-package-details-activities-messages { margin-bottom: 0 !important; }
+html.blm-ui2-wp .attributes-key-value--value-container,
+html.blm-ui2-wp .attributes-key-value--value-container * { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field {
+  border-radius: 8px; transition: background-color .14s ease-out;
+}
+html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field:hover { background: var(--g-hover); }
+html.blm-ui2-wp .attributes-key-value--value-container a { color: var(--g-accent); }
+
+/* Description and activity */
+html.blm-ui2-wp .work-packages--details .op-uc-container,
+html.blm-ui2-wp .work-packages--show-view .op-uc-container {
+  font-family: var(--g-font); font-size: 14px; line-height: 1.65; color: var(--g-text);
+}
 html.blm-ui2-wp .op-user-activity--user-name,
 html.blm-ui2-wp .user-comment--user { font-weight: 600; color: var(--g-text); }
 html.blm-ui2-wp .op-user-activity--date,
-html.blm-ui2-wp .user-comment--date { color: var(--g-text3); }
-html.blm-ui2-wp .detail-activity .op-user-activity .op-uc-container { font-size: 14px; }
-/* Comment field: a rounded message field */
-html.blm-ui2-wp .work-packages--activity--add-comment { margin-top: 12px; }
-html.blm-ui2-wp .work-package-comment.inline-edit--display-field {
-  width: 100%; box-sizing: border-box; padding: 10px 16px !important;
-  background: var(--g-card) !important; border: 1px solid transparent !important;
-  border-radius: 20px !important; color: var(--g-text3) !important;
-  transition: border-color .14s ease-out;
-}
-html.blm-ui2-wp .work-package-comment.inline-edit--display-field * { color: inherit !important; }
-html.blm-ui2-wp .work-package-comment.inline-edit--display-field:hover { border-color: var(--g-accent) !important; }
+html.blm-ui2-wp .user-comment--date { color: var(--g-text2); }
 
-/* ── Status menu (#wp-status-context-menu): an iOS pull-down menu — a frosted
-   rounded panel, 36 px rows, inset hover pill, plain colour dots ─────────── */
-html.blm-ui2-wp #wp-status-context-menu .dropdown-menu {
-  min-width: 200px; padding: 6px !important; margin-top: 6px;
-  background: color-mix(in srgb, var(--g-raised) 86%, transparent) !important;
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
-  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
-  font-family: var(--g-font);
-  transform-origin: top left; animation: blm-g-menu-in .16s ease-out;
-}
-html.blm-ui2[data-blm-ui2-theme="dark"] #wp-status-context-menu .dropdown-menu {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
-}
-@media (prefers-reduced-transparency: reduce) {
-  html.blm-ui2-wp #wp-status-context-menu .dropdown-menu { background: var(--g-raised) !important; }
-}
-html.blm-ui2-wp #wp-status-context-menu .dropdown-menu > li { margin: 0; }
-html.blm-ui2-wp #wp-status-context-menu .menu-item {
-  display: flex !important; align-items: center; gap: 10px; width: 100%;
-  min-height: 36px; box-sizing: border-box; padding: 0 12px !important;
-  border: 0 !important; border-radius: 8px; background: transparent !important;
-  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
-  text-align: left; cursor: pointer; outline: none !important;
-  transition: background-color .1s ease-out;
-}
-html.blm-ui2-wp #wp-status-context-menu .menu-item span { color: inherit !important; font: inherit !important; }
-html.blm-ui2-wp #wp-status-context-menu .menu-item::before {
-  flex: none; width: 10px !important; height: 10px !important; margin: 0 !important;
-  border: 0 !important; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .18);
-}
-html.blm-ui2-wp #wp-status-context-menu .menu-item:hover,
-html.blm-ui2-wp #wp-status-context-menu .menu-item:focus-visible { background: var(--g-fill) !important; }
-html.blm-ui2-wp #wp-status-context-menu .menu-item:active { background: var(--g-fill-hover) !important; }
-html.blm-ui2-wp #wp-status-context-menu .menu-item[aria-disabled="true"] { opacity: .4; cursor: default; }
-@keyframes blm-g-menu-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
-
-/* ── Dark: text that OpenProject keeps grey nearly vanishes on dark glass ── */
+/* Dark: text that OpenProject keeps grey nearly vanishes on dark glass */
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--details,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-packages--show-view,
 html.blm-ui2[data-blm-ui2-theme="dark"] .work-package--single-view,
@@ -396,16 +153,9 @@ html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li,
 html.blm-ui2[data-blm-ui2-theme="dark"] .journal-details li :not(a):not(a *) { color: var(--g-text) !important; }
 html.blm-ui2[data-blm-ui2-theme="dark"] .op-avatar,
 html.blm-ui2[data-blm-ui2-theme="dark"] .op-principal--avatar { background-color: var(--g-raised); }
-html.blm-ui2[data-blm-ui2-theme="dark"] .op-tab-row--link_selected { box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
 
 @media (prefers-reduced-motion: reduce) {
   html.blm-ui2-wp .op-tab-row--link,
   html.blm-ui2-wp .blm-g-status,
-  html.blm-ui2-wp .op-back-button,
-  html.blm-ui2-wp #toolbar-items .button,
-  html.blm-ui2-wp .work-package-comment.inline-edit--display-field,
-  html.blm-ui2-wp .inline-edit--display-field,
-  html.blm-ui2-wp #wp-status-context-menu .menu-item,
-  html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none !important; }
-  html.blm-ui2-wp #wp-status-context-menu .dropdown-menu { animation: none; }
+  html.blm-ui2-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none; }
 }

@@ -107,38 +107,6 @@ html.blm-ui2 #main-menu {
   border-right: 1px solid var(--g-hairline) !important;
   font-family: var(--g-font);
 }
-/* Slim scrollbars in the sidebar and the work-package panes: a 6px rounded
-   thumb, no track, no arrow buttons. Drawn with ::-webkit-scrollbar because
-   Chrome's standard thin bar keeps its arrows on Windows; scrollbar-color is
-   reset since Chrome ignores the pseudo-elements while it is set (and it is
-   inherited from the dark theme's html rule). The resize grip and its line
-   only show while hovered. */
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content) {
-  scrollbar-color: auto; scrollbar-width: auto;
-}
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar {
-  width: 6px; height: 6px; background: transparent;
-}
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-track,
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-corner { background: transparent; }
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-thumb {
-  background: var(--g-scroll-thumb); border-radius: 999px;
-}
-html.blm-ui2 :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-thumb:hover {
-  background: var(--g-scroll-thumb-hover);
-}
-html.blm-ui2 .main-menu--resizer { background: transparent !important; border: 0 !important; box-shadow: none !important; }
-html.blm-ui2 .main-menu--resizer .resizer-toggle-container { opacity: 0; transition: opacity .14s ease-out; }
-html.blm-ui2 .main-menu--resizer:hover .resizer-toggle-container,
-html.blm-ui2 .main-menu--resizer:focus-within .resizer-toggle-container { opacity: 1; }
 html.blm-ui2 #main-menu a,
 html.blm-ui2 #main-menu [class*="icon"],
 html.blm-ui2 #main-menu .menu-item--title { color: var(--g-text2) !important; }

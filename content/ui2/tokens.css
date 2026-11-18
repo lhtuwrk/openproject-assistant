@@ -30,20 +30,6 @@ html.blm-ui2 {
   --g-radius: 14px;
   --g-radius-lg: 16px;
   --g-font: system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* Work-package detail: iOS grouped lists (inset cards on a grouped background) */
-  --g-grouped: rgba(242, 242, 247, .8);
-  --g-grouped-solid: #f2f2f7;
-  --g-card: #ffffff;
-  --g-sep: rgba(60, 60, 67, .16);
-  --g-row-sep: rgba(60, 60, 67, .08);
-  --g-fill: rgba(118, 118, 128, .12);
-  --g-fill-hover: rgba(118, 118, 128, .2);
-  --g-text3: #6b707c;
-  --g-red: #d70015;
-  --g-radius-card: 12px;
-  --g-row: 44px;
-  --g-scroll-thumb: rgba(60, 60, 67, .22);
-  --g-scroll-thumb-hover: rgba(60, 60, 67, .4);
 }
 
 html.blm-ui2[data-blm-ui2-theme="dark"] {
@@ -70,24 +56,13 @@ html.blm-ui2[data-blm-ui2-theme="dark"] {
   --g-chip-progress-fg: #9ab6ff;
   --g-chip-done-bg: rgba(61, 196, 120, .18);
   --g-chip-done-fg: #6fdc9f;
-  --g-grouped: rgba(9, 10, 13, .6);
-  --g-scroll-thumb: rgba(235, 235, 245, .2);
-  --g-scroll-thumb-hover: rgba(235, 235, 245, .38);
-  --g-grouped-solid: #0e0f12;
-  --g-card: #1c1e24;
-  --g-sep: rgba(84, 84, 88, .55);
-  --g-row-sep: rgba(84, 84, 88, .3);
-  --g-fill: rgba(118, 118, 128, .24);
-  --g-fill-hover: rgba(118, 118, 128, .34);
-  --g-text3: #8e929c;
-  --g-red: #ff6961;
   color-scheme: dark;
 }
 
 /* No blur available or transparency not wanted: opaque panels. */
 @media (prefers-reduced-transparency: reduce) {
-  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-grouped: var(--g-grouped-solid); --g-blur: none; }
+  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-grouped: var(--g-grouped-solid); --g-blur: none; }
+  html.blm-ui2 { --g-surface: var(--g-surface-solid); --g-blur: none; }
 }
