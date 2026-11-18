@@ -9,6 +9,7 @@ const BACKLOG_URL       = await requireHost();
 const META_KEY          = '__blm_sync_meta';
 const TRACKED_KEY       = '__blm_tracked';
 const CFG_SYNC_BURNDOWN = '__blm_sync_burndown';
+const CFG_PACKAGE       = '__blm_package';
 const STATS_KEY         = '__blm_me_stats';   // last sprint stats, painted before the refetch
 
 const ICONS = {
@@ -16,12 +17,14 @@ const ICONS = {
   burndown: '<path d="M3 3v18h18"/><path d="M7 7l4 4 3-2 5 6"/>',
   timelog:  '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M12 13v3l2 1"/>',
   planning: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  package:  '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
 };
 const NAV = [
   { page: 'settings', href: 'dashboard.html', label: 'Settings' },
   { page: 'burndown', href: 'viewer.html',    label: 'Burndown' },
   { page: 'timelog',  href: 'timelog.html',   label: 'Time log' },
   { page: 'planning', href: 'planning.html',  label: 'Planning' },
+  { page: 'package',  href: 'package.html',   label: 'Package' },
 ];
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -162,13 +165,21 @@ function renderSync(rail, s) {
     : `Burndown synced ${relativeTime(meta.lastSync)}`;
 }
 
-const SYNC_KEYS = [META_KEY, TRACKED_KEY, CFG_SYNC_BURNDOWN];
+// Package pipeline leaves the nav when its feature toggle is off (kept while you're
+// already on that page, so you're not stranded there), same rule as Burndown above.
+function renderPackageNav(rail, s) {
+  const on = s[CFG_PACKAGE] ?? false;
+  rail.querySelector('[data-nav="package"]').hidden = !on && document.body.dataset.page !== 'package';
+}
+
+const SYNC_KEYS = [META_KEY, TRACKED_KEY, CFG_SYNC_BURNDOWN, CFG_PACKAGE];
 const state = await chrome.storage.local.get([ME_KEY, AVATAR_KEY, STATS_KEY, ...SYNC_KEYS]);
 const rail = buildRail();
 const cached = { me: state[ME_KEY] ?? null, avatar: state[AVATAR_KEY] ?? null };
 if (cached.me) renderIdentity(rail, cached.me, cached.avatar);
 if (state[STATS_KEY]?.sprint === currentSprint()?.key) paintStats(rail, state[STATS_KEY]);
 renderSync(rail, state);
+renderPackageNav(rail, state);
 document.body.prepend(rail);
 
 // ── Collapse and resize ──────────────────────────────────────────────────────
@@ -263,5 +274,8 @@ function railToast(msg) {
 
 refreshProfile(rail, cached);
 chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area === 'local' && SYNC_KEYS.some(k => k in changes)) renderSync(rail, await chrome.storage.local.get(SYNC_KEYS));
+  if (area !== 'local' || !SYNC_KEYS.some(k => k in changes)) return;
+  const fresh = await chrome.storage.local.get(SYNC_KEYS);
+  renderSync(rail, fresh);
+  renderPackageNav(rail, fresh);
 });
