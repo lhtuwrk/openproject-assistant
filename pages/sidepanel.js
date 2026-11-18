@@ -3,7 +3,9 @@
 // The switches come from the Settings page itself (dashboard.html: each
 // .feature[data-key] with data-default), so a feature added there shows up here
 // too. Changes save on click, like Settings, and both stay in step through
-// chrome.storage.onChanged.
+// chrome.storage.onChanged. The Style dropdown (#skin-row) comes from there too.
+
+import { setSkin, watchSkin } from '../shared/skins.js';
 
 const groupsEl = document.getElementById('groups');
 const DEV_KEY = '__blm_dev_unlocked';   // the Experimental group is only shown once it is unlocked (tap your avatar seven times)
@@ -26,14 +28,42 @@ async function readFeatures() {
   return [...doc.querySelectorAll('section.group')].map(g => ({
     lab: g.id === 'group-lab',
     title: g.querySelector('.group-title')?.textContent.trim() ?? '',
-    features: [...g.querySelectorAll('.feature[data-key]')].map(f => ({
+    features: [...g.querySelectorAll('.feature[data-key], #skin-row')].map(f => f.id === 'skin-row' ? {
+      skin: true,
+      name: f.querySelector('.name')?.textContent.trim() ?? 'Style',
+      options: [...f.querySelectorAll('option')].map(o => ({ value: o.value, text: o.textContent.trim(), desc: o.dataset.desc ?? '' })),
+    } : {
       key:  f.dataset.key,
       def:  f.dataset.default === 'true',
       name: f.querySelector('.name')?.textContent.trim() ?? f.dataset.key,
       desc: f.querySelector('.desc')?.textContent.trim() ?? '',
-    })),
+    }),
     hasTheme: !!g.querySelector('input[name="theme"]'),
   })).filter(g => g.features.length || g.hasTheme);
+}
+
+function skinRow(f) {
+  const li = el('li', 'row');
+  const select = el('select', 'select');
+  select.id = 'sp-skin';
+  const name = el('label', 'name', f.name);
+  name.htmlFor = select.id;
+  for (const o of f.options) {
+    const opt = el('option', null, o.text);
+    opt.value = o.value;
+    select.append(opt);
+  }
+  const desc = el('p', 'desc');
+  desc.id = 'sp-skin-desc';
+  select.setAttribute('aria-describedby', desc.id);
+  const show = () => {
+    desc.textContent = f.options.find(o => o.value === select.value)?.desc ?? '';
+    desc.title = desc.textContent;
+  };
+  watchSkin(skin => { select.value = skin; show(); });
+  select.addEventListener('change', () => { show(); setSkin(select.value); });
+  li.append(name, select, desc);
+  return li;
 }
 
 function themeRow() {
@@ -59,7 +89,7 @@ function themeRow() {
     const r = seg.querySelector(`input[value="${e.detail}"]`);
     if (r) r.checked = true;
   });
-  li.append(label, seg, el('p', 'desc', 'Applies to the popup, every dashboard page and the backlog skin.'));
+  li.append(label, seg, el('p', 'desc', 'Applies to the popup, every dashboard page and the OpenProject pages restyled by the Style above.'));
   return li;
 }
 
@@ -72,7 +102,7 @@ async function render() {
     groupsEl.replaceChildren(el('p', 'note', "Couldn't read the settings. Use All settings instead."));
     return;
   }
-  const keys = groups.flatMap(g => g.features.map(f => f.key));
+  const keys = groups.flatMap(g => g.features.filter(f => f.key).map(f => f.key));
   const stored = await chrome.storage.local.get(keys);
   const inputs = new Map();   // key -> { input, row, def }
 
@@ -83,6 +113,7 @@ async function render() {
     section.setAttribute('aria-labelledby', title.id);
     const rows = el('ul', 'rows');
     for (const f of g.features) {
+      if (f.skin) { rows.append(skinRow(f)); continue; }
       const li = el('li', 'row');
       const input = el('input');
       input.type = 'checkbox';

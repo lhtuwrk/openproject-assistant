@@ -53,6 +53,7 @@ though OpenProject itself doesn't retain it.
 | `pages/dashboard.html` / `pages/dashboard.js` | Dashboard: Settings page (feature switches) |
 | `shared/shell.css` / `shared/shell.js` | Dashboard side rail (profile, nav) shared by Settings, Burndown, Time log |
 | `shared/tokens.css` / `fonts/` | Shared design tokens (palette, type, spacing) and bundled Geist fonts |
+| `shared/skins.js` | The Style choice (Jira style / UI 2.0 / iOS / none) over its three exclusive storage flags, shared by Settings and Quick settings |
 | `shared/me.js` | Signed-in user profile cache and own-hours summary (popup + rail) |
 | `design.md` | The locked design system every page follows |
 | `pages/viewer.html` / `pages/viewer.js` | Dashboard: Burndown chart viewer |

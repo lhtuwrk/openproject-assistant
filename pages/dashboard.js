@@ -4,6 +4,7 @@
 
 import { currentSprint, todayStr } from '../shared/me.js';
 import { getHost } from '../shared/config.js';
+import { setSkin, watchSkin } from '../shared/skins.js';
 
 getHost().then(h => { if (h) document.getElementById('host-label').textContent = new URL(h).host; });
 
@@ -122,19 +123,7 @@ async function initFixedVersion() {
   el.related.addEventListener('change', save);
 }
 
-// Style: one dropdown over three exclusive flags. A missing key is "never set":
-// Jira style defaults on, the other two off. "none" turns all three off.
-const SKINS = { jira: '__blm_jira_skin', ui2: '__blm_ui2', ios: '__blm_ios' };
-const SKIN_DEFAULTS = { __blm_jira_skin: true, __blm_ui2: false, __blm_ios: false };
-
-function currentSkin(s) {
-  const on = (k) => s[k] ?? SKIN_DEFAULTS[k];
-  if (on(SKINS.ios)) return 'ios';
-  if (on(SKINS.ui2)) return 'ui2';
-  if (on(SKINS.jira)) return 'jira';
-  return 'none';
-}
-
+// Style: one dropdown over three exclusive flags (shared/skins.js).
 async function initSkin() {
   const select = document.getElementById('f-skin');
   const show = () => {
@@ -142,20 +131,8 @@ async function initSkin() {
     document.getElementById('skin-desc').textContent = opt?.dataset.desc ?? '';
     document.getElementById('skin-scope').textContent = opt?.dataset.scope ?? '';
   };
-  const keys = Object.values(SKINS);
-  const state = await chrome.storage.local.get(keys);
-  select.value = currentSkin(state);
-  show();
-  select.addEventListener('change', async () => {
-    show();
-    await chrome.storage.local.set(Object.fromEntries(keys.map(k => [k, SKINS[select.value] === k])));
-  });
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !keys.some(k => k in changes)) return;
-    for (const k of keys) if (k in changes) state[k] = changes[k].newValue;
-    select.value = currentSkin(state);
-    show();
-  });
+  await watchSkin(skin => { select.value = skin; show(); });
+  select.addEventListener('change', () => { show(); setSkin(select.value); });
 }
 
 async function init() {
