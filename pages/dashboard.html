@@ -230,7 +230,7 @@
       <ul class="features">
         <li class="feature">
           <span class="name" id="theme-label">Theme</span>
-          <p class="desc">Applies to the popup, every dashboard page and the backlog (with Jira style on).</p>
+          <p class="desc">Applies to the popup, every dashboard page and the OpenProject pages restyled by the Style below.</p>
           <div class="control">
             <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
               <input type="radio" name="theme" id="t-dark" value="dark" /><label for="t-dark">Dark</label>
@@ -238,17 +238,22 @@
             </div>
           </div>
         </li>
-        <li class="feature" data-key="__blm_jira_skin" data-default="true">
-          <label class="name" for="f-jira">Jira style</label>
-          <p class="desc">Restyles OpenProject like Jira: a white top bar and light sidebar on every page; work-package lists with status lozenges and type and priority icons; the work-package page with Details in a right-hand sidebar and a Child work items section, where you can change a child's assignee and status; and the Backlogs page as Jira sprint containers. Status, assignee and accountable open one searchable picker everywhere. The only things it writes to OpenProject are what you pick there and a child's title edited in place.</p>
-          <div class="control"><input type="checkbox" class="switch" id="f-jira" /></div>
-          <div class="meta"><span class="scope">Top bar · work packages · backlogs</span></div>
-        </li>
-        <li class="feature" data-key="__blm_ui2" data-default="false">
-          <label class="name" for="f-ui2">UI 2.0 (glass)</label>
-          <p class="desc">Experimental. A translucent, minimal look for work-package lists, the split view and the work-package page. Replaces Jira style: turning one on turns the other off.</p>
-          <div class="control"><input type="checkbox" class="switch" id="f-ui2" /></div>
-          <div class="meta"><span class="scope">Work packages</span></div>
+        <li class="feature" id="skin-row">
+          <label class="name" for="f-skin">Style</label>
+          <p class="desc" id="skin-desc"></p>
+          <div class="control">
+            <select class="ctrl" id="f-skin" aria-describedby="skin-desc">
+              <option value="jira" data-scope="Top bar · work packages · backlogs"
+                data-desc="Restyles OpenProject like Jira: a white top bar and light sidebar on every page; work-package lists with status lozenges and type and priority icons; the work-package page with Details in a right-hand sidebar and a Child work items section, where you can change a child's assignee and status; and the Backlogs page as Jira sprint containers. Status, assignee and accountable open one searchable picker everywhere. The only things it writes to OpenProject are what you pick there and a child's title edited in place.">Jira style</option>
+              <option value="ui2" data-scope="Work packages"
+                data-desc="Experimental. A translucent, minimal look for work-package lists, the split view and the work-package page.">UI 2.0 (glass)</option>
+              <option value="ios" data-scope="Work packages"
+                data-desc="Experimental. The work-package page and split view as iOS grouped lists: a large title, status and type capsules, fields in rounded cards with the label left and the value right, empty fields behind a &quot;Show N empty fields&quot; link, the tabs as a segmented control and activity as cards.">iOS</option>
+              <option value="none" data-scope="Nothing restyled"
+                data-desc="OpenProject's own look. Other features on this page keep working.">OpenProject</option>
+            </select>
+          </div>
+          <div class="meta"><span class="scope" id="skin-scope"></span></div>
         </li>
         <li class="feature" data-key="__blm_jira_animation" data-default="true">
           <label class="name" for="f-anim">Animations</label>

@@ -865,6 +865,8 @@ async function doRegisterHostScripts() {
   await chrome.scripting.registerContentScripts([
     { id: `${HOST_SCRIPT_PREFIX}content`, matches: [`${host}/projects/*/work_packages*`],
       js: ['content/content.js'], runAt: 'document_idle' },
+    { id: `${HOST_SCRIPT_PREFIX}ios`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`],
+      css: ['content/ios/tokens.css', 'content/ios/base.css', 'content/ios/list.css', 'content/ios/detail.css'], js: ['content/ios/ios.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}skin`, matches: [all],
       js: ['content/quotes.js', 'shared/wp-chips.js', 'content/jira-skin.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}pinned-backlog`, matches: [all],
@@ -879,12 +881,13 @@ async function doRegisterHostScripts() {
   console.log('[BacklogMonitor] Content scripts registered for', host);
 }
 
+const SKIN_KEYS = ['__blm_jira_skin', '__blm_ui2', '__blm_ios'];
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (HOST_KEY in changes) registerHostScripts();
-  // UI 2.0 and Jira style are mutually exclusive: the one just turned on wins.
-  if (changes.__blm_ui2?.newValue === true) chrome.storage.local.set({ __blm_jira_skin: false });
-  else if (changes.__blm_jira_skin?.newValue === true) chrome.storage.local.set({ __blm_ui2: false });
+  // Jira style, UI 2.0 and the iOS skin are mutually exclusive: the one just turned on wins.
+  const on = SKIN_KEYS.find(k => changes[k]?.newValue === true);
+  if (on) chrome.storage.local.set(Object.fromEntries(SKIN_KEYS.filter(k => k !== on).map(k => [k, false])));
 });
 chrome.permissions.onAdded.addListener(() => registerHostScripts());
 chrome.permissions.onRemoved.addListener(() => registerHostScripts());
