@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Planning: edit priority/label, upload attachments, link related stories, and see time already logged without leaving the sprint board.
 
 ### Changed
-- UI 2.0: a work package's page and side panel get an iOS look — a large title, status and type capsules, fields as rounded grouped lists with the label on the left and the value on the right, empty fields tucked behind a "Show N empty fields" link under each group, the tabs as a segmented control and activity entries as cards.
+- UI 2.0: a work package's page and side panel get an iOS look — a large title, status and type capsules, fields as rounded grouped lists with the label on the left and the value on the right, empty fields tucked behind a "Show N empty fields" link under each group, the tabs as a segmented control and activity entries as cards. No divider lines or panel borders: on the full page the sidebar and the content are one grey surface where only the white cards stand out, the panes and the sidebar have slim rounded scrollbars without arrows, and the resize grips show only on hover.
 - Jira style: the work-package list gives its spare width to the Summary column instead of leaving it empty and truncating titles, right-aligns time columns, and shows a group's Points/hours totals on its header row instead of a separate Sum row further down.
 - Jira style: an editable cell shows a dotted underline on hover so it's clear which fields can be clicked to edit, empty fields stay quiet until the row is hovered, Story Points get a visual chip, long Summary text gets a tooltip with the full text, and the "Story Points" column heading is shortened to "Points".
 

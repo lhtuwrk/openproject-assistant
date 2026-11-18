@@ -41,6 +41,8 @@ html.blm-ui2 {
   --g-red: #d70015;
   --g-radius-card: 12px;
   --g-row: 44px;
+  --g-scroll-thumb: rgba(60, 60, 67, .22);
+  --g-scroll-thumb-hover: rgba(60, 60, 67, .4);
 }
 
 html.blm-ui2[data-blm-ui2-theme="dark"] {
@@ -68,6 +70,8 @@ html.blm-ui2[data-blm-ui2-theme="dark"] {
   --g-chip-done-bg: rgba(61, 196, 120, .18);
   --g-chip-done-fg: #6fdc9f;
   --g-grouped: rgba(9, 10, 13, .6);
+  --g-scroll-thumb: rgba(235, 235, 245, .2);
+  --g-scroll-thumb-hover: rgba(235, 235, 245, .38);
   --g-grouped-solid: #0e0f12;
   --g-card: #1c1e24;
   --g-sep: rgba(84, 84, 88, .55);

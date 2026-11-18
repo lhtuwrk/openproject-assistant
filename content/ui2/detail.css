@@ -44,8 +44,24 @@ html.blm-ui2-wp .work-packages--show-view {
   font-family: var(--g-font); color: var(--g-text);
   background: var(--g-grouped);
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
-  border: 1px solid var(--g-border); border-radius: var(--g-radius-lg);
-  box-shadow: var(--g-shadow);
+  border: 0 !important; border-radius: var(--g-radius-lg);
+  /* Split view: a hairline ring plus a soft lift, no border line */
+  box-shadow: 0 0 0 1px var(--g-hairline), var(--g-shadow);
+}
+/* Full work-package page: one continuous grouped surface, like iOS Settings.
+   Canvas, sidebar and panel share the same grey with no line, shadow or
+   rounded edge between them, so only the white cards stand out. */
+html.blm-ui2-wp:has(.work-packages--show-view),
+html.blm-ui2-wp:has(.work-packages--show-view) body { background: var(--g-grouped-solid) !important; }
+html.blm-ui2-wp:has(.work-packages--show-view) #main-menu {
+  background: transparent !important; border-right: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html.blm-ui2-wp:has(.work-packages--show-view) #content-wrapper,
+html.blm-ui2-wp:has(.work-packages--show-view) #content { background: transparent !important; }
+html.blm-ui2-wp .work-packages--show-view {
+  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-radius: 0; box-shadow: none;
 }
 html.blm-ui2-wp .work-packages--details *,
 html.blm-ui2-wp .work-packages--show-view * { font-family: var(--g-font); }
@@ -57,11 +73,18 @@ html.blm-ui2-wp .work-package--single-view,
 html.blm-ui2-wp .work-packages--panel-inner,
 html.blm-ui2-wp .tabcontent,
 html.blm-ui2-wp .op-uc-container { background: transparent !important; color: var(--g-text); }
-html.blm-ui2-wp .work-packages-full-view--split-right { border-left: 1px solid var(--g-sep) !important; }
+/* No divider lines: the grouped background and the cards already separate the
+   two columns. The resize grip only shows while hovered. */
+html.blm-ui2-wp .work-packages-full-view--split-left,
+html.blm-ui2-wp .work-packages-full-view--split-right { border: 0 !important; }
+html.blm-ui2-wp .work-packages--resizer { opacity: 0; transition: opacity .14s ease-out; }
+html.blm-ui2-wp .work-packages-full-view--resizer:hover .work-packages--resizer { opacity: .6; }
+
+/* Scrollbars: slim, see base.css. */
 
 /* ── Navigation bar (full page) ───────────────────────────────────────────── */
 html.blm-ui2-wp .work-packages--show-view .toolbar-container {
-  background: transparent !important; border-bottom: 1px solid var(--g-sep);
+  background: transparent !important; border: 0 !important;
 }
 html.blm-ui2-wp .work-packages--show-view .op-back-button {
   border: 0 !important; background: transparent !important; box-shadow: none !important;
@@ -286,7 +309,7 @@ html.blm-ui2-wp .detail-activity .op-user-activity .op-uc-container { font-size:
 html.blm-ui2-wp .work-packages--activity--add-comment { margin-top: 12px; }
 html.blm-ui2-wp .work-package-comment.inline-edit--display-field {
   width: 100%; box-sizing: border-box; padding: 10px 16px !important;
-  background: var(--g-card) !important; border: 1px solid var(--g-sep) !important;
+  background: var(--g-card) !important; border: 1px solid transparent !important;
   border-radius: 20px !important; color: var(--g-text3) !important;
   transition: border-color .14s ease-out;
 }
