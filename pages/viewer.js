@@ -2859,7 +2859,7 @@ async function loadVersionPanel() {
   const msg        = document.getElementById('version-panel-msg');
   const search     = document.getElementById('vp-search');
 
-  body.innerHTML = '<div class="vp-empty">Loading versions…</div>';
+  body.innerHTML = '<div class="skel-stack" role="status" aria-busy="true" aria-label="Loading versions"><span class="skel-line lg"></span><span class="skel-line md"></span><span class="skel-line sm"></span><span class="skel-line md"></span><span class="skel-line sm"></span></div>';
   document.getElementById('version-panel-projects').innerHTML = '';
   msg.textContent  = '';
   msg.className    = 'version-panel-msg';

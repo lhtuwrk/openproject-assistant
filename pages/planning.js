@@ -2604,10 +2604,15 @@ function timeHtml(id, d) {
   </div>`;
 }
 
+function skeletonHtml(rows = 3, label = 'Loading') {
+  const row = '<span class="skel-line md"></span><span class="skel-line sm"></span>';
+  return `<div class="skel-stack" role="status" aria-busy="true" aria-label="${esc(label)}"><span class="skel-line lg"></span>${row.repeat(rows)}</div>`;
+}
+
 function detailHtml(id) {
   if (!id) return '';
   const d = details.get(id);
-  if (!d || (d.loading && !d.wp)) return '<section class="panel detail loading" aria-busy="true"><p class="text2">Loading the story…</p></section>';
+  if (!d || (d.loading && !d.wp)) return `<section class="panel detail loading" aria-busy="true">${skeletonHtml(3, 'Loading story')}</section>`;
   if (!d.wp) return `<section class="panel detail"><p class="card-error">Couldn't load #${esc(id)}: ${esc(d.err?.message ?? 'request failed')}</p>
     <button data-act="detail-retry" data-id="${esc(id)}">Try again</button></section>`;
   return withBlobSrc(`<section class="panel detail" aria-label="Story #${esc(id)}">
@@ -3022,7 +3027,7 @@ function storyMainHtml(card) {
   const dec = s.decisions[card.id];
   const decided = dec ? `<div class="decided ${dec.d === 'defer' ? 'defer' : 'plan'}">${dec.d === 'defer' ? `Deferred${deferNote(dec) ? `: ${esc(deferNote(dec))}` : ''}` : `${icon('check', 14)} Planned`}</div>` : '';
   let body;
-  if (!d || (d.loading && !d.wp)) body = '<p class="text2 story-wait" aria-busy="true">Loading the story…</p>';
+  if (!d || (d.loading && !d.wp)) body = `<div class="story-wait">${skeletonHtml(3, 'Loading story')}</div>`;
   else if (!d.wp) body = `<p class="card-error">Couldn't load #${esc(card.id)}: ${esc(d.err?.message ?? 'request failed')}</p>
     <div><button data-act="detail-retry" data-id="${esc(card.id)}">Try again</button></div>`;
   else body = tabsHtml(card.id, d);
@@ -3136,7 +3141,7 @@ function stageHtml() {
 }
 
 function arenaHtml() {
-  if (rt.loading && !rt.cards.size) return '<div class="panel empty">Dealing stories…</div>';
+  if (rt.loading && !rt.cards.size) return `<div class="panel" style="padding:var(--space-lg)">${skeletonHtml(4, 'Dealing stories')}</div>`;
   const card = s.intro ? null : currentCard();
   const body = card
     ? `${storyMainHtml(card)}${storySideHtml(card)}`
