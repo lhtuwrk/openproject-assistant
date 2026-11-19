@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Jira style: an editable cell shows a dotted underline on hover so it's clear which fields can be clicked to edit, empty fields stay quiet until the row is hovered, Story Points get a visual chip, long Summary text gets a tooltip with the full text, and the "Story Points" column heading is shortened to "Points".
 
 ### Fixed
+- iOS style: pinned sprints in the header now show as a light grey capsule with dark text and a blue pin, matching the bar, instead of a dark capsule with grey text when the computer is set to dark mode.
 - Backlogs: folding or unfolding a sprint under the iOS or UI 2.0 style no longer leaves a stray "TypeIDSummaryAssigneeLabelStatusPoints" line above its stories; the Jira style's column headers were redrawn on that click whichever style was on.
 - iOS style: the sidebar on work-package pages showed two scrollbars side by side; only the list's own slim bar is left.
 - UI 2.0 (glass): the soft background and the floating work-package table now show in light mode too, the detail tabs (Overview, Activity…) are no longer cut in half, and in dark mode the page buttons, the view title, the pinned-sprint chips and the comment box no longer show white boxes or bright borders.

@@ -68,6 +68,40 @@ html.blm-ios .op-app-header .op-quick-add-menu--icon,
 html.blm-ios .op-app-header .op-quick-add-menu [class*="icon"],
 html.blm-ios #top-menu .op-quick-add-menu--icon { color: var(--g-accent) !important; }
 
+/* Pinned-backlog header tabs (content/pinned-backlog.js) key their colours off
+   data-blm-theme, which only the Jira skin sets; without it they follow the OS and come
+   out as a dark capsule on a light bar. Point them at these tokens instead (the doubled
+   class outranks that script's own fallback rule), and keep the header's grey link
+   colour above off their title, pin and unpin hover. */
+html.blm-ios.blm-ios[data-blm-ios-theme] {
+  --blm-pin-accent: var(--g-accent);
+  --blm-pin-text: var(--g-text);
+  --blm-pin-text2: var(--g-text2);
+  --blm-pin-muted: var(--g-text3);
+  --blm-pin-surface: var(--g-raised);
+  --blm-pin-hover: var(--g-fill);
+  --blm-pin-border: var(--g-fill-hover);
+  --blm-pin-focus: var(--g-focus);
+  --blm-pin-danger: var(--g-red);
+  --blm-pin-danger-bg: color-mix(in srgb, var(--g-red) 14%, transparent);
+}
+html.blm-ios .op-app-header .blm-pin-tab > a,
+html.blm-ios #top-menu .blm-pin-tab > a,
+html.blm-ios .op-app-header .blm-pin-overflow > .op-app-menu--item-action,
+html.blm-ios #top-menu .blm-pin-overflow > .op-app-menu--item-action,
+html.blm-ios .op-app-header .blm-pinned-row .op-menu--item-action,
+html.blm-ios #top-menu .blm-pinned-row .op-menu--item-action { color: var(--g-text) !important; }
+html.blm-ios .op-app-header .blm-pin-tab .blm-pin-icon,
+html.blm-ios #top-menu .blm-pin-tab .blm-pin-icon,
+html.blm-ios .op-app-header .blm-pin-tab .blm-pin-icon svg,
+html.blm-ios #top-menu .blm-pin-tab .blm-pin-icon svg { color: var(--g-accent) !important; }
+html.blm-ios .op-app-header .blm-pin-tab-unpin,
+html.blm-ios #top-menu .blm-pin-tab-unpin { color: var(--g-text3) !important; }
+html.blm-ios .op-app-header .blm-pin-tab-unpin:hover,
+html.blm-ios #top-menu .blm-pin-tab-unpin:hover,
+html.blm-ios .op-app-header .blm-pin-tab-unpin:hover svg,
+html.blm-ios #top-menu .blm-pin-tab-unpin:hover svg { color: var(--g-red) !important; }
+
 /* Search: one rounded glass field */
 html.blm-ios .top-menu-search--input {
   display: flex !important; align-items: center; gap: 4px;
