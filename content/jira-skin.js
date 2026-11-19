@@ -24,6 +24,15 @@ const ROOT_CLASS    = 'blm-jira';
 const WP_CLASS      = 'blm-jira-wp';
 const BL_CLASS      = 'blm-jira-bl';
 const MOTION_CLASS  = 'blm-motion';   // animations on the stock UI (neither Jira style nor UI 2.0)
+// The iOS skin (content/ios/ios.js) sets this on work-package pages. The skin's
+// work-package layout (Child work items under the description, the full page's
+// attribute sidebar) then runs too, drawn by content/ios/detail.css instead of
+// this file's Jira rules; only the type icons, avatars and picker base are shared.
+const IOS_WP_CLASS  = 'blm-ios-wp';
+const iosLayout = () => document.documentElement.classList.contains(IOS_WP_CLASS);
+/** Jira style or the iOS skin: either lays the work package out the Jira way. */
+const layoutOn = () => skinEnabled || iosLayout();
+let iosLaidOut = false;   // the iOS layout was drawn; undone when the iOS skin goes off
 
 // Cached like the theme below: assuming "on" until chrome.storage answers painted
 // the Jira look for a moment on every load, even with UI 2.0 chosen instead.
@@ -505,7 +514,7 @@ const CSS = `
  * theme: studied-DNA (source: Jira) · paper #fff · accent blue
  * pre-emit critique: P4 H4 E4 S4 R5 V4
  */
-html.${ROOT_CLASS}, html.${AS_CLASS}, html.${ACT_CLASS}, html.${FILES_CLASS} {
+html.${ROOT_CLASS}, html.${AS_CLASS}, html.${ACT_CLASS}, html.${FILES_CLASS}, html.${IOS_WP_CLASS} {
   --jx-font: ui-sans-serif, -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
   --jx-text: #172b4d;
   --jx-text-subtle: #44546f;
@@ -841,23 +850,23 @@ html.${WP_CLASS} .work-package-table td.type * {
 }
 
 /* Icons (type and priority), inserted before the cell text */
-html.${ROOT_CLASS} .blm-jx-icon {
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon {
   display: inline-block; position: relative; flex: none;
   width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px;
 }
-html.${ROOT_CLASS} .blm-jx-icon[data-type] { border-radius: var(--jx-radius); }
-html.${ROOT_CLASS} .blm-jx-icon::after {
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-type] { border-radius: var(--jx-radius); }
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon::after {
   content: ""; position: absolute; inset: 0;
   -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
           mask: var(--jx-glyph) center / 12px no-repeat;
   background: var(--jx-on-icon);
 }
-html.${ROOT_CLASS} .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
 ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
-html.${ROOT_CLASS} .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 ${['highest', 'high', 'medium', 'low'].map(k => `
-html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
-html.${ROOT_CLASS} .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
+:is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }
 html.${WP_CLASS} .inline-edit--display-field[data-blm-priority="${k}"] { --jx-prio-c: var(--jx-prio-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 html.${WP_CLASS} .inline-edit--display-field[data-blm-priority]::before {
   content: "" !important; display: inline-block !important; width: 16px !important; height: 16px !important;
@@ -1660,31 +1669,31 @@ html.${WP_CLASS} .blm-jx-children li > .assignee,
 html.${WP_CLASS} .blm-jx-children li > .blm-jx-lozenge { justify-self: start; max-width: 100%; }
 html.${WP_CLASS} .blm-jx-children .key { min-width: 0; }
 html.${WP_CLASS} .blm-jx-children .assignee .name,
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Avatars: initials first, the picture fades in over them once loaded */
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar {
   position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; border-radius: 50%; overflow: hidden;
   background: var(--jx-avatar-0); color: var(--jx-on-primary);
   font-family: var(--jx-font); font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: 0;
   text-transform: uppercase;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar img {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar.small { width: 20px; height: 20px; font-size: 9px; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar[data-tone="1"] { background: var(--jx-avatar-1); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar[data-tone="2"] { background: var(--jx-avatar-2); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar[data-tone="3"] { background: var(--jx-avatar-3); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar[data-tone="4"] { background: var(--jx-avatar-4); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar[data-tone="5"] { background: var(--jx-avatar-5); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
   opacity: 0; transition: opacity var(--jx-dur) var(--jx-ease-out);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}) .blm-jx-avatar.none {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar.loaded img { opacity: 1; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${BL_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-avatar.none {
   background: transparent; border: 1.5px dashed var(--jx-text-subtlest); box-sizing: border-box;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option { display: flex; align-items: center; gap: var(--jx-space-2); }
 html.${WP_CLASS} .blm-jx-children .assignee.saving { opacity: 0.6; cursor: progress; }
 html.${WP_CLASS} .blm-jx-children .assignee[aria-disabled="true"]:hover { background: transparent; }
 html.${WP_CLASS} .blm-jx-children .locked { cursor: default; }
@@ -1693,34 +1702,34 @@ html.${WP_CLASS} .blm-jx-children span.subject.locked:hover { background: transp
 html.${WP_CLASS} .blm-jx-children .assignee.error { color: var(--jx-error); box-shadow: inset 0 0 0 1px var(--jx-error); }
 
 /* Assignee picker (fixed, appended to body) */
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker {
   position: fixed; z-index: 2147483646; width: 260px; padding: var(--jx-space-2);
   background: var(--jx-surface); border: 1px solid var(--jx-border); border-radius: var(--jx-radius-panel);
   box-shadow: var(--jx-shadow-raised); font-family: var(--jx-font); font-size: 14px; color: var(--jx-text);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker input {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker input {
   display: block; width: 100%; box-sizing: border-box; height: 32px; margin: 0 0 var(--jx-space-1);
   padding: 0 var(--jx-space-2); border: 2px solid var(--jx-border); border-radius: var(--jx-radius);
   background: var(--jx-surface); color: var(--jx-text); font: inherit;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker input:focus { border-color: var(--jx-focus); outline: none; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker ul { list-style: none; margin: 0; padding: 0; max-height: 264px; overflow-y: auto; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker input:focus { border-color: var(--jx-focus); outline: none; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker ul { list-style: none; margin: 0; padding: 0; max-height: 264px; overflow-y: auto; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option {
   padding: var(--jx-space-2); border-radius: var(--jx-radius); cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option.active,
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option:hover { background: var(--jx-hover); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option.current { color: var(--jx-link-hover); font-weight: 600; }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone]::before {
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option.active,
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option:hover { background: var(--jx-hover); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option.current { color: var(--jx-link-hover); font-weight: 600; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option[data-blm-tone]::before {
   content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--jx-space-2);
   border-radius: 50%; vertical-align: 1px; background: var(--jx-todo-fg);
 }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--jx-primary); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--jx-done-bar); }
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-note { padding: var(--jx-space-2); color: var(--jx-text-subtlest); font-size: 12px; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--jx-primary); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--jx-done-bar); }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-note { padding: var(--jx-space-2); color: var(--jx-text-subtlest); font-size: 12px; }
 /* OpenProject's list items are 16px; the rows the picker edits are 14px */
-:is(html.${WP_CLASS}, html.${AS_CLASS}) .blm-jx-picker-option { font-size: 14px; line-height: 20px; }
+:is(html.${WP_CLASS}, html.${AS_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-picker-option { font-size: 14px; line-height: 20px; }
 /* OpenProject's own status / assignee fields while the picker's choice saves */
 html.${WP_CLASS} .blm-jx-saving { opacity: 0.6; cursor: progress !important; }
 /* A list row whose status is saving breathes until it is redrawn in its new place */
@@ -2350,7 +2359,7 @@ function updateJump() {
 }
 
 function syncJump() {
-  const on = skinEnabled && onWorkPackagePage() && viewWpId() && childAnchor();
+  const on = layoutOn() && onWorkPackagePage() && viewWpId() && childAnchor();
   if (!on) {
     jumpBtn?.remove();
     jumpBtn = null;
@@ -2970,16 +2979,16 @@ window.addEventListener('keydown', e => {
 
 document.addEventListener('click', e => {
   const title = e.target.closest?.('.blm-jx-children span.subject');
-  if (title && skinEnabled) { editSubject(title); return; }
+  if (title && layoutOn()) { editSubject(title); return; }
   const button = e.target.closest?.('.blm-jx-children [data-field]');
-  if (button && skinEnabled) { togglePicker(button); return; }
+  if (button && layoutOn()) { togglePicker(button); return; }
   if (picker && !picker.el.contains(e.target)) closePicker();
 });
 // OpenProject's own inline editors (assignee, status, ...) stay open when you click
 // away, and the skin's cells stop their clicks from reaching OpenProject's outside-click
 // handling. Escape cancels an unchanged edit, so send it on any outside press.
 document.addEventListener('keydown', e => {
-  if ((e.key !== 'Enter' && e.key !== ' ') || !skinEnabled) return;
+  if ((e.key !== 'Enter' && e.key !== ' ') || !layoutOn()) return;
   const title = e.target.closest?.('.blm-jx-children span.subject');
   if (title) { e.preventDefault(); editSubject(title); }
 });
@@ -3713,7 +3722,7 @@ function openAddExisting(button) {
 
 document.addEventListener('click', e => {
   const b = e.target.closest?.('.blm-jx-children [data-child-action]');
-  if (!b || !skinEnabled) return;
+  if (!b || !layoutOn()) return;
   e.preventDefault();
   e.stopPropagation();          // the document handler below would close the picker at once
   if (b.dataset.childAction === 'create') createChild(b);
@@ -4606,7 +4615,7 @@ function applyClasses() {
   if (anyEnabled() || animationEnabled) ensureStyle();
 }
 
-const anyEnabled = () => skinEnabled || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
+const anyEnabled = () => skinEnabled || iosLayout() || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;
 
 // Sub-tab switch (Overview, Activity, Files...): OpenProject reuses the content
 // container, so animate it whenever the selected tab changes.
@@ -4695,6 +4704,7 @@ function schedule() {
   frame = requestAnimationFrame(() => {
     frame = 0;
     applyClasses();
+    if (iosLaidOut && !layoutOn()) { iosLaidOut = false; undoLayout(); }
     if (!anyEnabled() || !document.body) { syncJump(); return; }
     if (skinEnabled || document.documentElement.classList.contains(MOTION_CLASS)) animateTabSwitch();
     if (skinEnabled) renderTimeLog();
@@ -4704,6 +4714,7 @@ function schedule() {
     wasOnWp = onWp;
     if (onWp) {
       if (skinEnabled) { tagCells(); greet(); arrangeFullView(); syncTabHeading(); renderChildren(); renderChips(); syncJump(); adjustRelationsCount(); }
+      else if (iosLayout()) { iosLaidOut = true; arrangeFullView(); syncTabHeading(); renderChildren(); syncJump(); adjustRelationsCount(); }
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();
@@ -4719,12 +4730,17 @@ function disable() {
   document.documentElement.classList.remove(ROOT_CLASS, WP_CLASS, BL_CLASS);
   delete document.documentElement.dataset.blmTheme;
   untagCells();
+  removeTimelog();
+  if (!iosLayout()) undoLayout();   // the iOS skin keeps the layout
+}
+
+/** Takes the work-package layout down: sidebar nodes back, section and jump button gone. */
+function undoLayout() {
   restoreFullView();
   restoreRelationsCount();
   syncJump();
   if (picker?.page || picker?.button.closest('.blm-jx-children')) closePicker();
   document.querySelector('.blm-jx-children')?.remove();
-  removeTimelog();
 }
 
 function disableQuote() {

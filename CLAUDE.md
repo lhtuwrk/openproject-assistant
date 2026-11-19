@@ -8,12 +8,11 @@ A plain-JavaScript Chrome MV3 extension (no bundler, no npm, no package.json) th
 
 ## Commands
 
-There is no build or test suite. CI (`.gitea/workflows/ci.yml`) only does:
+There is no build, test suite or per-push CI. Validate by hand:
 
 ```bash
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"   # manifest is valid JSON
 tmp=$(mktemp -d); for f in $(git ls-files '*.js'); do cp "$f" "$tmp/t.mjs"; node --check "$tmp/t.mjs" || echo "FAIL $f"; done; rm -rf "$tmp"
-node .gitea/scripts/check-manifest.js                                       # every manifest-referenced path exists
 ```
 
 **Check the syntax through a `.mjs` copy, not `node --check <file>.js` directly.** On a `.js`
@@ -24,7 +23,7 @@ check never runs the code.
 
 Run those before pushing. To try changes: `chrome://extensions` → Developer mode → **Load unpacked** on the repo root, then reload the extension.
 
-Release: pushing any tag runs `.gitea/workflows/release.yml` (zips `manifest.json background content pages shared icons fonts`, verifies the zip against `git ls-files`, publishes a Gitea release). Bump `version` in `manifest.json` yourself.
+Release: `.github/workflows/release.yml`, run manually (`workflow_dispatch`). It reads `version` from `manifest.json` (bump it yourself), fails unless `CHANGELOG.md` has a non-empty `[<version>]` section, stamps that section's date, zips `manifest.json background content pages shared icons fonts`, verifies the zip against `git ls-files`, and publishes a GitHub release `v<version>`. Its own syntax check uses plain `node --check` (weaker than the `.mjs` check above).
 
 ## Architecture
 
@@ -42,6 +41,6 @@ Release: pushing any tag runs `.gitea/workflows/release.yml` (zips `manifest.jso
 
 - **Don't move the extension root or add a manifest `key`-less relocation**: the unpacked extension ID derives from the load folder path, so moving it wipes users' stored snapshots. `manifest.json` stays at the repo root.
 - **Path resolution differs by context**: markup injected by `shell.js` resolves URLs against the host *page*, ES imports against the importing module, `chrome.runtime.getURL` and manifest paths against the extension root, CSS `url()` against the stylesheet. When moving files, check each class; `popup.html` `data-open="…"` values are coupled to selectors in `popup.js`.
-- **New top-level folder** → add it to the zip list in `release.yml` by hand. `check-manifest.js` only checks manifest-referenced paths, not files reached via imports/HTML (all of `shared/`); the release workflow's `git ls-files` comparison covers that.
-- `README.md`'s feature/layout tables are partly stale (they still list `viewer.html`, `timelog.html`, `import.html` at the root; they live in `pages/`).
+- **New top-level folder** → add it to the zip list in `release.yml` by hand. The release workflow's `git ls-files` comparison only covers the listed folders.
+- `README.md`'s feature list names pages without the `pages/` prefix; they all live in `pages/`.
 - `.claude/agents/` holds a project-tuned agent team (po, ba, architect, developer, investigator, qa, tech-lead, security-reviewer, ui-reviewer); prefer those over generic ones.
