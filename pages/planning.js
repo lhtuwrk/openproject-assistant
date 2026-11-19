@@ -801,12 +801,110 @@ function labelNamesFromHrefs(d, value) {
   return hrefs.map(h => choices.find(c => c.href === h)?.name).filter(Boolean);
 }
 
+// ─── Optimistic field state ──────────────────────────────────────────────────
+
+function fieldChoiceTitle(wpId, field, value, parentId, { d, people, types }) {
+  if (!value) return '';
+  const list = field === 'status' ? (parentId ? d?.kidStatuses?.get(String(wpId)) : d?.statuses)
+    : field === 'assignee' ? people
+    : field === 'priority' ? d?.priorities
+    : field === 'type' ? types
+    : null;
+  return list?.find(x => x.href === value)?.name ?? '';
+}
+
+function wpTarget(wpId, parentId, d) {
+  return parentId ? d?.kids?.find(k => String(k.id) === String(wpId)) ?? null : d?.wp ?? null;
+}
+
+function snapshotField(wpId, field, parentId, { d, card, decCard }) {
+  const wp = wpTarget(wpId, parentId, d);
+  const wpSnap = !wp ? null
+    : field === 'storyPoints' ? { kind: 'prop', prop: 'storyPoints', val: wp.storyPoints }
+    : field === 'subject'     ? { kind: 'prop', prop: 'subject', val: wp.subject }
+    : field === LABEL_FIELD && d?.label?.kind === 'text' ? { kind: 'prop', prop: LABEL_FIELD, val: structuredClone(wp[LABEL_FIELD]) }
+    : { kind: 'link', val: structuredClone(wp._links?.[field]) };
+  const cardSnap = !card ? null
+    : field === 'storyPoints' ? { points: card.points }
+    : field === 'subject'     ? { subject: card.subject }
+    : field === 'priority'    ? { priority: card.priority }
+    : field === 'status'      ? { status: card.status, statusHref: card.statusHref }
+    : field === 'assignee'    ? { assigneeHref: card.assigneeHref, assigneeName: card.assigneeName }
+    : field === LABEL_FIELD   ? { labels: [...card.labels] }
+    : null;
+  const decSnap = !decCard ? null
+    : field === 'storyPoints' ? { points: decCard.points }
+    : field === 'priority'    ? { priority: decCard.priority }
+    : field === LABEL_FIELD   ? { labels: [...decCard.labels] }
+    : null;
+  return { wpSnap, cardSnap, decSnap };
+}
+
+function applyOptimisticField(wpId, field, value, parentId, ctx) {
+  const { d, card, decCard } = ctx;
+  const wp = wpTarget(wpId, parentId, d);
+  const title = fieldChoiceTitle(wpId, field, value, parentId, ctx);
+  if (wp) {
+    if (field === 'storyPoints') wp.storyPoints = value;
+    else if (field === 'subject') wp.subject = value;
+    else if (field === LABEL_FIELD && d?.label?.kind === 'text') wp[LABEL_FIELD] = d.label.formattable ? { raw: value } : value;
+    else if (field === LABEL_FIELD && d?.label?.kind === 'multi') {
+      const hrefs = Array.isArray(value) ? value : (value ? [value] : []);
+      wp._links = { ...wp._links, [LABEL_FIELD]: hrefs.map(h => ({ href: h, title: d.label.choices.find(c => c.href === h)?.name ?? '' })) };
+    } else if (field === LABEL_FIELD) {
+      wp._links = { ...wp._links, [LABEL_FIELD]: value ? { href: value, title: d?.label?.choices?.find(c => c.href === value)?.name ?? '' } : { href: null, title: '' } };
+    } else {
+      wp._links = { ...wp._links, [field]: value ? { href: value, title } : { href: null, title: '' } };
+    }
+  }
+  if (card) {
+    if (field === 'storyPoints') card.points = typeof value === 'number' ? value : null;
+    else if (field === 'subject') card.subject = value;
+    else if (field === 'priority') card.priority = title;
+    else if (field === 'status') { card.statusHref = value || null; card.status = title; }
+    else if (field === 'assignee') { card.assigneeHref = value || null; card.assigneeName = title; }
+    else if (field === LABEL_FIELD && d?.label?.kind !== 'text') card.labels = labelNamesFromHrefs(d, value);
+  }
+  if (decCard) {
+    if (field === 'storyPoints') decCard.points = typeof value === 'number' ? value : null;
+    else if (field === 'priority') decCard.priority = title;
+    else if (field === LABEL_FIELD && d?.label?.kind !== 'text') decCard.labels = labelNamesFromHrefs(d, value);
+  }
+}
+
+function restoreField(wpId, field, parentId, snap, { d, card, decCard }) {
+  const wp = wpTarget(wpId, parentId, d);
+  if (wp && snap.wpSnap) {
+    if (snap.wpSnap.kind === 'prop') {
+      if (snap.wpSnap.val === undefined) delete wp[snap.wpSnap.prop];
+      else wp[snap.wpSnap.prop] = snap.wpSnap.val;
+    } else if (wp._links) {
+      if (snap.wpSnap.val === undefined) delete wp._links[field];
+      else wp._links[field] = snap.wpSnap.val;
+    }
+  }
+  if (card && snap.cardSnap) Object.assign(card, snap.cardSnap);
+  if (decCard && snap.decSnap) Object.assign(decCard, snap.decSnap);
+}
+
+// ─── End optimistic
+
 /** Sets a story's or subtask's status, assignee, priority, label, subject or type on OpenProject. */
 async function writeField(wpId, field, value, parentId) {
   const key = `${wpId}:${field}`;
   if (rt.saving.has(key)) return;
-  rt.saving.add(key); rt.writeErr.delete(key); render();
   const d = details.get(parentId ?? wpId);
+  const ctx = {
+    d,
+    card: parentId ? null : rt.cards.get(String(wpId)) ?? null,
+    decCard: parentId ? null : s.decisions[wpId]?.card ?? null,
+    people: rt.people,
+    types: rt.types,
+  };
+  const snap = snapshotField(wpId, field, parentId, ctx);
+  rt.saving.add(key); rt.writeErr.delete(key);
+  applyOptimisticField(wpId, field, value, parentId, ctx);
+  render();
   try {
     const changes = field === 'storyPoints' ? { storyPoints: value }
       : field === 'subject' ? { subject: value }
@@ -839,6 +937,11 @@ async function writeField(wpId, field, value, parentId) {
     }
     announce(`#${wpId} ${field} saved`);
   } catch (err) {
+    restoreField(wpId, field, parentId, snap, {
+      d,
+      card: parentId ? null : rt.cards.get(String(wpId)) ?? null,
+      decCard: parentId ? null : s.decisions[wpId]?.card ?? null,
+    });
     rt.writeErr.set(key, err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message);
   } finally {
     rt.saving.delete(key);
