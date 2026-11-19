@@ -1,7 +1,7 @@
-// ios.js — iOS skin switch for OpenProject work-package pages.
+// ios.js — iOS skin switch for OpenProject work-package and Backlogs pages.
 // Only toggles html classes; every visual rule lives in content/ios/*.css and is
 // scoped under html.blm-ios, so switch off = native OpenProject.
-// Registered by background.js for the configured host on work-package routes.
+// Registered by background.js for the configured host on work-package and Backlogs routes.
 
 (() => {
 'use strict';
@@ -10,6 +10,7 @@ const CFG_IOS   = '__blm_ios';
 const CFG_THEME = '__blm_theme';   // 'dark' | 'light', mirrored from the Settings theme picker
 const ROOT_CLASS = 'blm-ios';
 const WP_CLASS   = 'blm-ios-wp';
+const BL_CLASS   = 'blm-ios-bl';
 
 // The switch and theme are cached in the host page's localStorage so the first
 // paint is already right; chrome.storage is async and lands after it.
@@ -19,6 +20,7 @@ let enabled = cached(CFG_IOS) === '1';
 let theme = cached(CFG_THEME) === 'light' ? 'light' : 'dark';
 
 const onWorkPackagePage = () => /\/work_packages(\/|$)/.test(location.pathname);
+const onBacklogsPage    = () => /\/backlogs(\/|$)/.test(location.pathname);
 
 // Status chips: tag the text leaf of each td.status with a tone. The tone is
 // guessed from English status names (same heuristic as the Jira skin); unknown
@@ -67,10 +69,18 @@ function tagCells() {
   for (const cell of document.querySelectorAll('td.status')) {
     const leaf = textLeaf(cell);
     if (!leaf) continue;
-    const tone = statusTone(leaf.textContent.trim().toLowerCase());
+    const text = leaf.textContent.trim();
+    const tone = statusTone(text.toLowerCase());
     if (leaf.dataset.blmITone !== tone) {
       leaf.classList.add('blm-i-chip');
       leaf.dataset.blmITone = tone;
+    }
+    // The status it shows, kept on the cell: once clicked, the cell's editor is
+    // empty until its options load, and list.css shows this chip meanwhile.
+    if (leaf.matches('.inline-edit--display-field')) {
+      const was = JSON.stringify(text);
+      if (cell.style.getPropertyValue('--blm-i-was') !== was) cell.style.setProperty('--blm-i-was', was);
+      if (cell.dataset.blmIWasTone !== tone) cell.dataset.blmIWasTone = tone;
     }
   }
   // Status button in the split view / full page (wp-status-button is an Angular element, not a class).
@@ -84,6 +94,28 @@ function tagCells() {
     }
   }
   tagEmptyFields();
+  tagBacklogs();
+}
+
+// Backlogs: a story's status text sits in .t (its stored id in a hidden .v), and
+// a sprint's blank dates hold whitespace, so :empty never matches them.
+function tagBacklogs() {
+  for (const t of document.querySelectorAll('#rb li.story > .status_id > .t')) {
+    const tone = statusTone(t.textContent.trim().toLowerCase());
+    if (t.dataset.blmITone !== tone) {
+      t.classList.add('blm-i-chip');
+      t.dataset.blmITone = tone;
+    }
+  }
+  // "User story: " → "User story", shown by backlogs.css in place of the text
+  for (const t of document.querySelectorAll('#rb li.story > .type_id > .t')) {
+    const name = t.textContent.trim().replace(/:$/, '').trim();
+    if (t.dataset.blmIType !== name) t.dataset.blmIType = name;
+  }
+  for (const d of document.querySelectorAll('#rb .backlog > .header .date')) {
+    const blank = !d.textContent.trim();
+    if (d.classList.contains('blm-i-blank') !== blank) d.classList.toggle('blm-i-blank', blank);
+  }
 }
 
 // Work-package detail: rows whose value is empty ("-") are hidden behind a
@@ -153,9 +185,15 @@ function untagCells() {
   });
   document.querySelectorAll('.blm-i-empty-toggle').forEach(el => el.remove());
   document.querySelectorAll('.blm-i-dash').forEach(el => el.classList.remove('blm-i-dash'));
-  document.querySelectorAll('[data-blm-i-prio], [data-blm-i-count]').forEach(el => {
+  document.querySelectorAll('.blm-i-blank').forEach(el => el.classList.remove('blm-i-blank'));
+  document.querySelectorAll('[data-blm-i-was-tone]').forEach(el => {
+    el.style.removeProperty('--blm-i-was');
+    delete el.dataset.blmIWasTone;
+  });
+  document.querySelectorAll('[data-blm-i-prio], [data-blm-i-count], [data-blm-i-type]').forEach(el => {
     delete el.dataset.blmIPrio;
     delete el.dataset.blmICount;
+    delete el.dataset.blmIType;
   });
   document.querySelectorAll('[data-blm-i-empty], [data-blm-i-show-empty], [data-blm-i-all-empty]').forEach(el => {
     el.removeAttribute('data-blm-i-empty');
@@ -170,7 +208,7 @@ function schedule() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    if (enabled && onWorkPackagePage()) tagCells();
+    if (enabled && (onWorkPackagePage() || onBacklogsPage())) tagCells();
   });
 }
 function observe() {
@@ -184,6 +222,7 @@ function apply() {
   const root = document.documentElement;
   root.classList.toggle(ROOT_CLASS, enabled);
   root.classList.toggle(WP_CLASS, enabled && onWorkPackagePage());
+  root.classList.toggle(BL_CLASS, enabled && onBacklogsPage());
   if (enabled) schedule();
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off

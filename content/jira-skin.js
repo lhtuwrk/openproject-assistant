@@ -129,6 +129,24 @@ function tagTypePicker() {
   }
 }
 
+// The status list of a row being edited in the work-package table: each option
+// gets its status's colour (--blm-dot) for the iOS skin's dot (content/ios/list.css),
+// as in the status menu of the details view. The options carry only the name, so
+// the colours come from /api/v3/statuses, read once per page.
+let statusColors = null;   // Promise<Map<lower-case name, colour>>
+function tagStatusPicker() {
+  if (!document.querySelector('.work-package-table td.status ng-select.ng-select-opened')) return;
+  statusColors ??= getJson('/api/v3/statuses')
+    .then((d) => new Map((d._embedded?.elements ?? []).map((st) => [String(st.name).trim().toLowerCase(), st.color])))
+    .catch(() => new Map());   // no colours, plain dots; not retried on every mutation
+  statusColors.then((colors) => {
+    for (const el of document.querySelectorAll('.ng-dropdown-panel .ng-option')) {
+      const c = colors.get(el.textContent.trim().toLowerCase());
+      if (c && el.style.getPropertyValue('--blm-dot') !== c) el.style.setProperty('--blm-dot', c);
+    }
+  });
+}
+
 function priorityLevel(text) {
   if (/immediate|urgent|highest|blocker|critical/.test(text)) return 'highest';
   if (text.includes('high'))                                   return 'high';
@@ -478,8 +496,10 @@ function renderColumnHeads() {
 }
 
 // Folding a backlog changes style, not the tree, so the observer doesn't see it.
+// Only for the Jira skin: under another skin (iOS, UI 2.0) the header row has no
+// styles and would show as one run-together line of words.
 document.addEventListener('click', e => {
-  if (e.target.closest?.('#rb .backlog > .header')) setTimeout(renderColumnHeads, 450);
+  if (e.target.closest?.('#rb .backlog > .header')) setTimeout(() => { if (skinEnabled) renderColumnHeads(); }, 450);
 });
 
 function untagCells() {
@@ -4729,7 +4749,7 @@ function schedule() {
     wasOnWp = onWp;
     if (onWp) {
       if (skinEnabled) { tagCells(); greet(); arrangeFullView(); syncTabHeading(); renderChildren(); renderChips(); syncJump(); adjustRelationsCount(); }
-      else if (iosLayout()) { iosLaidOut = true; arrangeFullView(); syncTabHeading(); renderChildren(); syncJump(); adjustRelationsCount(); tagTypePicker(); }
+      else if (iosLayout()) { iosLaidOut = true; arrangeFullView(); syncTabHeading(); renderChildren(); syncJump(); adjustRelationsCount(); tagTypePicker(); tagStatusPicker(); }
       if (assignEnabled) renderTableAssignees();
       if (activityEnabled) renderActivityFilter();
       if (quoteEnabled) renderQuote();
