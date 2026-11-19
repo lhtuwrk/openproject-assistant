@@ -2989,7 +2989,14 @@ async function loadVersionPanel() {
     if (!body.children.length)
       body.innerHTML = `<div class="vp-empty">${q ? `No version matches "${q.replace(/[<&]/g, '')}".` : 'No more versions in the selected projects.'}</div>`;
   }
-  search.oninput = renderAvailable;
+  let vpSearchTimer = 0;
+  const flushSearch = () => { clearTimeout(vpSearchTimer); vpSearchTimer = 0; renderAvailable(); };
+  search.oninput = () => {
+    clearTimeout(vpSearchTimer);
+    if (!search.value.trim()) { vpSearchTimer = 0; renderAvailable(); return; }
+    vpSearchTimer = setTimeout(flushSearch, 150);
+  };
+  search.onkeydown = e => { if (e.key === 'Enter') flushSearch(); };
   renderAvailable();
 }
 
