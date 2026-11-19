@@ -127,12 +127,43 @@ html.blm-ios-wp .work-packages--details--subject .inline-edit--display-field.sub
 html.blm-ios-wp .work-packages--details .work-packages--details--subject .inline-edit--display-field.subject {
   font-size: 22px !important;
 }
-/* Type: a capsule tinted with OpenProject's own type colour (currentColor) */
-html.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 10px !important;
-  border-radius: 999px; font-size: 12px !important; font-weight: 600 !important;
-  text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap;
-  background: color-mix(in srgb, currentColor 14%, transparent);
+/* Type beside the title: an iOS tinted capsule in the type's own colour (the
+   list's type colour, from the icon), with the type's icon at its start. Its
+   editor is the grey pop-up button (see "Type picker" below); this is the
+   resting label, so it reads as a tag, not a control, until hovered.
+   jira-skin.js tags it with data-blm-type for the icon and colour; until then
+   it is an accent-tinted capsule without an icon. */
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .work-packages--type-selector {
+  align-self: center; margin-right: 14px !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type {
+  --blm-tint: var(--jx-type-c, var(--g-accent));
+  position: relative; display: inline-flex; align-items: center; box-sizing: border-box;
+  height: 28px; margin: 0 !important; padding: 0 12px !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important; outline: none;
+  background: color-mix(in srgb, var(--blm-tint) 13%, transparent) !important;
+  font: 600 13px/18px var(--g-font) !important; letter-spacing: .01em !important;
+  color: color-mix(in srgb, var(--blm-tint) 72%, var(--g-text)) !important;
+  text-transform: none !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:hover {
+  background: color-mix(in srgb, var(--blm-tint) 22%, transparent) !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:active {
+  background: color-mix(in srgb, var(--blm-tint) 28%, transparent) !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:focus-visible { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type] { padding-left: 30px !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::before,
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::after {
+  content: ""; position: absolute; left: 6px; top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 999px;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::before { background: var(--jx-type-c); }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::after {
+  background: var(--jx-on-icon);
+  -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
+          mask: var(--jx-glyph) center / 12px no-repeat;
 }
 
 /* Breadcrumb and the "#id Created by … Last updated …" caption */
@@ -806,5 +837,6 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-tab-row--link_selected { box-shadow:
   html.blm-ios-wp .blm-jx-picker,
   html.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel { animation: none !important; }
   html.blm-ios-wp .work-packages--type-selector .ng-select .ng-select-container,
+  html.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type,
   html.blm-ios-wp .ng-dropdown-panel .ng-option { transition: none !important; }
 }

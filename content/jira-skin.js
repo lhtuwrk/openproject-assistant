@@ -115,12 +115,13 @@ function typeKind(text) {
   return 'other';
 }
 
-// The type being edited (an ng-select): its value and the options of its list,
-// which OpenProject appends to the subject/type row. Tagged only; the iOS skin
-// (content/ios/detail.css) draws the type icon from data-blm-type.
+// The type beside the title: its label, and while it is edited (an ng-select)
+// its value and the options of its list, which OpenProject appends to the
+// subject/type row. Tagged only; the iOS skin (content/ios/detail.css) draws the
+// type icon from data-blm-type.
 function tagTypePicker() {
   for (const el of document.querySelectorAll(
-    '.work-packages--type-selector .ng-select .ng-value, .work-packages--subject-type-row > .ng-dropdown-panel .ng-option'
+    '.work-packages--type-selector .inline-edit--display-field, .work-packages--type-selector .ng-select .ng-value, .work-packages--subject-type-row > .ng-dropdown-panel .ng-option'
   )) {
     const label = el.querySelector('.ng-value-label, .ng-option-label') || el;
     const kind = typeKind(label.textContent.trim().toLowerCase());
@@ -877,7 +878,7 @@ html.${WP_CLASS} .work-package-table td.type * {
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
 ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }
-html.${IOS_WP_CLASS} :is(.ng-value, .ng-option)[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+html.${IOS_WP_CLASS} :is(.ng-value, .ng-option, .work-packages--type-selector .inline-edit--display-field)[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 ${['highest', 'high', 'medium', 'low'].map(k => `
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }
