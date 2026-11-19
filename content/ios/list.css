@@ -1,8 +1,10 @@
-/* iOS skin work-package list: toolbar and table. No blur on rows (Angular
-   re-renders them constantly); the table sits on one solid-ish card.
+/* iOS skin work-package list: toolbar and an inset-grouped table (each group
+   a rounded card on the grey grouped background). No blur on rows (Angular
+   re-renders them constantly).
    OpenProject-internal selectors: .toolbar-container, .toolbar-items .button,
    .work-package-table (td.id/subject/status/type/priority/assignee,
-   tr.-group-header, tr.wp-table--row), .op-pagination. */
+   tr.-group-header .expander/.group--value/.count, tr.wp-table--row,
+   tr[class*=sums]), .op-pagination. */
 
 /* Toolbar: title and buttons */
 html.blm-ios-wp .toolbar-container,
@@ -10,9 +12,23 @@ html.blm-ios-wp #toolbar { font-family: var(--g-font); }
 html.blm-ios-wp .toolbar-container .title-container,
 html.blm-ios-wp .toolbar-container .title-container *,
 html.blm-ios-wp .toolbar-container h2 {
-  font-family: var(--g-font); font-size: 24px; font-weight: 600; font-style: normal;
+  font-family: var(--g-font); font-size: 28px; font-weight: 700; font-style: normal;
   letter-spacing: -.02em; color: var(--g-text);
 }
+/* The view name is an inline-edit input: no white box or hover border, just the
+   title on the grey. Hover shows a faint tint, editing a white rounded field. */
+html.blm-ios-wp .toolbar-container .editable-toolbar-title--input {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  outline: 0 !important; border-radius: 10px; padding: 0 6px; margin-left: -6px;
+  transition: background-color .14s ease-out, box-shadow .14s ease-out;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input:hover {
+  background: color-mix(in srgb, var(--g-text) 5%, transparent) !important;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input:focus {
+  background: var(--g-card) !important; box-shadow: 0 0 0 2px var(--g-focus) !important;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input::placeholder { color: var(--g-text3); }
 html.blm-ios-wp .toolbar-items .button,
 html.blm-ios-wp .toolbar-container .button {
   font-family: var(--g-font); font-size: 14px; font-weight: 500;
@@ -36,23 +52,36 @@ html.blm-ios-wp .toolbar-items .button.-alt-highlight:hover,
 html.blm-ios-wp .toolbar-items .button.-highlight:hover,
 html.blm-ios-wp .toolbar-items .button.-primary:hover { background: var(--g-accent); filter: brightness(1.1); color: var(--g-on-accent); }
 html.blm-ios-wp .toolbar-items .button .badge {
-  background: var(--g-text2); color: var(--g-surface-solid);
-  border-radius: 8px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px;
+  background: var(--g-accent); color: var(--g-on-accent); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 html.blm-ios-wp .toolbar-items .button:focus-visible,
 html.blm-ios-wp .toolbar-container .button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
-/* Table: one floating card, 44 px rows, hairlines only */
+/* Page: the iOS grouped background (as on the detail page), so the list reads as
+   inset cards on grey instead of one white sheet */
+html.blm-ios-wp:has(.work-package-table),
+html.blm-ios-wp:has(.work-package-table) body { background: var(--g-grouped-solid) !important; }
+html.blm-ios-wp:has(.work-package-table) #content-wrapper,
+html.blm-ios-wp:has(.work-package-table) #content,
+html.blm-ios-wp .work-packages--list-container,
+html.blm-ios-wp .wp-table--container,
+html.blm-ios-wp .generic-table--container { background: transparent !important; }
+
+/* Table: an inset-grouped list. Each group is its own rounded card with its name
+   above it in small grey capitals; without grouping the whole list is one card.
+   Rows paint --blm-i-row so hover and selection stay opaque on the card. */
 html.blm-ios-wp .work-package-table {
   font-family: var(--g-font); font-size: 14px; color: var(--g-text);
-  background: var(--g-surface-solid); border-collapse: separate; border-spacing: 0;
-  box-shadow: var(--g-shadow); border-radius: var(--g-radius-lg);
+  background: transparent; border: 0; border-collapse: separate; border-spacing: 0;
+  box-shadow: none; border-radius: 0;
 }
-html.blm-ios-wp .work-package-table thead th:first-child { border-top-left-radius: var(--g-radius-lg); }
-html.blm-ios-wp .work-package-table thead th:last-child { border-top-right-radius: var(--g-radius-lg); }
+/* Column titles sit on the grey above the cards; translucent while they stick */
 html.blm-ios-wp .work-package-table thead th {
-  background: var(--g-surface-solid); border: 0; border-bottom: 1px solid var(--g-hairline);
-  height: 40px; padding: 0 10px; vertical-align: middle;
+  background: var(--g-grouped) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 0; height: 34px; padding: 0 10px; vertical-align: middle;
 }
 html.blm-ios-wp .work-package-table thead th *,
 html.blm-ios-wp .work-package-table thead th *::before,
@@ -60,29 +89,53 @@ html.blm-ios-wp .work-package-table thead th *::after { border-bottom: 0; box-sh
 html.blm-ios-wp .work-package-table thead th,
 html.blm-ios-wp .work-package-table thead th a,
 html.blm-ios-wp .work-package-table thead th span {
-  font-family: var(--g-font); font-size: 12px; font-weight: 600;
-  text-transform: none; letter-spacing: 0; color: var(--g-text2);
+  font-family: var(--g-font); font-size: 12px; font-weight: 500;
+  text-transform: none; letter-spacing: 0; color: var(--g-text3);
 }
 html.blm-ios-wp .work-package-table thead th a:hover { color: var(--g-text); text-decoration: none; }
 
-html.blm-ios-wp .work-package-table tbody td {
-  height: 44px; padding: 0 10px; vertical-align: middle;
-  border: 0; border-bottom: 1px solid var(--g-hairline);
-  background: transparent; color: var(--g-text);
+html.blm-ios-wp .work-package-table tbody tr { --blm-i-row: var(--g-card); }
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row:not([class*="sums"]):hover {
+  --blm-i-row: color-mix(in srgb, var(--g-text) 4%, var(--g-card));
 }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row:hover > td { background: var(--g-hover); }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked > td,
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--g-selected); }
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked,
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover {
+  --blm-i-row: color-mix(in srgb, var(--g-accent) 14%, var(--g-card));
+}
+html.blm-ios-wp .work-package-table tbody td {
+  height: var(--g-row); padding: 0 10px; vertical-align: middle;
+  border: 0; border-bottom: 1px solid var(--g-row-sep);
+  background: var(--blm-i-row) !important; color: var(--g-text);
+  transition: background-color .12s ease-out;
+}
+/* Separators start after the leading inset, like iOS cells */
+html.blm-ios-wp .work-package-table tbody tr > td:first-child {
+  border-bottom-color: transparent;
+  background: linear-gradient(var(--g-row-sep), var(--g-row-sep)) right bottom / calc(100% - 16px) 1px no-repeat,
+              var(--blm-i-row) !important;
+}
+/* Card corners: first row of the list or of a group, last row before the next
+   group or the end of the list (the group's Sum row, when there is one);
+   a collapsed group's header and the "Create new work package" row are never
+   part of a card */
+html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-header"]) > td:first-child,
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:first-child { border-top-left-radius: var(--g-radius-card); }
+html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-header"]) > td:last-child,
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:last-child { border-top-right-radius: var(--g-radius-card); }
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td { border-bottom-color: transparent; }
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:first-child {
+  background: var(--blm-i-row) !important; border-bottom-left-radius: var(--g-radius-card);
+}
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:last-child { border-bottom-right-radius: var(--g-radius-card); }
 
 html.blm-ios-wp .work-package-table td.id a {
   color: var(--g-accent); font-weight: 500; text-decoration: none; font-variant-numeric: tabular-nums;
 }
 html.blm-ios-wp .work-package-table td.id a:hover { text-decoration: underline; }
 html.blm-ios-wp .work-package-table td.subject,
-html.blm-ios-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 450; }
+html.blm-ios-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 500; }
 
-/* Quieter columns; type and priority keep OpenProject's own icon and dot */
-html.blm-ios-wp .work-package-table td.priority *,
+/* Quieter columns; type keeps OpenProject's own icon */
 html.blm-ios-wp .work-package-table td.type *,
 html.blm-ios-wp .work-package-table td.version *,
 html.blm-ios-wp .work-package-table td[class*="customField"] * { color: var(--g-text2); }
@@ -90,15 +143,31 @@ html.blm-ios-wp .work-package-table td.type * { text-transform: none; font-weigh
 html.blm-ios-wp .work-package-table td.storyPoints,
 html.blm-ios-wp .work-package-table td.spentTime,
 html.blm-ios-wp .work-package-table td.estimatedTime { font-variant-numeric: tabular-nums; }
+html.blm-ios-wp .work-package-table td.storyPoints { font-weight: 600; }
 html.blm-ios-wp .work-package-table [class*="__hl_inline_type"],
 html.blm-ios-wp .work-package-table [class*="__hl_inline_priority"] {
   color: var(--g-text2) !important; text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
 }
+/* A lone "-" (nothing set) goes quiet so real values stand out (tagged by ios.js) */
+html.blm-ios-wp .work-package-table td.blm-i-dash,
+html.blm-ios-wp .work-package-table td.blm-i-dash * { color: var(--g-text3) !important; }
+/* Priority: a dot that says how loud it is; urgent also reads in red (tagged by ios.js) */
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio] {
+  display: inline-flex; align-items: center; gap: 7px; color: var(--g-text2) !important; font-weight: 400;
+}
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio]::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--g-fill-hover);
+}
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="urgent"] { color: var(--g-red) !important; font-weight: 600 !important; }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="urgent"]::before { background: var(--g-red); }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="high"] { color: var(--g-text) !important; }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="high"]::before { background: var(--g-orange); }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="low"]::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--g-fill-hover); }
 
 /* Status chip (tagged by ios.js) */
 html.blm-ios-wp .work-package-table .blm-i-chip {
   display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-  padding: 2px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
   font-family: var(--g-font); font-size: 12px; font-weight: 600; line-height: 16px;
   text-transform: none; letter-spacing: 0;
   background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
@@ -119,33 +188,120 @@ html.blm-ios-wp .work-package-table td.assignee img {
 }
 html.blm-ios-wp .work-package-table td.assignee * { color: var(--g-text); }
 
-/* Group headers and sum rows */
-html.blm-ios-wp .work-package-table tr.-group-header > td,
-html.blm-ios-wp .work-package-table tr[class*="group-header"] > td {
-  height: 44px; background: var(--g-sunken); border-bottom: 1px solid var(--g-hairline); padding: 0 10px;
+/* Group headers: no band, just the section title on the grey above its card,
+   with a chevron and the count. OpenProject's toggle is a black minus square and
+   its count reads "(6)"; ios.js copies the bare number into data-blm-i-count. */
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] > td {
+  height: auto; padding: 22px 6px 7px; border: 0; border-radius: 0 !important;
+  background: transparent !important;
 }
-html.blm-ios-wp .work-package-table tr.-group-header .group--value,
+/* OpenProject also paints the row and the wrappers inside the cell, which left a
+   lighter band behind the title; everything in the title row shows the page grey */
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"],
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] * {
+  background-color: transparent !important; background-image: none !important; box-shadow: none !important;
+}
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"]:first-child > td { padding-top: 10px; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] > td > * { vertical-align: middle; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-right: 4px; border-radius: 50%; cursor: pointer;
+  color: var(--g-text3) !important; font-size: 0 !important;
+  background: transparent !important; border: 0 !important;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander::before {
+  content: "" !important; width: 6px; height: 6px; margin-top: -3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+}
+/* collapsed: the chevron points right */
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander.icon-plus::before { margin: 0 0 0 -3px; transform: rotate(-45deg); }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander:hover { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
 html.blm-ios-wp .work-package-table tr[class*="group-header"] .group--value {
-  font-family: var(--g-font); font-size: 14px; font-weight: 600; color: var(--g-text);
+  display: inline-flex !important; align-items: center; gap: 6px;
+  font-family: var(--g-font); font-size: 12px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: .03em; color: var(--g-text3);
 }
-html.blm-ios-wp .work-package-table tr.-group-header .count,
 html.blm-ios-wp .work-package-table tr[class*="group-header"] .count {
-  display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
-  background: var(--g-chip-todo-bg); color: var(--g-text2);
-  font-size: 12px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+  margin: 0; padding: 0; background: none; color: var(--g-text3);
+  font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .count[data-blm-i-count] { font-size: 0 !important; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .count[data-blm-i-count]::after {
+  content: attr(data-blm-i-count); display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--g-fill); color: var(--g-text2); text-align: center; text-transform: none; letter-spacing: 0;
+  font-size: 11px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+}
+
+/* Sum row: the card's footer, a faint tint, quiet label, totals in tabular figures */
+html.blm-ios-wp .work-package-table tbody tr[class*="sums"] {
+  --blm-i-row: color-mix(in srgb, var(--g-text) 2.5%, var(--g-card));
 }
 html.blm-ios-wp .work-package-table tr[class*="sums"] > td {
-  height: 36px; background: var(--g-surface-solid); color: var(--g-text2);
-  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  height: 36px; color: var(--g-text);
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
+html.blm-ios-wp .work-package-table tr[class*="sums"] > td:first-child,
+html.blm-ios-wp .work-package-table tr[class*="sums"] > td:nth-child(2) { color: var(--g-text3); font-size: 12px; font-weight: 500; }
 
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table th,
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table td { background-color: transparent; }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tbody tr.wp-table--row:hover > td { background-color: var(--g-hover); }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tbody tr.wp-table--row.-checked > td { background-color: var(--g-selected); }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tr.-group-header > td,
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tr[class*="group-header"] > td { background-color: var(--g-sunken); }
+/* Total sum (its own tbody after the results): a quiet footer line on the grey
+   under the cards, not a band */
+html.blm-ios-wp .work-package-table tbody:not(.results-tbody) tr[class*="sums"] > td {
+  height: 34px; padding: 0 10px; border: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  color: var(--g-text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .work-package-table tbody:not(.results-tbody) tr[class*="sums"] > td:first-child { color: var(--g-text3); font-size: 12px; font-weight: 500; }
+
+/* "Create new work package": a compact tinted capsule on the grey under the list,
+   not a full-width white bar. The row it sits in stays see-through. */
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row,
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td,
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td * {
+  background-color: transparent !important; background-image: none !important;
+  border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+}
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td { height: auto; padding: 10px 0 4px !important; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link {
+  display: inline-flex !important; align-items: center; gap: 4px; width: auto !important;
+  height: 30px; padding: 0 12px 0 9px !important; border-radius: 999px !important;
+  background: var(--g-chip-progress-bg) !important; color: var(--g-accent) !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 600; line-height: 1;
+  text-decoration: none !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link * { color: inherit !important; font-size: inherit; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link [class*="icon"],
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link svg { font-size: 14px !important; width: 14px; height: 14px; margin: 0 !important; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link:hover {
+  background: color-mix(in srgb, var(--g-accent) 20%, transparent) !important;
+}
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* Pagination: round page buttons, the current page a filled blue circle */
+html.blm-ios-wp .op-pagination--item-link {
+  min-width: 30px; height: 30px; padding: 0 9px; border: 0 !important; border-radius: 999px !important;
+  background: transparent !important; color: var(--g-accent) !important; box-shadow: none !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+html.blm-ios-wp .op-pagination--item-link:hover { background: var(--g-fill) !important; }
+html.blm-ios-wp .op-pagination--item-link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios-wp .op-pagination--item-link:disabled { opacity: .35; cursor: not-allowed; background: transparent !important; }
+html.blm-ios-wp .op-pagination--item_current {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 9px;
+  border: 0 !important; border-radius: 999px; background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .op-pagination--space { background: transparent !important; border: 0 !important; }
+html.blm-ios-wp .op-pagination--range,
+html.blm-ios-wp .op-pagination--label,
+html.blm-ios-wp .op-pagination--space { color: var(--g-text2); font-family: var(--g-font); font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wp .toolbar-container .button { transition: none; }
+  html.blm-ios-wp .toolbar-container .button,
+  html.blm-ios-wp .toolbar-container .editable-toolbar-title--input,
+  html.blm-ios-wp .work-package-table tbody td,
+  html.blm-ios-wp .work-package-table .expander,
+  html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link { transition: none; }
 }

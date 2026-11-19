@@ -298,3 +298,12 @@ UI 2.0, scoped under `html.blm-ios`, with light and dark from
 - Editable text (title, description) shows a soft `--g-fill` rounded highlight on
   hover, never an outline. The status menu is a frosted pull-down: 14 px radius,
   36 px rows, an inset 8 px hover pill, plain 10 px colour dots.
+- Work-package list follows an inset-grouped list on the same `--g-grouped-solid`
+  page: each group is its own `--g-card` card with 12 px corners, its name above
+  it in upper-case 12 px `--g-text3` with a chevron and a `--g-fill` count capsule
+  (no grey band); without grouping the whole list is one card. 44 px rows,
+  `--g-row-sep` hairlines inset 16 px from the leading edge, none under a card's
+  last row; the Sum row is the card's faintly tinted footer. Column titles sit
+  on the grey above the cards, translucent while sticky. Priority is a dot (red
+  for urgent names, `--g-orange` for high, a ring for low); a lone "-" fades to
+  `--g-text3`. Large title 28 px bold; filter counts are `--g-accent` capsules.

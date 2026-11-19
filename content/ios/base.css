@@ -107,34 +107,39 @@ html.blm-ios #main-menu {
   border-right: 1px solid var(--g-hairline) !important;
   font-family: var(--g-font);
 }
-/* Slim scrollbars in the sidebar and the work-package panes: a 6px rounded
+/* Slim scrollbars in the sidebar, the work-package panes and the list: a 6px rounded
    thumb, no track, no arrow buttons. Drawn with ::-webkit-scrollbar because
    Chrome's standard thin bar keeps its arrows on Windows; scrollbar-color is
    reset since Chrome ignores the pseudo-elements while it is set (and it is
    inherited from the dark theme's html rule). The resize grip and its line
    only show while hovered. */
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content) {
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *) {
   scrollbar-color: auto; scrollbar-width: auto;
 }
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar {
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar {
   width: 6px; height: 6px; background: transparent;
 }
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-track,
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-corner { background: transparent; }
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-thumb {
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-track,
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-corner { background: transparent; }
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-thumb {
   background: var(--g-scroll-thumb); border-radius: 999px;
 }
-html.blm-ios :is(#main-menu, #main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content)::-webkit-scrollbar-thumb:hover {
+html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
+  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-thumb:hover {
   background: var(--g-scroll-thumb-hover);
 }
+/* The sidebar itself shows no bar: the list inside it is what scrolls, and
+   the menu around it only overflows by a few pixels, which drew a second,
+   almost full-height bar beside the list's. It still scrolls with the wheel. */
+html.blm-ios #main-menu { scrollbar-width: none; }
+html.blm-ios #main-menu::-webkit-scrollbar { display: none; }
 html.blm-ios .main-menu--resizer { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 html.blm-ios .main-menu--resizer .resizer-toggle-container { opacity: 0; transition: opacity .14s ease-out; }
 html.blm-ios .main-menu--resizer:hover .resizer-toggle-container,

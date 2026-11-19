@@ -40,8 +40,30 @@ function textLeaf(cell) {
   return leaf;
 }
 
+// Priority names vary per instance: anything urgent-sounding is "urgent".
+function prioTone(text) {
+  if (/immediate|urgent|blocker|critical|highest/.test(text)) return 'urgent';
+  if (/high/.test(text)) return 'high';
+  if (/low/.test(text)) return 'low';
+  return 'normal';
+}
+
 // Idempotent: a second pass over tagged rows changes nothing.
 function tagCells() {
+  // List: priority gets a tone for its dot, lone "-" cells go quiet, and a
+  // group's "(6)" count becomes a bare number for its capsule.
+  for (const f of document.querySelectorAll('.work-package-table td.priority .inline-edit--display-field')) {
+    const tone = prioTone(f.textContent.trim().toLowerCase());
+    if (f.dataset.blmIPrio !== tone) f.dataset.blmIPrio = tone;
+  }
+  for (const td of document.querySelectorAll('.work-package-table tr.wp-table--row > td')) {
+    const dash = /^[-–—]$/.test(td.textContent.trim());
+    if (td.classList.contains('blm-i-dash') !== dash) td.classList.toggle('blm-i-dash', dash);
+  }
+  for (const c of document.querySelectorAll('.work-package-table tr[class*="group-header"] .count')) {
+    const n = c.textContent.replace(/[()\s]/g, '');
+    if (c.dataset.blmICount !== n) c.dataset.blmICount = n;
+  }
   for (const cell of document.querySelectorAll('td.status')) {
     const leaf = textLeaf(cell);
     if (!leaf) continue;
@@ -130,6 +152,11 @@ function untagCells() {
     delete el.dataset.blmITone;
   });
   document.querySelectorAll('.blm-i-empty-toggle').forEach(el => el.remove());
+  document.querySelectorAll('.blm-i-dash').forEach(el => el.classList.remove('blm-i-dash'));
+  document.querySelectorAll('[data-blm-i-prio], [data-blm-i-count]').forEach(el => {
+    delete el.dataset.blmIPrio;
+    delete el.dataset.blmICount;
+  });
   document.querySelectorAll('[data-blm-i-empty], [data-blm-i-show-empty], [data-blm-i-all-empty]').forEach(el => {
     el.removeAttribute('data-blm-i-empty');
     el.removeAttribute('data-blm-i-show-empty');
