@@ -728,17 +728,49 @@ function withBlobSrc(html) {
   });
 }
 
+const observedBlobs = new WeakSet();
+const blobObserver = typeof IntersectionObserver !== 'undefined'
+  ? new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const img = entry.target;
+      blobObserver.unobserve(img);
+      observedBlobs.delete(img);
+      if (img.isConnected && !img.hasAttribute('src')) loadBlobImg(img);
+    }
+  }, { rootMargin: '200px' })
+  : null;
+
+function loadBlobImg(img) {
+  const path = img.dataset.blob;
+  if (!path) return;
+  const cached = blobUrl(path);
+  if (cached) { img.src = cached; return; }
+  if (blobs.get(path)) return;
+  blobs.set(path, 'loading');
+  fetchBacklogBlob(path)
+    .then(b => { blobs.set(path, URL.createObjectURL(b)); hydrateImages(); })
+    .catch(() => { blobs.set(path, 'failed'); });
+}
+
 /** Fills images that need the session cookie (description images, attachment thumbnails). */
 function hydrateImages() {
   for (const img of document.querySelectorAll('#view img[data-blob]:not([src]), .pick-pop img[data-blob]:not([src]), .clone-dlg img[data-blob]:not([src])')) {
     const path = img.dataset.blob;
-    const url = blobs.get(path);
-    if (url && url !== 'loading' && url !== 'failed') { img.src = url; continue; }
-    if (url) continue;
-    blobs.set(path, 'loading');
-    fetchBacklogBlob(path)
-      .then(b => { blobs.set(path, URL.createObjectURL(b)); hydrateImages(); })
-      .catch(() => { blobs.set(path, 'failed'); });
+    const cached = blobUrl(path);
+    img.decoding = 'async';
+    if (cached) {
+      img.src = cached;
+      if (observedBlobs.has(img)) { blobObserver?.unobserve(img); observedBlobs.delete(img); }
+      continue;
+    }
+    if (blobs.get(path)) continue;
+    if (!blobObserver || img.closest('.pick-pop, .clone-dlg')) {
+      loadBlobImg(img);
+    } else if (!observedBlobs.has(img)) {
+      observedBlobs.add(img);
+      blobObserver.observe(img);
+    }
   }
 }
 

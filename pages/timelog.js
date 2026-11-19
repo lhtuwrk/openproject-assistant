@@ -102,12 +102,34 @@ function avatarUrl(userId) {
   return avatarCache.get(userId);
 }
 
+const observedAvatars = new WeakSet();
+const avatarObserver = typeof IntersectionObserver !== 'undefined'
+  ? new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const el = entry.target;
+      avatarObserver.unobserve(el);
+      observedAvatars.delete(el);
+      if (el.isConnected && !el.classList.contains('has-img')) applyAvatar(el);
+    }
+  }, { rootMargin: '200px' })
+  : null;
+
+async function applyAvatar(el) {
+  const url = await avatarUrl(el.dataset.uid);
+  if (!url || !el.isConnected) return;
+  el.style.backgroundImage = `url("${url}")`;
+  el.classList.add('has-img');
+}
+
 function hydrateAvatars(root) {
-  root.querySelectorAll('.avatar[data-uid]:not(.has-img)').forEach(async el => {
-    const url = await avatarUrl(el.dataset.uid);
-    if (!url || !el.isConnected) return;
-    el.style.backgroundImage = `url("${url}")`;
-    el.classList.add('has-img');
+  root.querySelectorAll('.avatar[data-uid]:not(.has-img)').forEach(el => {
+    if (!avatarObserver || avatarCache.has(el.dataset.uid)) {
+      applyAvatar(el);
+    } else if (!observedAvatars.has(el)) {
+      observedAvatars.add(el);
+      avatarObserver.observe(el);
+    }
   });
 }
 
