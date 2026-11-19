@@ -33,29 +33,31 @@ function timeoutSignal(ms, callerSignal) {
   return callerSignal ? AbortSignal.any([timer, callerSignal]) : timer;
 }
 
-async function timedFetch(url, init, timeoutMs, label) {
+function mapTimeoutError(err, timeoutMs, label) {
+  if (err?.name !== 'TimeoutError') return err;
+  const te = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s (${label})`);
+  te.code = 'TIMEOUT';
+  return te;
+}
+
+async function withTimeout(timeoutMs, label, fn) {
   try {
-    return await fetch(url, { ...init, signal: timeoutSignal(timeoutMs, init.signal) });
+    return await fn();
   } catch (err) {
-    if (err?.name === 'TimeoutError') {
-      const te = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s (${label})`);
-      te.code = 'TIMEOUT';
-      throw te;
-    }
-    throw err;
+    throw mapTimeoutError(err, timeoutMs, label);
   }
 }
 
 async function apiFetch(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
   if (!signal && inflightGets.has(path)) return structuredClone(await inflightGets.get(path));
 
-  const run = (async () => {
+  const run = withTimeout(timeoutMs, path, async () => {
     const BASE = await base();
-    const res = await timedFetch(`${BASE}${path}`, {
+    const res = await fetch(`${BASE}${path}`, {
       credentials: 'include',
       headers: { Accept: 'application/hal+json' },
-      signal,
-    }, timeoutMs, path);
+      signal: timeoutSignal(timeoutMs, signal),
+    });
 
     if (res.status === 401 || res.status === 403) {
       const err = new Error('Not authenticated — please log in to the backlog.');
@@ -65,7 +67,7 @@ async function apiFetch(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
 
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
     return res.json();
-  })();
+  });
 
   if (signal) return run;
   inflightGets.set(path, run);
@@ -243,26 +245,31 @@ export async function patchWorkPackage(wpId, changes) {
 /** A JSON (or, for a FormData body, multipart) write with the session cookie; throws
  *  with OpenProject's own message when it refuses. */
 async function apiWrite(method, path, body, { timeoutMs = WRITE_TIMEOUT_MS, signal } = {}) {
-  const BASE = await base();
-  const isForm = body instanceof FormData;
-  const res = await timedFetch(`${BASE}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/hal+json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
-    },
-    body: isForm ? body : JSON.stringify(body),
-    signal,
-  }, timeoutMs, path);
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const err = new Error(data?.message ?? `HTTP ${res.status}`);
-    if (res.status === 401) err.code = 'NOT_AUTHENTICATED';
-    throw err;
-  }
-  return data;
+  return withTimeout(timeoutMs, path, async () => {
+    const BASE = await base();
+    const isForm = body instanceof FormData;
+    const res = await fetch(`${BASE}${path}`, {
+      method,
+      credentials: 'include',
+      headers: {
+        Accept: 'application/hal+json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: isForm ? body : JSON.stringify(body),
+      signal: timeoutSignal(timeoutMs, signal),
+    });
+    const data = await res.json().catch(err => {
+      if (err?.name === 'TimeoutError') throw err;
+      return null;
+    });
+    if (!res.ok) {
+      const err = new Error(data?.message ?? `HTTP ${res.status}`);
+      if (res.status === 401) err.code = 'NOT_AUTHENTICATED';
+      throw err;
+    }
+    return data;
+  });
 }
 
 /**
@@ -410,12 +417,14 @@ export async function fetchProjectTypes(projectId) {
  * @returns {Promise<Blob>}
  */
 export async function fetchBacklogBlob(path) {
-  const BASE = await base();
-  const url = /^https?:\/\//.test(path) ? path : `${BASE}${path}`;
-  if (!url.startsWith(`${BASE}/`)) throw new Error('not a backlog file');
-  const res = await timedFetch(url, { credentials: 'include' }, BLOB_TIMEOUT_MS, path);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.blob();
+  return withTimeout(BLOB_TIMEOUT_MS, path, async () => {
+    const BASE = await base();
+    const url = /^https?:\/\//.test(path) ? path : `${BASE}${path}`;
+    if (!url.startsWith(`${BASE}/`)) throw new Error('not a backlog file');
+    const res = await fetch(url, { credentials: 'include', signal: timeoutSignal(BLOB_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  });
 }
 
 /**
@@ -730,7 +739,10 @@ export async function fetchUserName(userId) {
 export async function fetchUserAvatar(userId) {
   try {
     const BASE = await base();
-    const res = await timedFetch(`${BASE}/api/v3/users/${userId}/avatar`, { credentials: 'include' }, READ_TIMEOUT_MS, `avatar ${userId}`);
+    const res = await fetch(`${BASE}/api/v3/users/${userId}/avatar`, {
+      credentials: 'include',
+      signal: timeoutSignal(READ_TIMEOUT_MS),
+    });
     if (res.status >= 500 || res.status === 401 || res.status === 403 || res.status === 429) return undefined;
     if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
     return await res.blob();

@@ -889,6 +889,9 @@ function restoreField(wpId, field, parentId, snap, { d, card, decCard }) {
 
 // ─── End optimistic
 
+const pendingOptimistic = new Map();   // key -> { wpId, field, value, parentId }
+const rollbackKeys      = new Set();   // wpId:domField forced to re-sync even when focused
+
 /** Sets a story's or subtask's status, assignee, priority, label, subject or type on OpenProject. */
 async function writeField(wpId, field, value, parentId) {
   const key = `${wpId}:${field}`;
@@ -903,6 +906,7 @@ async function writeField(wpId, field, value, parentId) {
   };
   const snap = snapshotField(wpId, field, parentId, ctx);
   rt.saving.add(key); rt.writeErr.delete(key);
+  pendingOptimistic.set(key, { wpId: String(wpId), field, value, parentId });
   applyOptimisticField(wpId, field, value, parentId, ctx);
   render();
   try {
@@ -911,6 +915,7 @@ async function writeField(wpId, field, value, parentId) {
       : field === LABEL_FIELD ? labelChanges(d, value)
       : { _links: { [field]: { href: value } } };
     const saved = await queueWrite(String(wpId), () => patchWorkPackage(wpId, changes));
+    pendingOptimistic.delete(key);
     if (d?.loading) {
       details.delete(parentId ?? wpId);   // a reload started before the save: load it again after
     } else if (parentId) {
@@ -935,17 +940,34 @@ async function writeField(wpId, field, value, parentId) {
       if (field === 'status' || field === 'assignee') loadStatuses(wpId);
       if (field === 'storyPoints' && s.decisions[wpId]) s.decisions[wpId].card.points = fresh.points;
     }
+    if (!d?.loading) {
+      const liveCtx = {
+        d,
+        card: parentId ? null : rt.cards.get(String(wpId)) ?? null,
+        decCard: parentId ? null : s.decisions[wpId]?.card ?? null,
+        people: rt.people,
+        types: rt.types,
+      };
+      for (const p of pendingOptimistic.values()) {
+        if (p.wpId === String(wpId) && (p.parentId ?? null) === (parentId ?? null)) {
+          applyOptimisticField(p.wpId, p.field, p.value, p.parentId, liveCtx);
+        }
+      }
+    }
     announce(`#${wpId} ${field} saved`);
   } catch (err) {
+    pendingOptimistic.delete(key);
     restoreField(wpId, field, parentId, snap, {
       d,
       card: parentId ? null : rt.cards.get(String(wpId)) ?? null,
       decCard: parentId ? null : s.decisions[wpId]?.card ?? null,
     });
+    rollbackKeys.add(`${wpId}:${field === 'storyPoints' ? 'points' : field}`);
     rt.writeErr.set(key, err.code === 'NOT_AUTHENTICATED' ? "you're signed out of the backlog" : err.message);
   } finally {
     rt.saving.delete(key);
     render();
+    rollbackKeys.clear();
   }
 }
 
@@ -2108,8 +2130,12 @@ function patchAttrs(a, b) {
 
 /** Attributes don't move a control's live value; set it, unless someone is using that control. */
 function patchFormState(a, b) {
-  if (a === document.activeElement) return;
-  if (a.tagName === 'SELECT') {
+  const forced = a.dataset?.wp && a.dataset?.field && rollbackKeys.has(`${a.dataset.wp}:${a.dataset.field}`);
+  if (a === document.activeElement && !forced) return;
+  if (a.tagName === 'SELECT' && a.multiple) {
+    const want = new Set([...b.options].filter(o => o.hasAttribute('selected')).map(o => o.value));
+    for (const o of a.options) o.selected = want.has(o.value);
+  } else if (a.tagName === 'SELECT') {
     const want = [...b.options].find(o => o.hasAttribute('selected'))?.value ?? b.options[0]?.value ?? '';
     if (a.value !== want) a.value = want;
   } else if (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') {

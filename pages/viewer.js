@@ -2776,11 +2776,14 @@ function isDefaultProject(name) {
   return /credit.?utility/i.test(name) || /valiant/i.test(name);
 }
 
+let vpSearchTimer = 0, vpLoadSeq = 0;
+
 function toggleVersionPanel(forceOpen) {
   const panel    = document.getElementById('version-panel');
   const willOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
   panel.classList.toggle('open', willOpen);
   if (willOpen) { loadVersionPanel(); loadPlanningSettings(); document.getElementById('vp-search')?.focus(); }
+  else { clearTimeout(vpSearchTimer); vpSearchTimer = 0; vpLoadSeq++; }
 }
 
 document.getElementById('version-scrim').addEventListener('click', () => toggleVersionPanel(false));
@@ -2854,10 +2857,15 @@ document.getElementById('exclude-types-input').addEventListener('keydown', (e) =
 });
 
 async function loadVersionPanel() {
+  const seq = ++vpLoadSeq;
+  clearTimeout(vpSearchTimer); vpSearchTimer = 0;
   const trackingEl = document.getElementById('vp-tracking');
   const body       = document.getElementById('version-panel-body');
   const msg        = document.getElementById('version-panel-msg');
   const search     = document.getElementById('vp-search');
+  search.oninput = null;
+  search.onkeydown = null;
+  const isStale = () => seq !== vpLoadSeq || !document.getElementById('version-panel')?.classList.contains('open');
 
   body.innerHTML = '<div class="skel-stack" role="status" aria-busy="true" aria-label="Loading versions"><span class="skel-line lg"></span><span class="skel-line md"></span><span class="skel-line sm"></span><span class="skel-line md"></span><span class="skel-line sm"></span></div>';
   document.getElementById('version-panel-projects').innerHTML = '';
@@ -2865,6 +2873,7 @@ async function loadVersionPanel() {
   msg.className    = 'version-panel-msg';
 
   const stored = await chrome.storage.local.get([TRACKED_KEY, PROJECT_FILTER_KEY]);
+  if (isStale()) return;
   let tracked  = stored[TRACKED_KEY] ?? [];
   const today  = todayStr();
   const current = currentMainViewVersion();
@@ -2913,6 +2922,7 @@ async function loadVersionPanel() {
   try {
     projects = await fetchActiveProjects();
   } catch (err) {
+    if (isStale()) return;
     body.innerHTML  = '';
     msg.textContent = err.code === 'NOT_AUTHENTICATED'
       ? '⚠ Not logged in — open the backlog page first.'
@@ -2920,6 +2930,7 @@ async function loadVersionPanel() {
     msg.className   = 'version-panel-msg error';
     return;
   }
+  if (isStale()) return;
 
   // The tracked list above is already clickable while the versions load, and removing one
   // from it redraws this list — so what that redraw reads has to exist before the await,
@@ -2936,6 +2947,7 @@ async function loadVersionPanel() {
         .catch(() => ({ project: p, versions: [] }))
     )
   );
+  if (isStale()) return;
   projectsWithVers = results.filter(r => r.versions.length);
 
   // Selected projects: saved filter OR default (Credit Utility + Valiant)
@@ -2952,7 +2964,7 @@ async function loadVersionPanel() {
   }, () => { showClosed = !showClosed; renderAvailable(); });
 
   function renderAvailable() {
-    if (!loaded) return;   // still loading: the placeholder stays until the versions are in
+    if (isStale() || !loaded) return;   // still loading or superseded: leave placeholder / skip stale render
     const q = search.value.trim().toLowerCase();
     const trackedIds = new Set(tracked.map(t => t.versionId));
     body.innerHTML = '';
@@ -2989,10 +3001,10 @@ async function loadVersionPanel() {
     if (!body.children.length)
       body.innerHTML = `<div class="vp-empty">${q ? `No version matches "${q.replace(/[<&]/g, '')}".` : 'No more versions in the selected projects.'}</div>`;
   }
-  let vpSearchTimer = 0;
   const flushSearch = () => { clearTimeout(vpSearchTimer); vpSearchTimer = 0; renderAvailable(); };
   search.oninput = () => {
     clearTimeout(vpSearchTimer);
+    if (isStale()) { vpSearchTimer = 0; return; }
     if (!search.value.trim()) { vpSearchTimer = 0; renderAvailable(); return; }
     vpSearchTimer = setTimeout(flushSearch, 150);
   };
