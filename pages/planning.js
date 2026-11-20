@@ -1176,7 +1176,7 @@ function suggestHtml(id, d) {
   }).join('');
   const n = sg.rows.filter(r => r.on && r.title.trim()).length;
   return `<section class="sug${sg.ai ? ' ai-result' : ''}" aria-label="Suggested subtasks">
-      <div class="sug-head">${sg.ai ? '<span class="ai-mark" aria-hidden="true">✦</span>' : ''}<b>Suggested subtasks</b><span class="muted">from ${esc(sg.from)}</span><span class="spacer"></span>
+      <div class="sug-head">${sg.ai ? `<span class="ai-mark" aria-hidden="true">${CLAUDE_ICON}</span>` : ''}<b>Suggested subtasks</b><span class="muted">from ${esc(sg.from)}</span><span class="spacer"></span>
         ${sg.ai ? '' : '<button class="ghost" data-act="tpl-edit">Edit template</button>'}</div>
       <ul class="sug-list">${rows}</ul>
       ${sg.err ? `<div class="card-error" role="alert">Couldn't create the subtasks: ${esc(sg.err)}</div>` : ''}
@@ -1184,6 +1184,24 @@ function suggestHtml(id, d) {
         <button class="primary" data-act="sug-create" data-id="${esc(id)}"${!n || sg.busy ? ' disabled' : ''}${sg.busy ? ' aria-busy="true"' : ''}>${sg.busy ? 'Creating…' : `Create ${n} subtask${n === 1 ? '' : 's'}`}</button></div>
     </section>`;
 }
+
+// The Claude spark, in Claude's orange (--claude): eleven petals, thin where they meet the centre and
+// widening to a rounded tip, at uneven angles and lengths so it reads hand-cut rather than a gear.
+const CLAUDE_ICON = (() => {
+  const RAYS = [   // [angle° clockwise from top, length, tip width]
+    [0, 10.6, 2.9], [33, 8.3, 2.5], [63, 9.9, 2.8], [96, 7.6, 2.4], [127, 10.3, 2.9], [160, 8.7, 2.6],
+    [191, 10.0, 2.8], [222, 7.7, 2.4], [253, 10.5, 2.9], [287, 8.1, 2.5], [318, 9.5, 2.7],
+  ];
+  const R0 = 1.0, W0 = 0.75, f = n => +n.toFixed(2);
+  const petal = ([deg, len, w]) => {
+    const a = (deg - 90) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const P = (x, y) => `${f(x * c - y * s)} ${f(x * s + y * c)}`;   // a petal drawn along +x, then turned
+    const r = w / 2, tip = len - r;
+    return `M${P(R0, -W0 / 2)}L${P(tip, -r)}A${f(r)} ${f(r)} 0 0 1 ${P(tip, r)}L${P(R0, W0 / 2)}Z`;
+  };
+  const d = RAYS.map(petal).join('') + 'M-1.7 0a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0 -3.4 0Z';
+  return `<svg class="claude-icon" viewBox="-12 -12 24 24" aria-hidden="true" focusable="false"><path d="${d}" /></svg>`;
+})();
 
 // ─── Claude: subtasks, test cases and a requirement summary, through the local bridge ─
 
@@ -1330,7 +1348,7 @@ async function postAiOut(id) {
 function aiThinkingHtml(b) {
   const n = aiPhase(b), ask = AI_ASKS[b.what];
   return `<div class="ai-think" role="status" aria-live="polite">
-      <div class="ai-orb" aria-hidden="true"><span></span></div>
+      <div class="ai-orb" aria-hidden="true">${CLAUDE_ICON}</div>
       <div class="ai-think-main">
         <div class="ai-think-head"><span class="ai-label">${esc(ask.label)}</span><span class="num ai-clock" data-role="ai-clock">${Math.floor((Date.now() - b.start) / 1000)}s</span></div>
         <p class="ai-phase" data-role="ai-phase">${esc(ask.steps[n])}…</p>
@@ -1423,7 +1441,7 @@ function chatHtml(id) {
   if (!ch.open) return '';
   const msgs = ch.msgs.map(m => m.role === 'user'
     ? `<li class="msg msg-user ai-in">${esc(m.text)}</li>`
-    : `<li class="msg msg-ai${m.live ? ' is-live' : ''}${m.err ? ' is-err' : ''} ai-in"><span class="ai-mark" aria-hidden="true">✦</span><span class="msg-text"${m.live ? ' data-role="chat-live"' : ''}>${esc(m.text)}</span>${m.live && !m.text ? '<span class="typing" aria-label="Claude is writing"><i></i><i></i><i></i></span>' : ''}</li>`).join('');
+    : `<li class="msg msg-ai${m.live ? ' is-live' : ''}${m.err ? ' is-err' : ''} ai-in"><span class="ai-mark" aria-hidden="true">${CLAUDE_ICON}</span><span class="msg-text"${m.live ? ' data-role="chat-live"' : ''}>${esc(m.text)}</span>${m.live && !m.text ? '<span class="typing" aria-label="Claude is writing"><i></i><i></i><i></i></span>' : ''}</li>`).join('');
   const starters = ch.msgs.length ? '' : `<div class="chat-starters">${CHAT_STARTERS.map(t => `<button type="button" class="ghost chip" data-act="chat-starter" data-id="${esc(id)}" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
   return `<div class="chat">
       <div class="chat-head"><b>Chat about #${esc(id)}</b><span class="muted">Claude reads the story and its comments</span><span class="spacer"></span>
@@ -1448,14 +1466,14 @@ function aiPanelHtml(id) {
   const err = rt.aiErr?.id === id ? rt.aiErr.msg : '';
   const ch = chatFor(id);
   const state = mine || ch.streaming ? 'thinking' : err ? 'error' : out || ch.msgs.length ? 'done' : 'idle';
-  const btn = (act, what, label) => `<button type="button" class="ai-btn${mine && b.what === what ? ' is-on' : ''}" data-act="${act}" data-id="${esc(id)}"${b || ch.streaming ? ' disabled' : ''}${mine && b.what === what ? ' aria-busy="true"' : ''}><span class="ai-spark" aria-hidden="true">✦</span>${label}</button>`;
+  const btn = (act, what, label) => `<button type="button" class="ai-btn${mine && b.what === what ? ' is-on' : ''}" data-act="${act}" data-id="${esc(id)}"${b || ch.streaming ? ' disabled' : ''}${mine && b.what === what ? ' aria-busy="true"' : ''}><span class="ai-spark" aria-hidden="true">${CLAUDE_ICON}</span>${label}</button>`;
   return `<section class="ai" data-state="${state}" aria-label="Claude">
       <div class="ai-bar">
-        <span class="ai-mark" aria-hidden="true">✦</span><b class="ai-name">Claude</b>
+        <span class="ai-mark" aria-hidden="true">${CLAUDE_ICON}</span><b class="ai-name">Claude</b>
         <span class="ai-hint">${esc(MODELS.find(m => m.id === rt.model)?.name ?? '')} · on this machine · nothing is written until you say so</span>
         <span class="spacer"></span>
         ${btn('ai-sum', 'sum', 'Summarize requirement')}${btn('ai-sub', 'sub', 'Suggest subtasks')}${btn('ai-tc', 'tc', 'Design test cases')}
-        <button type="button" class="ai-btn${ch.open ? ' is-on' : ''}" data-act="chat-toggle" data-id="${esc(id)}" aria-expanded="${ch.open}"><span class="ai-spark" aria-hidden="true">✦</span>Chat</button>
+        <button type="button" class="ai-btn${ch.open ? ' is-on' : ''}" data-act="chat-toggle" data-id="${esc(id)}" aria-expanded="${ch.open}"><span class="ai-spark" aria-hidden="true">${CLAUDE_ICON}</span>Chat</button>
       </div>
       ${chatHtml(id)}
       ${mine ? aiThinkingHtml(b) : ''}
