@@ -1,0 +1,244 @@
+/* iOS skin Backlogs page (html.blm-ios-bl): the same inset-grouped look as the
+   work-package list. Each sprint and product backlog is a section on the grey
+   grouped background, its title row (chevron, name, dates, points capsule, "…"
+   menu) above a rounded white card of 44px rows (type · #id · subject · status
+   capsule · points) whose separators start after the leading inset. Drag-and-
+   drop, inline editing and OpenProject's two-column layout are kept; rows only
+   switch from floats to flex.
+   OpenProject-internal selectors: #rb #backlogs_container (#owner_/
+   #sprint_backlogs_container), .backlog > .header (.toggler(.closed), .sprint
+   (.editing) .name/.start_date/.effective_date/.id, .velocity, .menu
+   .menu-trigger(.open) + .items), ul.stories(.closed), li.story(.closed|
+   .editing|.ui-sortable-helper) > .type_id/.id/.subject/.status_id/
+   .story_points (.t shown text, .v hidden value), .editors. OpenProject's own
+   rules carry two ids, so most selectors here name #backlogs_container too. */
+
+/* Page: the grouped grey, as on the list and the work-package page */
+html.blm-ios-bl,
+html.blm-ios-bl body { background: var(--g-grouped-solid) !important; }
+html.blm-ios-bl #content-wrapper,
+html.blm-ios-bl #content { background: transparent !important; }
+html.blm-ios-bl .toolbar-container h2 {
+  font-family: var(--g-font); font-size: 28px; font-weight: 700; font-style: normal;
+  letter-spacing: -.02em; color: var(--g-text);
+}
+html.blm-ios-bl #rb { font-family: var(--g-font); font-size: 14px; color: var(--g-text); }
+html.blm-ios-bl #rb #backlogs_container { row-gap: 0; column-gap: 28px; justify-content: flex-start; }
+html.blm-ios-bl #rb #owner_backlogs_container,
+html.blm-ios-bl #rb #sprint_backlogs_container { flex: 1 1 0; width: auto; }
+
+/* Section: no box of its own, the card is the list of stories */
+html.blm-ios-bl #rb #backlogs_container .backlog {
+  margin: 0 0 22px; padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
+
+/* Title row on the grey above the card */
+html.blm-ios-bl #rb #backlogs_container .backlog .header {
+  display: flex; align-items: center; gap: 8px;
+  height: auto; min-height: 30px; padding: 0 4px 7px; position: relative;
+  background: transparent; border: 0;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header > * { position: static; float: none; }
+/* Chevron in place of OpenProject's arrow glyph; collapsed, it points right */
+html.blm-ios-bl #rb #backlogs_container .backlog .header .toggler {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 22px; height: 22px; line-height: 1; border-radius: 50%; cursor: pointer;
+  color: var(--g-text3); font-size: 0; background: transparent;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .toggler::before {
+  content: "" !important; position: static; width: 6px; height: 6px; margin-top: -3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .toggler.closed::before { margin: 0 0 0 -3px; transform: rotate(-45deg); }
+html.blm-ios-bl #rb #backlogs_container .backlog .header .toggler:hover { background: var(--g-fill); color: var(--g-text); }
+
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint {
+  flex: 1 1 auto; min-width: 0; height: auto; margin: 0; cursor: pointer;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .show {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .show > * { float: none; width: auto; height: auto; margin: 0; line-height: 22px; }
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .name {
+  order: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-size: 17px; font-weight: 600; letter-spacing: -.01em; color: var(--g-text);
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .start_date { order: 2; }
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .effective_date { order: 3; }
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .date {
+  flex: none; font-size: 13px; font-weight: 400; color: var(--g-text3); font-variant-numeric: tabular-nums;
+}
+/* ios.js marks blank dates (they hold whitespace, so :empty never matches) */
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .start_date:not(.blm-i-blank)::after { content: " –"; }
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint .date.blm-i-blank { display: none; }
+
+/* Points: a count capsule, as beside a list group's name */
+html.blm-ios-bl #rb #backlogs_container .backlog .header .velocity {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: auto; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px;
+  background: var(--g-fill); color: var(--g-text2); text-align: center;
+  font-size: 11px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header > .add_new_story {
+  width: auto; height: 26px; line-height: 26px; padding: 0 10px; border-radius: 999px;
+  background: var(--g-fill); color: var(--g-accent); font-size: 13px; font-weight: 500;
+}
+
+/* "…" menu: a round button, its list the frosted pull-down of the details view */
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu {
+  position: relative; flex: none; width: 26px; height: 26px; border: 0;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .menu-trigger {
+  position: static; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; color: var(--g-accent); cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+/* OpenProject's ▼ glyph becomes three dots */
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .menu-trigger::before {
+  content: "" !important; width: 16px; height: 4px; padding: 0;
+  background: radial-gradient(circle, currentColor 1.5px, transparent 2px) 0 0 / 5.33px 4px repeat-x;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .menu-trigger:hover,
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .menu-trigger.open { background: var(--g-fill); }
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .items {
+  top: calc(100% + 6px); right: 0; min-width: 200px; padding: 6px;
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent);
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline); border-radius: var(--g-radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .14), 0 0 0 .5px rgba(0, 0, 0, .04);
+  transform-origin: top right; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios-bl[data-blm-ios-theme="dark"] #rb #backlogs_container .backlog .header .menu .items {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 0 .5px rgba(255, 255, 255, .06);
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .items { background: var(--g-raised); }
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .item {
+  width: auto; height: auto; border-radius: 8px; background: transparent;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .item a {
+  display: flex; align-items: center; min-height: 36px; padding: 0 16px 0 12px; box-sizing: border-box;
+  font: 400 15px/1.2 var(--g-font); color: var(--g-text); text-decoration: none;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .item:is(:hover, .hover) { background: var(--g-fill); }
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .item:is(:hover, .hover) a { color: var(--g-text); }
+html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .item:active { background: var(--g-fill-hover); }
+
+/* Card: the stories. An empty backlog keeps a 44px card so stories can be
+   dropped into it. */
+html.blm-ios-bl #rb #backlogs_container .backlog .stories {
+  min-height: var(--g-row); background: var(--g-card); border-radius: var(--g-radius-card);
+}
+
+/* Rows */
+html.blm-ios-bl #rb #backlogs_container .stories .story {
+  --blm-i-row: var(--g-card);
+  display: flex; align-items: center; gap: 12px; box-sizing: border-box;
+  min-height: var(--g-row); padding: 0 14px 0 16px; overflow: hidden;
+  font-size: 14px; color: var(--g-text);
+  background: linear-gradient(var(--g-row-sep), var(--g-row-sep)) right bottom / calc(100% - 16px) 1px no-repeat,
+              var(--blm-i-row);
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story:last-child { background: var(--blm-i-row); }
+html.blm-ios-bl #rb #backlogs_container .stories .story:is(:hover, .hover) {
+  --blm-i-row: color-mix(in srgb, var(--g-text) 4%, var(--g-card));
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story > * {
+  float: none; width: auto; height: auto; min-height: 0; margin: 0; padding: 0; line-height: 20px;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story .type_id .t { float: none; padding: 0; text-align: left; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .type_id {
+  order: 1; flex: none; width: 78px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 13px; color: var(--g-text3);
+}
+/* the type without OpenProject's trailing colon (ios.js copies it to data-blm-i-type) */
+html.blm-ios-bl #rb #backlogs_container .stories .story .type_id .t[data-blm-i-type] { font-size: 0; }
+html.blm-ios-bl #rb #backlogs_container .stories .story .type_id .t[data-blm-i-type]::after { content: attr(data-blm-i-type); font-size: 13px; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .id { order: 2; flex: none; width: 48px; text-align: left; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .id a {
+  color: var(--g-accent); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; text-decoration: none;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story > .id a:hover { text-decoration: underline; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .id a:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .subject {
+  order: 3; flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-weight: 500; color: var(--g-text);
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story > .status_id { order: 4; flex: none; width: 108px; }
+html.blm-ios-bl #rb #backlogs_container .stories .story > .story_points {
+  order: 5; flex: none; width: 26px; text-align: right;
+  font-weight: 600; font-variant-numeric: tabular-nums; color: var(--g-text2);
+}
+/* OpenProject strikes the whole closed row; a line-through on a parent can't be
+   undone by its children, so lift it from the row and fade the title instead */
+html.blm-ios-bl #rb #backlogs_container .stories .story.closed { text-decoration: none; }
+html.blm-ios-bl #rb #backlogs_container .stories .story.closed > .subject { color: var(--g-text3); font-weight: 400; }
+
+/* Status capsule (tagged by ios.js) */
+html.blm-ios-bl #rb .blm-i-chip {
+  display: inline-block; max-width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
+  font: 600 12px/16px var(--g-font); text-transform: none; letter-spacing: 0;
+  background: var(--g-chip-todo-bg); color: var(--g-chip-todo-fg);
+}
+html.blm-ios-bl #rb .blm-i-chip[data-blm-i-tone="progress"] { background: var(--g-chip-progress-bg); color: var(--g-chip-progress-fg); }
+html.blm-ios-bl #rb .blm-i-chip[data-blm-i-tone="done"] { background: var(--g-chip-done-bg); color: var(--g-chip-done-fg); }
+
+/* Editing a story: its fields become filled rounded iOS fields in one row
+   (type · subject · status · points), still inside the card */
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing {
+  --blm-i-row: color-mix(in srgb, var(--g-accent) 6%, var(--g-card));
+  cursor: default;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing .editors {
+  display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; padding: 7px 0;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing :is(select, input) {
+  float: none; box-sizing: border-box; min-width: 0; height: 30px; margin: 0; padding: 0 10px;
+  font: 400 14px/20px var(--g-font); color: var(--g-text);
+  background-color: var(--g-fill); border: 0; border-radius: 9px; box-shadow: none; outline: 0;
+  transition: box-shadow .12s ease-out;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing select {
+  -webkit-appearance: none; appearance: none; padding-right: 26px; cursor: pointer;
+  /* up/down chevrons of an iOS pop-up button */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%236b707c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+}
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing :is(select, input):focus { box-shadow: 0 0 0 2px var(--g-focus); }
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing .type_id.editor { order: 1; flex: 0 0 112px; width: auto; max-width: none; }
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing .subject.editor { order: 2; flex: 1 1 auto; width: auto; min-width: 0; }
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing .status_id.editor { order: 3; flex: 0 0 128px; width: auto; }
+html.blm-ios-bl #rb #backlogs_container .stories .story.editing .story_points.editor { order: 4; flex: 0 0 56px; width: auto; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Editing a sprint's name and dates in its title row */
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint.editing .editors { gap: 8px; }
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint.editing .editor {
+  box-sizing: border-box; height: 30px; padding: 0 10px; margin: 0;
+  font: 400 14px/20px var(--g-font); color: var(--g-text);
+  background: var(--g-card); border: 0; border-radius: 9px; box-shadow: 0 0 0 .5px var(--g-hairline); outline: 0;
+}
+html.blm-ios-bl #rb #backlogs_container .backlog .sprint.editing .editor:focus { box-shadow: 0 0 0 2px var(--g-focus); }
+
+/* Drag: the row lifts off the card, the gap it leaves is a tinted slot */
+html.blm-ios-bl #rb #backlogs_container .stories .story.ui-sortable-helper {
+  --blm-i-row: var(--g-raised);
+  background: var(--blm-i-row); border-radius: 10px; box-shadow: var(--g-shadow);
+}
+html.blm-ios-bl #rb #backlogs_container .stories .ui-sortable-placeholder {
+  visibility: visible !important; min-height: var(--g-row);
+  background: color-mix(in srgb, var(--g-accent) 10%, var(--g-card)); border: 0;
+}
+
+/* Dark: OpenProject paints rows, the header and the menu in fixed light greys;
+   the rules above already repaint them from the tokens */
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios-bl #rb #backlogs_container .backlog .header :is(.toggler, .menu-trigger),
+  html.blm-ios-bl #rb #backlogs_container .stories .story,
+  html.blm-ios-bl #rb #backlogs_container .stories .story.editing :is(select, input) { transition: none; }
+  html.blm-ios-bl #rb #backlogs_container .backlog .header .menu .items { animation: none; }
+}

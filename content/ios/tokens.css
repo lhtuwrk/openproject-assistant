@@ -40,6 +40,8 @@ html.blm-ios {
   --g-fill-hover: rgba(118, 118, 128, .2);
   --g-text3: #6b707c;
   --g-red: #d70015;
+  --g-orange: #ff9500;
+  --g-green: #34c759;
   --g-radius-card: 12px;
   --g-row: 44px;
   --g-scroll-thumb: rgba(60, 60, 67, .22);
@@ -81,6 +83,8 @@ html.blm-ios[data-blm-ios-theme="dark"] {
   --g-fill-hover: rgba(118, 118, 128, .34);
   --g-text3: #8e929c;
   --g-red: #ff6961;
+  --g-orange: #ff9f0a;
+  --g-green: #30d158;
   color-scheme: dark;
 }
 

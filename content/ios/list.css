@@ -1,8 +1,10 @@
-/* iOS skin work-package list: toolbar and table. No blur on rows (Angular
-   re-renders them constantly); the table sits on one solid-ish card.
+/* iOS skin work-package list: toolbar and an inset-grouped table (each group
+   a rounded card on the grey grouped background). No blur on rows (Angular
+   re-renders them constantly).
    OpenProject-internal selectors: .toolbar-container, .toolbar-items .button,
    .work-package-table (td.id/subject/status/type/priority/assignee,
-   tr.-group-header, tr.wp-table--row), .op-pagination. */
+   tr.-group-header .expander/.group--value/.count, tr.wp-table--row,
+   tr[class*=sums]), .op-pagination. */
 
 /* Toolbar: title and buttons */
 html.blm-ios-wp .toolbar-container,
@@ -10,9 +12,23 @@ html.blm-ios-wp #toolbar { font-family: var(--g-font); }
 html.blm-ios-wp .toolbar-container .title-container,
 html.blm-ios-wp .toolbar-container .title-container *,
 html.blm-ios-wp .toolbar-container h2 {
-  font-family: var(--g-font); font-size: 24px; font-weight: 600; font-style: normal;
+  font-family: var(--g-font); font-size: 28px; font-weight: 700; font-style: normal;
   letter-spacing: -.02em; color: var(--g-text);
 }
+/* The view name is an inline-edit input: no white box or hover border, just the
+   title on the grey. Hover shows a faint tint, editing a white rounded field. */
+html.blm-ios-wp .toolbar-container .editable-toolbar-title--input {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  outline: 0 !important; border-radius: 10px; padding: 0 6px; margin-left: -6px;
+  transition: background-color .14s ease-out, box-shadow .14s ease-out;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input:hover {
+  background: color-mix(in srgb, var(--g-text) 5%, transparent) !important;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input:focus {
+  background: var(--g-card) !important; box-shadow: 0 0 0 2px var(--g-focus) !important;
+}
+html.blm-ios-wp .toolbar-container input.editable-toolbar-title--input::placeholder { color: var(--g-text3); }
 html.blm-ios-wp .toolbar-items .button,
 html.blm-ios-wp .toolbar-container .button {
   font-family: var(--g-font); font-size: 14px; font-weight: 500;
@@ -36,23 +52,137 @@ html.blm-ios-wp .toolbar-items .button.-alt-highlight:hover,
 html.blm-ios-wp .toolbar-items .button.-highlight:hover,
 html.blm-ios-wp .toolbar-items .button.-primary:hover { background: var(--g-accent); filter: brightness(1.1); color: var(--g-on-accent); }
 html.blm-ios-wp .toolbar-items .button .badge {
-  background: var(--g-text2); color: var(--g-surface-solid);
-  border-radius: 8px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px;
+  background: var(--g-accent); color: var(--g-on-accent); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 html.blm-ios-wp .toolbar-items .button:focus-visible,
 html.blm-ios-wp .toolbar-container .button:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
-/* Table: one floating card, 44 px rows, hairlines only */
+/* ── View settings menu (the toolbar's ⋮, op-context-menu #settingsDropdown): an
+   iOS context menu. Frosted rounded panel, full-width rows with hairlines
+   between them, the label left and its symbol right, thick gaps between the
+   groups (view layout | the saved view | sharing), Delete in red. Matched by id
+   and, in case the id changes, by the group-by item only this menu has.
+   The Create button's type menu (#types-context-menu, or the menu whose items
+   carry OpenProject's __hl_inline_type_* colour classes) shares the panel and
+   rows; its own tweaks follow the shared rules.
+   OpenProject markup: .dropdown-menu > li > a.menu-item > op-icon i.icon-* + span. */
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+  min-width: 248px; padding: 0 !important; margin-top: 6px; overflow: hidden;
+  background: color-mix(in srgb, var(--g-raised) 86%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: 13px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  font-family: var(--g-font);
+  transform-origin: top right; animation: blm-i-menu-in .16s ease-out;
+  --blm-i-menu-gap: rgba(0, 0, 0, .07);
+}
+html.blm-ios[data-blm-ios-theme="dark"] :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+  --blm-i-menu-gap: rgba(0, 0, 0, .32);
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) { background: var(--g-raised) !important; }
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"]))::before,
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"]))::after { display: none !important; }
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li {
+  margin: 0; padding: 0; border: 0; list-style: none;
+}
+/* hairline between rows; a thick band where a new group starts */
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li + li {
+  border-top: .5px solid var(--g-row-sep);
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li + li:has(:is(.icon-edit, .icon-export)) {
+  border-top: 8px solid var(--blm-i-menu-gap);
+}
+/* OpenProject's own separators: the same band */
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) :is(hr, .dropdown-divider) {
+  height: 8px; margin: 0; border: 0; background: var(--blm-i-menu-gap);
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item {
+  display: flex !important; flex-direction: row-reverse; align-items: center; justify-content: space-between;
+  gap: 16px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px !important;
+  border: 0 !important; border-radius: 0 !important; background: transparent !important;
+  font: 400 15px/1.25 var(--g-font) !important;
+  text-align: left; text-decoration: none !important; cursor: pointer; outline: none !important;
+  transition: background-color .1s ease-out;
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item > span {
+  flex: 1 1 auto; min-width: 0; color: inherit !important; font: inherit !important;
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item :is(op-icon, [class*="icon-"]) {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; margin: 0 !important; padding: 0 !important;
+  color: inherit !important; font-size: 16px; line-height: 1;
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item [class*="icon-"]::before {
+  margin: 0 !important; padding: 0 !important; color: inherit !important;
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:is(:hover, :focus-visible) {
+  background: var(--g-fill) !important;
+}
+/* a Create item carrying a type colour class keeps it, for its dot */
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:not([class*="__hl_inline_type"]) { color: var(--g-text) !important; }
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:active {
+  background: var(--g-fill-hover) !important;
+}
+/* destructive */
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:has(.icon-delete),
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:has(.icon-delete):is(:hover, :focus-visible) {
+  color: var(--g-red) !important;
+}
+html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:is(.inactive, [aria-disabled="true"], [disabled]) {
+  opacity: .38; cursor: default; background: transparent !important;
+}
+/* Create menu: opens from the left, type names in sentence case with the
+   type's colour as a leading dot instead of coloured capitals */
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+  min-width: 200px; transform-origin: top left;
+}
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item {
+  flex-direction: row; justify-content: flex-start; gap: 0;
+}
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"] {
+  display: inline-flex; align-items: center; gap: 10px;
+  text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
+  -webkit-text-fill-color: var(--g-text);
+}
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"] * {
+  text-transform: none !important; -webkit-text-fill-color: var(--g-text);
+}
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"]::before {
+  content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: currentColor; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .18);
+}
+html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item > span:not([class*="__hl_inline_type"]) {
+  text-transform: none !important;
+}
+
+/* Page: the iOS grouped background (as on the detail page), so the list reads as
+   inset cards on grey instead of one white sheet */
+html.blm-ios-wp:has(.work-package-table),
+html.blm-ios-wp:has(.work-package-table) body { background: var(--g-grouped-solid) !important; }
+html.blm-ios-wp:has(.work-package-table) #content-wrapper,
+html.blm-ios-wp:has(.work-package-table) #content,
+html.blm-ios-wp .work-packages--list-container,
+html.blm-ios-wp .wp-table--container,
+html.blm-ios-wp .generic-table--container { background: transparent !important; }
+
+/* Table: an inset-grouped list. Each group is its own rounded card with its name
+   above it in small grey capitals; without grouping the whole list is one card.
+   Rows paint --blm-i-row so hover and selection stay opaque on the card. */
 html.blm-ios-wp .work-package-table {
   font-family: var(--g-font); font-size: 14px; color: var(--g-text);
-  background: var(--g-surface-solid); border-collapse: separate; border-spacing: 0;
-  box-shadow: var(--g-shadow); border-radius: var(--g-radius-lg);
+  background: transparent; border: 0; border-collapse: separate; border-spacing: 0;
+  box-shadow: none; border-radius: 0;
 }
-html.blm-ios-wp .work-package-table thead th:first-child { border-top-left-radius: var(--g-radius-lg); }
-html.blm-ios-wp .work-package-table thead th:last-child { border-top-right-radius: var(--g-radius-lg); }
+/* Column titles sit on the grey above the cards; translucent while they stick */
 html.blm-ios-wp .work-package-table thead th {
-  background: var(--g-surface-solid); border: 0; border-bottom: 1px solid var(--g-hairline);
-  height: 40px; padding: 0 10px; vertical-align: middle;
+  background: var(--g-grouped) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 0; height: 34px; padding: 0 10px; vertical-align: middle;
 }
 html.blm-ios-wp .work-package-table thead th *,
 html.blm-ios-wp .work-package-table thead th *::before,
@@ -60,29 +190,53 @@ html.blm-ios-wp .work-package-table thead th *::after { border-bottom: 0; box-sh
 html.blm-ios-wp .work-package-table thead th,
 html.blm-ios-wp .work-package-table thead th a,
 html.blm-ios-wp .work-package-table thead th span {
-  font-family: var(--g-font); font-size: 12px; font-weight: 600;
-  text-transform: none; letter-spacing: 0; color: var(--g-text2);
+  font-family: var(--g-font); font-size: 12px; font-weight: 500;
+  text-transform: none; letter-spacing: 0; color: var(--g-text3);
 }
 html.blm-ios-wp .work-package-table thead th a:hover { color: var(--g-text); text-decoration: none; }
 
-html.blm-ios-wp .work-package-table tbody td {
-  height: 44px; padding: 0 10px; vertical-align: middle;
-  border: 0; border-bottom: 1px solid var(--g-hairline);
-  background: transparent; color: var(--g-text);
+html.blm-ios-wp .work-package-table tbody tr { --blm-i-row: var(--g-card); }
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row:not([class*="sums"]):hover {
+  --blm-i-row: color-mix(in srgb, var(--g-text) 4%, var(--g-card));
 }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row:hover > td { background: var(--g-hover); }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked > td,
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td { background: var(--g-selected); }
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked,
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover {
+  --blm-i-row: color-mix(in srgb, var(--g-accent) 14%, var(--g-card));
+}
+html.blm-ios-wp .work-package-table tbody td {
+  height: var(--g-row); padding: 0 10px; vertical-align: middle;
+  border: 0; border-bottom: 1px solid var(--g-row-sep);
+  background: var(--blm-i-row) !important; color: var(--g-text);
+  transition: background-color .12s ease-out;
+}
+/* Separators start after the leading inset, like iOS cells */
+html.blm-ios-wp .work-package-table tbody tr > td:first-child {
+  border-bottom-color: transparent;
+  background: linear-gradient(var(--g-row-sep), var(--g-row-sep)) right bottom / calc(100% - 16px) 1px no-repeat,
+              var(--blm-i-row) !important;
+}
+/* Card corners: first row of the list or of a group, last row before the next
+   group or the end of the list (the group's Sum row, when there is one);
+   a collapsed group's header and the "Create new work package" row are never
+   part of a card */
+html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-header"]) > td:first-child,
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:first-child { border-top-left-radius: var(--g-radius-card); }
+html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-header"]) > td:last-child,
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:last-child { border-top-right-radius: var(--g-radius-card); }
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td { border-bottom-color: transparent; }
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:first-child {
+  background: var(--blm-i-row) !important; border-bottom-left-radius: var(--g-radius-card);
+}
+html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:last-child { border-bottom-right-radius: var(--g-radius-card); }
 
 html.blm-ios-wp .work-package-table td.id a {
   color: var(--g-accent); font-weight: 500; text-decoration: none; font-variant-numeric: tabular-nums;
 }
 html.blm-ios-wp .work-package-table td.id a:hover { text-decoration: underline; }
 html.blm-ios-wp .work-package-table td.subject,
-html.blm-ios-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 450; }
+html.blm-ios-wp .work-package-table td.subject * { color: var(--g-text); font-weight: 500; }
 
-/* Quieter columns; type and priority keep OpenProject's own icon and dot */
-html.blm-ios-wp .work-package-table td.priority *,
+/* Quieter columns; type keeps OpenProject's own icon */
 html.blm-ios-wp .work-package-table td.type *,
 html.blm-ios-wp .work-package-table td.version *,
 html.blm-ios-wp .work-package-table td[class*="customField"] * { color: var(--g-text2); }
@@ -90,15 +244,31 @@ html.blm-ios-wp .work-package-table td.type * { text-transform: none; font-weigh
 html.blm-ios-wp .work-package-table td.storyPoints,
 html.blm-ios-wp .work-package-table td.spentTime,
 html.blm-ios-wp .work-package-table td.estimatedTime { font-variant-numeric: tabular-nums; }
+html.blm-ios-wp .work-package-table td.storyPoints { font-weight: 600; }
 html.blm-ios-wp .work-package-table [class*="__hl_inline_type"],
 html.blm-ios-wp .work-package-table [class*="__hl_inline_priority"] {
   color: var(--g-text2) !important; text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
 }
+/* A lone "-" (nothing set) goes quiet so real values stand out (tagged by ios.js) */
+html.blm-ios-wp .work-package-table td.blm-i-dash,
+html.blm-ios-wp .work-package-table td.blm-i-dash * { color: var(--g-text3) !important; }
+/* Priority: a dot that says how loud it is; urgent also reads in red (tagged by ios.js) */
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio] {
+  display: inline-flex; align-items: center; gap: 7px; color: var(--g-text2) !important; font-weight: 400;
+}
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio]::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--g-fill-hover);
+}
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="urgent"] { color: var(--g-red) !important; font-weight: 600 !important; }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="urgent"]::before { background: var(--g-red); }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="high"] { color: var(--g-text) !important; }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="high"]::before { background: var(--g-orange); }
+html.blm-ios-wp .work-package-table td.priority [data-blm-i-prio="low"]::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--g-fill-hover); }
 
 /* Status chip (tagged by ios.js) */
 html.blm-ios-wp .work-package-table .blm-i-chip {
   display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-  padding: 2px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap; vertical-align: middle;
   font-family: var(--g-font); font-size: 12px; font-weight: 600; line-height: 16px;
   text-transform: none; letter-spacing: 0;
   background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
@@ -119,33 +289,219 @@ html.blm-ios-wp .work-package-table td.assignee img {
 }
 html.blm-ios-wp .work-package-table td.assignee * { color: var(--g-text); }
 
-/* Group headers and sum rows */
-html.blm-ios-wp .work-package-table tr.-group-header > td,
-html.blm-ios-wp .work-package-table tr[class*="group-header"] > td {
-  height: 44px; background: var(--g-sunken); border-bottom: 1px solid var(--g-hairline); padding: 0 10px;
+/* Group headers: no band, just the section title on the grey above its card,
+   with a chevron and the count. OpenProject's toggle is a black minus square and
+   its count reads "(6)"; ios.js copies the bare number into data-blm-i-count. */
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] > td {
+  height: auto; padding: 22px 6px 7px; border: 0; border-radius: 0 !important;
+  background: transparent !important;
 }
-html.blm-ios-wp .work-package-table tr.-group-header .group--value,
+/* OpenProject also paints the row and the wrappers inside the cell, which left a
+   lighter band behind the title; everything in the title row shows the page grey */
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"],
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] * {
+  background-color: transparent !important; background-image: none !important; box-shadow: none !important;
+}
+html.blm-ios-wp .work-package-table tbody tr[class*="group-header"]:first-child > td { padding-top: 10px; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] > td > * { vertical-align: middle; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-right: 4px; border-radius: 50%; cursor: pointer;
+  color: var(--g-text3) !important; font-size: 0 !important;
+  background: transparent !important; border: 0 !important;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander::before {
+  content: "" !important; width: 6px; height: 6px; margin-top: -3px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+}
+/* collapsed: the chevron points right */
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander.icon-plus::before { margin: 0 0 0 -3px; transform: rotate(-45deg); }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander:hover { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
 html.blm-ios-wp .work-package-table tr[class*="group-header"] .group--value {
-  font-family: var(--g-font); font-size: 14px; font-weight: 600; color: var(--g-text);
+  display: inline-flex !important; align-items: center; gap: 6px;
+  font-family: var(--g-font); font-size: 12px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: .03em; color: var(--g-text3);
 }
-html.blm-ios-wp .work-package-table tr.-group-header .count,
 html.blm-ios-wp .work-package-table tr[class*="group-header"] .count {
-  display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
-  background: var(--g-chip-todo-bg); color: var(--g-text2);
-  font-size: 12px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+  margin: 0; padding: 0; background: none; color: var(--g-text3);
+  font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .count[data-blm-i-count] { font-size: 0 !important; }
+html.blm-ios-wp .work-package-table tr[class*="group-header"] .count[data-blm-i-count]::after {
+  content: attr(data-blm-i-count); display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--g-fill); color: var(--g-text2); text-align: center; text-transform: none; letter-spacing: 0;
+  font-size: 11px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums;
+}
+
+/* Sum row: the card's footer, a faint tint, quiet label, totals in tabular figures */
+html.blm-ios-wp .work-package-table tbody tr[class*="sums"] {
+  --blm-i-row: color-mix(in srgb, var(--g-text) 2.5%, var(--g-card));
 }
 html.blm-ios-wp .work-package-table tr[class*="sums"] > td {
-  height: 36px; background: var(--g-surface-solid); color: var(--g-text2);
-  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  height: 36px; color: var(--g-text);
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
+html.blm-ios-wp .work-package-table tr[class*="sums"] > td:first-child,
+html.blm-ios-wp .work-package-table tr[class*="sums"] > td:nth-child(2) { color: var(--g-text3); font-size: 12px; font-weight: 500; }
 
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table th,
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table td { background-color: transparent; }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tbody tr.wp-table--row:hover > td { background-color: var(--g-hover); }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tbody tr.wp-table--row.-checked > td { background-color: var(--g-selected); }
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tr.-group-header > td,
-html.blm-ios[data-blm-ios-theme="dark"] .work-package-table tr[class*="group-header"] > td { background-color: var(--g-sunken); }
+/* Total sum (its own tbody after the results): a quiet footer line on the grey
+   under the cards, not a band */
+html.blm-ios-wp .work-package-table tbody:not(.results-tbody) tr[class*="sums"] > td {
+  height: 34px; padding: 0 10px; border: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  color: var(--g-text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .work-package-table tbody:not(.results-tbody) tr[class*="sums"] > td:first-child { color: var(--g-text3); font-size: 12px; font-weight: 500; }
+
+/* "Create new work package": a compact tinted capsule on the grey under the list,
+   not a full-width white bar. The row it sits in stays see-through. */
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row,
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td,
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td * {
+  background-color: transparent !important; background-image: none !important;
+  border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+}
+html.blm-ios-wp .work-package-table tbody tr.wp-inline-create-button-row > td { height: auto; padding: 10px 0 4px !important; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link {
+  display: inline-flex !important; align-items: center; gap: 4px; width: auto !important;
+  height: 30px; padding: 0 12px 0 9px !important; border-radius: 999px !important;
+  background: var(--g-chip-progress-bg) !important; color: var(--g-accent) !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 600; line-height: 1;
+  text-decoration: none !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link * { color: inherit !important; font-size: inherit; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link [class*="icon"],
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link svg { font-size: 14px !important; width: 14px; height: 14px; margin: 0 !important; }
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link:hover {
+  background: color-mix(in srgb, var(--g-accent) 20%, transparent) !important;
+}
+html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* Pagination: round page buttons, the current page a filled blue circle */
+html.blm-ios-wp .op-pagination--item-link {
+  min-width: 30px; height: 30px; padding: 0 9px; border: 0 !important; border-radius: 999px !important;
+  background: transparent !important; color: var(--g-accent) !important; box-shadow: none !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+html.blm-ios-wp .op-pagination--item-link:hover { background: var(--g-fill) !important; }
+html.blm-ios-wp .op-pagination--item-link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios-wp .op-pagination--item-link:disabled { opacity: .35; cursor: not-allowed; background: transparent !important; }
+html.blm-ios-wp .op-pagination--item_current {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 9px;
+  border: 0 !important; border-radius: 999px; background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+  font-family: var(--g-font); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wp .op-pagination--space { background: transparent !important; border: 0 !important; }
+html.blm-ios-wp .op-pagination--range,
+html.blm-ios-wp .op-pagination--label,
+html.blm-ios-wp .op-pagination--space { color: var(--g-text2); font-family: var(--g-font); font-size: 13px; }
+
+/* Status picker in a row: OpenProject edits the status with an ng-select (a
+   white box with a grey caret). Closed, it is an iOS pop-up button: filled,
+   rounded, the status pill inside, up/down chevrons. Open, its list is the
+   same pull-down as the status menu of the details view: 36 px rows, a colour
+   dot per status (--blm-dot, set by jira-skin.js from /api/v3/statuses), every
+   status in view without a scrollbar where it fits. The list may be appended to
+   <body>, so it is found through the open status field (only one ng-select is
+   open at a time). */
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select {
+  height: 30px !important; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 9px !important;
+  box-shadow: none !important; outline: none !important; font-family: var(--g-font);
+}
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-select-container {
+  min-height: 30px !important; height: 30px !important; padding: 0 !important;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 9px !important;
+  box-shadow: none !important; color: var(--g-text) !important; cursor: pointer;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select:focus-within .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-value-container { height: 30px !important; padding: 0 0 0 6px !important; align-items: center !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-value { display: flex !important; align-items: center; margin: 0 !important; padding: 0 !important; background: transparent !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-value-icon,
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-clear-wrapper { display: none !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-input { top: 0 !important; bottom: 0; display: flex; align-items: center; padding: 0 4px 0 10px !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-input input {
+  height: 30px !important; padding: 0 !important; outline: none !important; cursor: pointer;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  font: 400 14px/20px var(--g-font) !important; color: var(--g-text) !important;
+}
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-placeholder { font: 400 14px/20px var(--g-font) !important; color: var(--g-text3) !important; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-arrow-wrapper {
+  position: static !important; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 26px !important; height: 30px; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-arrow-wrapper .ng-arrow {
+  position: static !important; top: 0 !important; width: 12px !important; height: 12px !important;
+  border: 0 !important; background: var(--g-text3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+/* Loading: until its options load the editor is empty, so it shows the status
+   the cell had (--blm-i-was, kept by ios.js) as its chip, and a spinner in place
+   of the chevrons, as the status button of the details view does. */
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select .ng-value-label:empty::before {
+  content: var(--blm-i-was, "");
+  display: inline-block; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  font: 600 12px/16px var(--g-font); background: var(--g-chip-todo-bg); color: var(--g-chip-todo-fg);
+}
+html.blm-ios-wp .work-package-table td.status[data-blm-i-was-tone="progress"] ng-select.ng-select .ng-value-label:empty::before { background: var(--g-chip-progress-bg); color: var(--g-chip-progress-fg); }
+html.blm-ios-wp .work-package-table td.status[data-blm-i-was-tone="done"] ng-select.ng-select .ng-value-label:empty::before { background: var(--g-chip-done-bg); color: var(--g-chip-done-fg); }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-label:empty) .ng-select-container { cursor: progress; }
+html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-label:empty) .ng-arrow-wrapper .ng-arrow {
+  box-sizing: border-box; background: none !important; -webkit-mask: none; mask: none;
+  border: 2px solid var(--g-text3) !important; border-right-color: transparent !important; border-radius: 50%;
+  animation: blm-i-spin .7s linear infinite;
+}
+@keyframes blm-i-spin { to { transform: rotate(360deg); } }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel {
+  min-width: 200px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
+  transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+}
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+  position: relative; display: flex !important; align-items: center; gap: 10px;
+  min-height: 36px; box-sizing: border-box; padding: 0 16px 0 12px !important;
+  border: 0 !important; border-radius: 8px !important; background: transparent !important;
+  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
+  white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
+}
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option .ng-option-label { overflow: hidden; text-overflow: ellipsis; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option::before {
+  content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--blm-dot, transparent); box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .18);
+}
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
 
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wp .toolbar-container .button { transition: none; }
+  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) { animation: none; }
+  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item { transition: none; }
+  html.blm-ios-wp .toolbar-container .button,
+  html.blm-ios-wp .toolbar-container .editable-toolbar-title--input,
+  html.blm-ios-wp .work-package-table tbody td,
+  html.blm-ios-wp .work-package-table .expander,
+  html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link { transition: none; }
+  html.blm-ios-wp .work-package-table td.status ng-select .ng-select-container,
+  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
+  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-label:empty) .ng-arrow-wrapper .ng-arrow { animation: none; border-right-color: var(--g-text3) !important; opacity: .5; }
 }

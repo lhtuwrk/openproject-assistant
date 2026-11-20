@@ -1,0 +1,162 @@
+/* iOS skin: the notification centre (/notifications). The toolbar's buttons come from
+   list.css (the page also carries blm-ios-wp, so its split view gets detail.css);
+   here: a large title, Unread / All as a segmented control, the list as one
+   inset-grouped card with a blue dot on unread rows (as in Mail), and the counts
+   in the sidebar and on the rows as capsules.
+   Scoped under html.blm-ios-notif, set by ios.js on /notifications.
+   OpenProject-internal selectors: .op-ian-center, .op-ian-item (_read, _selected,
+   --top-line, --bottom-line, --date, --actor, --reason, --buttons, --button),
+   op-in-app-notification-entry, .op-bubble. */
+
+/* Large title */
+html.blm-ios-notif .toolbar-container :is(.title-container, .title-container *, h2) {
+  font-family: var(--g-font) !important; font-size: 30px !important; font-weight: 700 !important;
+  letter-spacing: -.02em; color: var(--g-text) !important; border: 0 !important;
+}
+html.blm-ios-notif .toolbar-container { margin-bottom: 14px; }
+html.blm-ios-notif .toolbar-container .button * { color: inherit !important; }
+
+/* Unread / All: a segmented control. A grey track; the chosen one is a raised white
+   segment. Matches a button group holding two or more buttons. */
+html.blm-ios-notif .toolbar-container :is(.button-group, [class*="filter"], [class*="segment"]):has(> .button ~ .button) {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 10px;
+}
+html.blm-ios-notif .toolbar-container :is(.button-group, [class*="filter"], [class*="segment"]):has(> .button ~ .button) > .button {
+  height: 30px !important; min-height: 30px !important; margin: 0 !important; padding: 0 14px !important;
+  background: transparent !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 8px !important; box-shadow: none !important;
+  font: 500 13px var(--g-font) !important;
+}
+html.blm-ios-notif .toolbar-container :is(.button-group, [class*="filter"], [class*="segment"]):has(> .button ~ .button) > .button:hover:not(.-active, [aria-pressed="true"], [aria-current]) {
+  color: var(--g-text) !important;
+}
+html.blm-ios-notif .toolbar-container :is(.button-group, [class*="filter"], [class*="segment"]):has(> .button ~ .button) > .button:is(.-active, [aria-pressed="true"], [aria-current]) {
+  background: var(--g-card) !important; color: var(--g-text) !important; font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .04) !important;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-notif .toolbar-container :is(.button-group, [class*="filter"], [class*="segment"]):has(> .button ~ .button) > .button:is(.-active, [aria-pressed="true"], [aria-current]) {
+  background: var(--g-raised) !important;
+}
+
+/* The list: one rounded card; the rows inside it carry the separators */
+html.blm-ios-notif :is(.op-ian-center, .op-ian-center--content) { background: transparent !important; font-family: var(--g-font); }
+html.blm-ios-notif :has(> op-in-app-notification-entry) {
+  background: var(--g-card) !important; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-notif :has(> op-in-app-notification-entry) { box-shadow: none; }
+
+/* A row: the blue unread dot on the left, then three lines */
+html.blm-ios-notif .op-ian-item {
+  position: relative; display: block;
+  margin: 0 !important; padding: 12px 16px 12px 32px !important;
+  background: transparent !important; border: 0 !important; border-radius: 0 !important;
+  box-shadow: inset 0 -.5px 0 var(--g-row-sep) !important;
+  color: var(--g-text); font-family: var(--g-font); cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-notif op-in-app-notification-entry:last-child .op-ian-item { box-shadow: none !important; }
+html.blm-ios-notif .op-ian-item:hover { background: var(--g-hover) !important; }
+html.blm-ios-notif .op-ian-item:is(.op-ian-item_selected, [class*="_selected"]) { background: var(--g-selected) !important; }
+html.blm-ios-notif .op-ian-item:not(.op-ian-item_read)::before {
+  content: ""; position: absolute; left: 13px; top: 19px;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--g-accent);
+}
+html.blm-ios-notif .op-ian-item:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+
+/* Top line: id, project and reason in small grey text; the status a soft pill */
+html.blm-ios-notif .op-ian-item--top-line {
+  display: flex; align-items: center; gap: 6px; min-height: 22px;
+  color: var(--g-text3) !important; font: 400 13px var(--g-font) !important;
+}
+html.blm-ios-notif .op-ian-item--top-line * { font-family: var(--g-font) !important; }
+html.blm-ios-notif .op-ian-item--top-line :is(a, span, div):not([class*="__hl_"]):not(.op-bubble):not(.op-ian-item--buttons *) {
+  color: var(--g-text3) !important; font-weight: 400 !important;
+}
+/* Status: a soft tinted chip with a dot in its tone, as in the list (the tone is
+   set by ios.js; until it lands, OpenProject's colour keeps a readable white text) */
+html.blm-ios-notif .op-ian-item [class*="__hl_background_status"] {
+  display: inline-flex !important; align-items: center; gap: 5px;
+  height: 20px; padding: 0 9px 0 8px !important; margin-right: 2px;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 600 12px/1 var(--g-font) !important; letter-spacing: 0; text-transform: none;
+  white-space: nowrap;
+}
+html.blm-ios-notif .op-ian-item [class*="__hl_background_status"]:not(.blm-i-chip),
+html.blm-ios-notif .op-ian-item [class*="__hl_background_status"]:not(.blm-i-chip) * { color: #fff !important; }
+html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"] {
+  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+}
+html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"][data-blm-i-tone="progress"] {
+  background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important;
+}
+html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"][data-blm-i-tone="done"] {
+  background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important;
+}
+html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"] * {
+  color: inherit !important; background: transparent !important; font: inherit !important;
+}
+html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"]::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+/* Subject: the type in its colour, small caps; the title in body text */
+html.blm-ios-notif .op-ian-item [class*="__hl_inline_type"] {
+  font: 600 12px var(--g-font) !important; letter-spacing: .03em; margin-right: 4px;
+}
+html.blm-ios-notif .op-ian-item :is(.op-ian-item--subject, [class*="--subject"]) {
+  color: var(--g-text) !important; font: 600 15px/1.35 var(--g-font) !important;
+}
+html.blm-ios-notif .op-ian-item_read :is(.op-ian-item--subject, [class*="--subject"]) { font-weight: 400 !important; }
+html.blm-ios-notif .op-ian-item > :not(.op-ian-item--top-line):not(.op-ian-item--bottom-line) { margin-top: 2px; }
+/* Bottom line: time and author, grey */
+html.blm-ios-notif .op-ian-item--bottom-line {
+  margin-top: 4px; color: var(--g-text3) !important; font: 400 13px var(--g-font) !important;
+}
+html.blm-ios-notif .op-ian-item--bottom-line * { color: inherit !important; font: inherit !important; }
+
+/* Row buttons (count, mark read): round, quiet until hovered */
+html.blm-ios-notif .op-ian-item--buttons { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+html.blm-ios-notif .op-ian-item :is(.op-ian-item--button, .op-ian-item--buttons button, .op-ian-item--buttons a) {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; color: var(--g-text3) !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: none !important; cursor: pointer;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-notif .op-ian-item :is(.op-ian-item--button, .op-ian-item--buttons button, .op-ian-item--buttons a):hover {
+  background: var(--g-fill) !important; color: var(--g-accent) !important;
+}
+
+/* Counts: capsules. Accent on the rows, grey in the sidebar; the sidebar's
+   current entry and Inbox's unread count go accent too. */
+html.blm-ios-notif .op-bubble {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
+  background: var(--g-fill) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 999px !important;
+  font: 600 12px var(--g-font) !important; font-variant-numeric: tabular-nums;
+}
+html.blm-ios-notif .op-ian-item .op-bubble,
+html.blm-ios-notif #main-menu :is(.selected, [aria-current]) .op-bubble {
+  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+}
+
+/* Sidebar section titles (REASON, UNREAD BY PROJECT): iOS list headers */
+html.blm-ios-notif #main-menu :is(.op-sidemenu--title, [class*="sidemenu--title"]) {
+  color: var(--g-text3) !important; font: 600 11px var(--g-font) !important; letter-spacing: .05em; text-transform: uppercase;
+}
+html.blm-ios-notif #main-menu :is(.op-sidemenu--title, [class*="sidemenu--title"]) * { color: inherit !important; }
+
+/* Empty inbox: a quiet centred message */
+html.blm-ios-notif :is(.op-ian-center--empty-state, [class*="ian-center"] [class*="empty"], op-no-results, .generic-table--no-results-container) {
+  background: transparent !important; border: 0 !important; color: var(--g-text3) !important;
+  font: 400 15px var(--g-font) !important; text-align: center;
+}
+html.blm-ios-notif :is(.op-ian-center--empty-state, [class*="ian-center"] [class*="empty"]) :is(h1, h2, h3, h4, strong) {
+  color: var(--g-text) !important; font: 600 17px var(--g-font) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios-notif .op-ian-item, html.blm-ios-notif .op-ian-item * { transition: none !important; }
+}
