@@ -35,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Jira style: an editable cell shows a dotted underline on hover so it's clear which fields can be clicked to edit, empty fields stay quiet until the row is hovered, Story Points get a visual chip, long Summary text gets a tooltip with the full text, and the "Story Points" column heading is shortened to "Points".
 
 ### Fixed
+- iOS style: the sign-in page is now an iOS sign-in sheet — a frosted rounded card with a large "Sign in" title, the username and password as one rounded group (label on the left, field on the right, a hairline between them, no light-blue autofill), and a full-width blue Sign in button — instead of OpenProject's grey box.
+- iOS style: the work-package list's ⋮ view menu (Configure view, Sort by, Save, Export…) is now an iOS context menu — a frosted rounded panel with the label on the left and its symbol on the right, hairlines between rows, wider gaps between its groups, and Delete in red — instead of OpenProject's plain list. The Create button's type menu gets the same panel, with each type in normal case beside a dot of its colour instead of coloured capitals.
 - iOS style: pinned sprints in the header now show as a light grey capsule with dark text and a blue pin, matching the bar, instead of a dark capsule with grey text when the computer is set to dark mode.
 - Backlogs: folding or unfolding a sprint under the iOS or UI 2.0 style no longer leaves a stray "TypeIDSummaryAssigneeLabelStatusPoints" line above its stories; the Jira style's column headers were redrawn on that click whichever style was on.
 - iOS style: the sidebar on work-package pages showed two scrollbars side by side; only the list's own slim bar is left.

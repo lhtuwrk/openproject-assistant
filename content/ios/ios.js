@@ -1,7 +1,7 @@
 // ios.js — iOS skin switch for OpenProject work-package and Backlogs pages.
 // Only toggles html classes; every visual rule lives in content/ios/*.css and is
 // scoped under html.blm-ios, so switch off = native OpenProject.
-// Registered by background.js for the configured host on work-package and Backlogs routes.
+// Registered by background.js for the configured host on work-package, Backlogs and sign-in routes.
 
 (() => {
 'use strict';
@@ -11,6 +11,7 @@ const CFG_THEME = '__blm_theme';   // 'dark' | 'light', mirrored from the Settin
 const ROOT_CLASS = 'blm-ios';
 const WP_CLASS   = 'blm-ios-wp';
 const BL_CLASS   = 'blm-ios-bl';
+const LOGIN_CLASS = 'blm-ios-login';
 
 // The switch and theme are cached in the host page's localStorage so the first
 // paint is already right; chrome.storage is async and lands after it.
@@ -21,6 +22,7 @@ let theme = cached(CFG_THEME) === 'light' ? 'light' : 'dark';
 
 const onWorkPackagePage = () => /\/work_packages(\/|$)/.test(location.pathname);
 const onBacklogsPage    = () => /\/backlogs(\/|$)/.test(location.pathname);
+const onLoginPage       = () => /^\/login(\/|$)/.test(location.pathname);
 
 // Status chips: tag the text leaf of each td.status with a tone. The tone is
 // guessed from English status names (same heuristic as the Jira skin); unknown
@@ -223,6 +225,7 @@ function apply() {
   root.classList.toggle(ROOT_CLASS, enabled);
   root.classList.toggle(WP_CLASS, enabled && onWorkPackagePage());
   root.classList.toggle(BL_CLASS, enabled && onBacklogsPage());
+  root.classList.toggle(LOGIN_CLASS, enabled && onLoginPage());
   if (enabled) schedule();
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off

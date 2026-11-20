@@ -865,8 +865,8 @@ async function doRegisterHostScripts() {
   await chrome.scripting.registerContentScripts([
     { id: `${HOST_SCRIPT_PREFIX}content`, matches: [`${host}/projects/*/work_packages*`],
       js: ['content/content.js'], runAt: 'document_idle' },
-    { id: `${HOST_SCRIPT_PREFIX}ios`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`, `${host}/projects/*/backlogs*`],
-      css: ['content/ios/tokens.css', 'content/ios/base.css', 'content/ios/list.css', 'content/ios/detail.css', 'content/ios/backlogs.css'], js: ['content/ios/ios.js'], runAt: 'document_start' },
+    { id: `${HOST_SCRIPT_PREFIX}ios`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`, `${host}/projects/*/backlogs*`, `${host}/login*`],
+      css: ['content/ios/tokens.css', 'content/ios/base.css', 'content/ios/list.css', 'content/ios/detail.css', 'content/ios/backlogs.css', 'content/ios/login.css'], js: ['content/ios/ios.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}skin`, matches: [all],
       js: ['content/quotes.js', 'shared/wp-chips.js', 'content/jira-skin.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}pinned-backlog`, matches: [all],
