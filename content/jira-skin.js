@@ -121,8 +121,16 @@ function typeKind(text) {
 // type icon from data-blm-type.
 function tagTypePicker() {
   for (const el of document.querySelectorAll(
-    '.work-packages--type-selector .inline-edit--display-field, .work-packages--type-selector .ng-select .ng-value, .work-packages--subject-type-row > .ng-dropdown-panel .ng-option'
+    '.work-packages--type-selector .inline-edit--display-field, .work-packages--type-selector .ng-select .ng-value, .work-packages--subject-type-row > .ng-dropdown-panel .ng-option, .work-package-table td.type ng-select .ng-value, .work-package-table td.type .inline-edit--display-field'
   )) {
+    const label = el.querySelector('.ng-value-label, .ng-option-label') || el;
+    const kind = typeKind(label.textContent.trim().toLowerCase());
+    if (el.dataset.blmType !== kind) el.dataset.blmType = kind;
+  }
+  // The type list of a row being edited in the work-package table (ng-select may
+  // append it to <body>): its options get the same tag for the icons.
+  if (!document.querySelector('.work-package-table td.type ng-select.ng-select-opened')) return;
+  for (const el of document.querySelectorAll('.ng-dropdown-panel .ng-option')) {
     const label = el.querySelector('.ng-value-label, .ng-option-label') || el;
     const kind = typeKind(label.textContent.trim().toLowerCase());
     if (el.dataset.blmType !== kind) el.dataset.blmType = kind;
@@ -898,7 +906,7 @@ html.${WP_CLASS} .work-package-table td.type * {
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority]::after { -webkit-mask-size: 16px; mask-size: 16px; }
 ${['story', 'bug', 'task', 'epic', 'feature', 'other'].map(k => `
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-type="${k}"] { background: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }
-html.${IOS_WP_CLASS} :is(.ng-value, .ng-option, .work-packages--type-selector .inline-edit--display-field)[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
+html.${IOS_WP_CLASS} :is(.ng-value, .ng-option, .work-packages--type-selector .inline-edit--display-field, .work-package-table td.type .inline-edit--display-field)[data-blm-type="${k}"] { --jx-type-c: var(--jx-type-${k}); --jx-glyph: ${GLYPH[k]}; }`).join('')}
 ${['highest', 'high', 'medium', 'low'].map(k => `
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"] { --jx-glyph: ${GLYPH[k]}; }
 :is(html.${ROOT_CLASS}, html.${IOS_WP_CLASS}) .blm-jx-icon[data-priority="${k}"]::after { background: var(--jx-prio-${k}); }

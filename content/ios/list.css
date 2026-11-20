@@ -305,6 +305,23 @@ html.blm-ios-wp .work-package-table td .inline-edit--display-field:focus-visible
 /* the cell itself never draws OpenProject's hover border either */
 html.blm-ios-wp .work-package-table tbody td:is(:hover, :focus-within) { outline: none !important; }
 
+/* Type label: the type's icon (a rounded square in its colour, the glyph knocked
+   out in white) before the name, as in the details view and the type picker.
+   jira-skin.js tags the field with data-blm-type; untagged it stays plain text. */
+html.blm-ios-wp .work-package-table td.type .inline-edit--display-field[data-blm-type] {
+  position: relative; gap: 7px; color: var(--g-text) !important; font-weight: 500;
+}
+html.blm-ios-wp .work-package-table td.type .inline-edit--display-field[data-blm-type] * { color: inherit !important; }
+html.blm-ios-wp .work-package-table td.type .inline-edit--display-field[data-blm-type]::before {
+  content: ""; flex: none; width: 16px; height: 16px; border-radius: 4.5px; background: var(--jx-type-c);
+}
+html.blm-ios-wp .work-package-table td.type .inline-edit--display-field[data-blm-type]::after {
+  content: ""; position: absolute; left: 6px; top: 50%; width: 16px; height: 16px; margin-top: -8px;
+  background: var(--jx-on-icon);
+  -webkit-mask: var(--jx-glyph) center / 11px no-repeat;
+          mask: var(--jx-glyph) center / 11px no-repeat;
+}
+
 /* Avatars */
 html.blm-ios-wp .work-package-table td.assignee .op-principal--avatar,
 html.blm-ios-wp .work-package-table td.assignee .op-avatar,
@@ -517,6 +534,105 @@ html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .n
 html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
 html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
 
+/* ── Type of a row being edited: the type picker of the details view, cell-sized.
+   Closed, a filled pop-up button with the type's icon and up/down chevrons; open,
+   the frosted pull-down with each type's icon and a checkmark on the current one.
+   jira-skin.js tags .ng-value and the options with data-blm-type. ─────────────── */
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select {
+  min-width: 140px; height: 30px !important; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 9px !important;
+  box-shadow: none !important; outline: none !important; font-family: var(--g-font);
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-select-container {
+  min-height: 30px !important; height: 30px !important; padding: 0 !important; overflow: visible;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 9px !important;
+  box-shadow: none !important; color: var(--g-text) !important; cursor: pointer;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select:focus-within .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value-container {
+  position: relative; height: 30px !important; padding: 0 0 0 7px !important; align-items: center !important; overflow: visible !important;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value {
+  position: relative; display: flex !important; align-items: center; gap: 7px; min-width: 0;
+  margin: 0 !important; padding: 0 !important; background: transparent !important;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value-icon,
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-clear-wrapper { display: none !important; }
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select :is(.ng-value-label, .ng-placeholder, .ng-input input) {
+  font: 500 14px/20px var(--g-font) !important; color: var(--g-text) !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value-container .ng-input {
+  position: absolute !important; top: 0 !important; bottom: 0; left: 0 !important; right: 0;
+  display: flex; align-items: center; padding: 0 4px 0 30px !important;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-input input { height: 30px !important; padding: 0 !important; outline: none !important; cursor: pointer; }
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-placeholder { color: var(--g-text3) !important; font-weight: 400 !important; }
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-arrow-wrapper {
+  position: static !important; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 26px !important; height: 30px; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-arrow-wrapper .ng-arrow {
+  position: static !important; top: 0 !important; width: 12px !important; height: 12px !important;
+  border: 0 !important; background: var(--g-text3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+/* type icon: a rounded square in the type colour, the glyph a white masked overlay */
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::before,
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type]::before {
+  content: ""; flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--jx-type-c);
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::after,
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before {
+  content: ""; position: absolute; top: 50%; width: 18px; height: 18px; margin-top: -9px;
+  background: var(--jx-on-icon);
+  -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
+          mask: var(--jx-glyph) center / 12px no-repeat;
+}
+html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::after { left: 0; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before { left: 10px; }
+
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel {
+  min-width: 200px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
+  transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+}
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+  position: relative; display: flex !important; align-items: center; gap: 10px;
+  min-height: 36px; box-sizing: border-box; padding: 0 34px 0 10px !important;
+  border: 0 !important; border-radius: 8px !important; background: transparent !important;
+  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
+  white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
+}
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; background-color: transparent !important; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option .ng-option-label { position: static !important; overflow: hidden; text-overflow: ellipsis; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected { font-weight: 600 !important; }
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  background: var(--g-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
+
 @media (prefers-reduced-motion: reduce) {
   html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) { animation: none; }
   html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item { transition: none; }
@@ -529,5 +645,8 @@ html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .n
   html.blm-ios-wp .work-package-table td.status ng-select .ng-select-container,
   html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
   html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp .work-package-table td.type ng-select .ng-select-container,
+  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
+  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
   html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-label:empty) .ng-arrow-wrapper .ng-arrow { animation: none; border-right-color: var(--g-text3) !important; opacity: .5; }
 }
