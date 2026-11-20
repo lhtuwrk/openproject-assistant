@@ -5,6 +5,10 @@
    control and activity entries as cards. CSS only, except the "Show N empty
    fields" footer that ios.js adds after a group's card: OpenProject's layout is
    kept and no nodes are moved, so there is nothing to restore when the switch is off.
+   The Jira layout on top of it (Child work items under the description, and on
+   the full page the status and attribute groups in a right-hand column) is
+   built by jira-skin.js, which restores it when the switch is off; this file
+   only draws it (see "Jira layout, iOS look" below).
    OpenProject-internal selectors: .work-packages--details, .work-packages--show-view,
    .work-packages-full-view--split-*, .work-package--single-view, .wp-info-wrapper,
    .work-packages--info-row, .work-packages--type-selector, .toolbar-container,
@@ -19,7 +23,8 @@
    is on; point them at the iOS skin tokens so they follow light/dark too. */
 html.blm-ios.blm-assign,
 html.blm-ios.blm-activity,
-html.blm-ios.blm-files {
+html.blm-ios.blm-files,
+html.blm-ios.blm-ios-wp {
   --jx-text: var(--g-text);
   --jx-text-subtle: var(--g-text2);
   --jx-text-subtlest: var(--g-text2);
@@ -36,6 +41,9 @@ html.blm-ios.blm-files {
   --jx-primary: var(--g-accent);
   --jx-on-primary: var(--g-on-accent);
   --jx-focus: var(--g-focus);
+  --jx-done-bar: var(--g-green);
+  --jx-error: var(--g-red);
+  --jx-todo-fg: var(--g-text3);
 }
 
 /* ── Panels: a grouped background floating on the canvas ─────────────────── */
@@ -119,12 +127,43 @@ html.blm-ios-wp .work-packages--details--subject .inline-edit--display-field.sub
 html.blm-ios-wp .work-packages--details .work-packages--details--subject .inline-edit--display-field.subject {
   font-size: 22px !important;
 }
-/* Type: a capsule tinted with OpenProject's own type colour (currentColor) */
-html.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 10px !important;
-  border-radius: 999px; font-size: 12px !important; font-weight: 600 !important;
-  text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap;
-  background: color-mix(in srgb, currentColor 14%, transparent);
+/* Type beside the title: an iOS tinted capsule in the type's own colour (the
+   list's type colour, from the icon), with the type's icon at its start. Its
+   editor is the grey pop-up button (see "Type picker" below); this is the
+   resting label, so it reads as a tag, not a control, until hovered.
+   jira-skin.js tags it with data-blm-type for the icon and colour; until then
+   it is an accent-tinted capsule without an icon. */
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .work-packages--type-selector {
+  align-self: center; margin-right: 14px !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type {
+  --blm-tint: var(--jx-type-c, var(--g-accent));
+  position: relative; display: inline-flex; align-items: center; box-sizing: border-box;
+  height: 28px; margin: 0 !important; padding: 0 12px !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important; outline: none;
+  background: color-mix(in srgb, var(--blm-tint) 13%, transparent) !important;
+  font: 600 13px/18px var(--g-font) !important; letter-spacing: .01em !important;
+  color: color-mix(in srgb, var(--blm-tint) 72%, var(--g-text)) !important;
+  text-transform: none !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:hover {
+  background: color-mix(in srgb, var(--blm-tint) 22%, transparent) !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:active {
+  background: color-mix(in srgb, var(--blm-tint) 28%, transparent) !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type:focus-visible { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type] { padding-left: 30px !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::before,
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::after {
+  content: ""; position: absolute; left: 6px; top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 999px;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::before { background: var(--jx-type-c); }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type[data-blm-type]::after {
+  background: var(--jx-on-icon);
+  -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
+          mask: var(--jx-glyph) center / 12px no-repeat;
 }
 
 /* Breadcrumb and the "#id Created by … Last updated …" caption */
@@ -379,6 +418,614 @@ html.blm-ios-wp #wp-status-context-menu .menu-item:active { background: var(--g-
 html.blm-ios-wp #wp-status-context-menu .menu-item[aria-disabled="true"] { opacity: .4; cursor: default; }
 @keyframes blm-i-menu-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 
+/* ── Type picker: OpenProject edits the type with an ng-select that is also an
+   .inline-edit--field (its own white box and border). Closed, it becomes an iOS
+   pop-up button: filled, rounded, the type's icon, up/down chevrons. Open, its
+   list (appended to the subject/type row) is the same frosted pull-down as the
+   status menu: each type with its icon, a checkmark on the current one.
+   jira-skin.js tags .ng-value and each .ng-option with data-blm-type and sets
+   --jx-type-c / --jx-glyph for it; the icons are the list's type icons. ────── */
+/* The button is wider than the type label it replaces, and OpenProject's
+   wrappers keep the label's width (on the full page they don't grow to fit),
+   so it spilled over the title: the whole chain reserves the width. */
+html.blm-ios.blm-ios-wp .work-packages--type-selector:has(ng-select),
+html.blm-ios.blm-ios-wp .work-packages--type-selector:has(ng-select) :is(.inline-edit--container, .inline-edit--container > div, .inline-edit--active-field) {
+  min-width: 176px !important; flex-shrink: 0 !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector ng-select.ng-select {
+  min-width: 176px; height: 32px !important; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 10px !important;
+  box-shadow: none !important; outline: none !important; font-family: var(--g-font);
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-select-container {
+  min-height: 32px !important; height: 32px !important; padding: 0 !important; overflow: visible;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 10px !important;
+  box-shadow: none !important; color: var(--g-text) !important; cursor: pointer;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select:focus-within .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value-container {
+  position: relative; height: 32px !important; padding: 0 0 0 8px !important; align-items: center !important; overflow: visible !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value {
+  display: flex !important; align-items: center; gap: 8px; min-width: 0; margin: 0 !important; padding: 0 !important; background: transparent !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value-icon,
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-clear-wrapper { display: none !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select :is(.ng-value-label, .ng-placeholder, .ng-input input) {
+  font: 600 15px/20px var(--g-font) !important; color: var(--g-text) !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  text-transform: none !important; letter-spacing: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value-container .ng-input {
+  position: absolute !important; top: 0 !important; bottom: 0; left: 0 !important; right: 0;
+  display: flex; align-items: center; padding: 0 4px 0 34px !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-input input { height: 32px !important; padding: 0 !important; outline: none !important; cursor: pointer; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-placeholder { color: var(--g-text3) !important; font-weight: 400 !important; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-arrow-wrapper {
+  position: static !important; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 28px !important; height: 32px; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-arrow-wrapper .ng-arrow {
+  position: static !important; top: 0 !important; width: 12px !important; height: 12px !important;
+  border: 0 !important; background: var(--g-text3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 4.5 6 2l2.5 2.5M3.5 7.5 6 10l2.5-2.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+/* Type icon: a rounded square in the type colour, the glyph knocked out in white */
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value[data-blm-type]::before,
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option[data-blm-type]::before {
+  content: ""; flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--jx-type-c);
+}
+/* the glyph: a white masked overlay on that square (a masked ::before would mask the square too) */
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value[data-blm-type],
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option[data-blm-type] { position: relative; }
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value[data-blm-type]::after,
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before {
+  content: ""; position: absolute; top: 50%; width: 18px; height: 18px; margin-top: -9px;
+  background: var(--jx-on-icon);
+  -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
+          mask: var(--jx-glyph) center / 12px no-repeat;
+}
+html.blm-ios.blm-ios-wp .work-packages--type-selector .ng-select .ng-value[data-blm-type]::after { left: 0; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before { left: 10px; }
+
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel {
+  min-width: 220px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
+  /* nearly solid: the row is a backdrop root, so the blur never reaches the
+     description underneath and a see-through panel shows it sharp */
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  font-family: var(--g-font); overflow: hidden;
+  transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel { background: var(--g-raised) !important; }
+}
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-dropdown-panel-items { border: 0 !important; background: transparent !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option {
+  position: relative; display: flex !important; align-items: center; gap: 10px;
+  min-height: 36px; box-sizing: border-box; padding: 0 34px 0 10px !important;
+  border: 0 !important; border-radius: 8px !important; background: transparent !important;
+  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
+  white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
+}
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; background-color: transparent !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option .ng-option-label { position: static !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+/* while the pointer is on the list, only the row under it is lit (ng-select's
+   keyboard mark can lag behind the mouse) */
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option.ng-option-selected { font-weight: 600 !important; }
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option.ng-option-selected::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  background: var(--g-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
+
+/* ── Attribute pickers (Assignee, Accountable, Version, Priority…): the field
+   being edited is an iOS search field (filled, rounded, a round clear button,
+   a chevron) and its list the same frosted pull-down as the type picker: people
+   with a round avatar, the typed letters in bold, a checkmark on the current
+   value. The list may be appended to <body>, so it is found through the open
+   field (one ng-select is open at a time). ─────────────────────────────────── */
+html.blm-ios-wp .attributes-key-value--value-container .inline-edit--container.-active :is(.inline-edit--field, .inline-edit--active-field):has(ng-select) {
+  border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select {
+  width: 100%; padding: 0 !important; margin: 0 !important; border: 0 !important;
+  background: transparent !important; box-shadow: none !important; font-family: var(--g-font);
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-select-container {
+  min-height: 34px !important; height: 34px !important; padding: 0 !important; overflow: visible;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 10px !important;
+  box-shadow: none !important; color: var(--g-text) !important;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select:is(.ng-select-focused, :focus-within) .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value-container {
+  height: 34px !important; padding: 0 0 0 10px !important; align-items: center !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value { margin: 0 !important; padding: 0 !important; background: transparent !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value-container .ng-input {
+  top: 0 !important; bottom: 0; display: flex; align-items: center; padding: 0 4px 0 10px !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select :is(.ng-value-label, .ng-placeholder, .ng-input input) {
+  font: 400 15px/20px var(--g-font) !important; color: var(--g-text) !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-input input { height: 34px !important; padding: 0 !important; caret-color: var(--g-accent); }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-placeholder { color: var(--g-text3) !important; }
+/* Clear: a small grey disc with a white × */
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper {
+  position: relative; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 24px !important; height: 34px; padding: 0 !important; margin: 0 !important; color: transparent !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper .ng-clear { display: none !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper::before {
+  content: ""; width: 16px; height: 16px; border-radius: 50%; background: var(--g-text3);
+  /* a disc with the × cut out of it */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='white'/%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E") center / 16px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='white'/%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E") center / 16px no-repeat;
+  transition: background-color .1s ease-out;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper:hover::before { background: var(--g-text2); }
+/* Chevron, turned up while the list is open */
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-arrow-wrapper {
+  position: static !important; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 30px !important; height: 34px; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-arrow-wrapper .ng-arrow {
+  position: static !important; top: 0 !important; width: 12px !important; height: 12px !important;
+  border: 0 !important; background: var(--g-text3); transition: transform .16s ease-out;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5l3-3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5l3-3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select-opened .ng-arrow-wrapper .ng-arrow { transform: rotate(180deg); }
+
+/* The list */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+  min-width: 220px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
+  transform-origin: top center; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel :is(.ng-dropdown-panel-items, .ng-dropdown-header, .ng-dropdown-footer) {
+  border: 0 !important; background: transparent !important;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(50vh, 320px) !important; scrollbar-width: thin; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+  position: relative; display: flex !important; align-items: center; gap: 10px;
+  min-height: 40px; box-sizing: border-box; padding: 0 34px 0 10px !important;
+  border: 0 !important; border-radius: 8px !important; background: transparent !important;
+  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
+  white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * {
+  font-family: var(--g-font) !important; font-size: inherit !important; color: inherit !important; background-color: transparent;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.ng-option-label, .op-principal, op-principal) {
+  display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-principal--name, .op-principal--name *) {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400 !important; text-decoration: none !important;
+}
+/* Avatars: 26px discs */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-avatar, .op-principal--avatar, img.avatar) {
+  flex: none; width: 26px !important; height: 26px !important; min-width: 26px; margin: 0 !important;
+  border-radius: 50% !important; font-size: 11px !important; line-height: 26px !important;
+}
+/* The typed letters: bold, in body colour (OpenProject paints them blue) */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.highlighted, mark, b, strong) {
+  font-weight: 700 !important; color: var(--g-text) !important; background: none !important; padding: 0 !important;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  background: var(--g-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+/* "No items found", "Loading…": quiet centred grey text */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled:not(:has(:is(.op-avatar, op-principal))) {
+  justify-content: center; padding: 0 10px !important; color: var(--g-text3) !important; font-size: 14px !important; background: transparent !important; cursor: default;
+}
+
+/* ── Jira layout, iOS look ────────────────────────────────────────────────────
+   jira-skin.js runs its work-package layout while html.blm-ios-wp is set:
+   arrangeFullView() moves .wp-info-wrapper and the attribute groups into
+   aside.blm-jx-side on the full page, and renderChildren() puts
+   section.blm-jx-children after the description (both views). Its own rules are
+   scoped to the Jira skin, so everything here is drawn from the iOS tokens. The
+   prefix html.blm-ios.blm-ios-wp outranks the picker / avatar base rules that
+   jira-skin.js shares with this skin (:is(html.blm-jira-wp, …, html.blm-ios-wp)). */
+
+/* Full page: main column (title, description, children, tabs) and a side column
+   (status, then one inset card per attribute group), like Jira's issue view. */
+html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 34%, 420px);
+  grid-template-rows: auto 1fr;
+  column-gap: 32px; align-items: start;
+  overflow-y: auto !important;
+  padding: 0 24px 32px;
+}
+html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side)
+  :is(.work-packages-full-view--split-left, .work-packages-full-view--split-right, .work-packages--panel-inner, wp-single-view, .work-package--single-view) {
+  display: block !important; position: static !important;
+  width: auto !important; max-width: none !important; min-width: 0 !important;
+  height: auto !important; overflow: visible !important;
+  flex: none !important; border: 0 !important; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) > .work-packages-full-view--split-left { grid-column: 1; grid-row: 1; }
+html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) > .work-packages-full-view--split-right { grid-column: 1; grid-row: 2; }
+html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) .work-packages-full-view--resizer { display: none !important; }
+html.blm-ios-wp .blm-jx-side {
+  grid-column: 2; grid-row: 1 / span 2;
+  display: flex; flex-direction: column; min-width: 0; padding-top: 16px;
+}
+html.blm-ios-wp .blm-jx-side .wp-info-wrapper {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin: 0 0 24px !important; padding: 0 !important;
+}
+html.blm-ios-wp .blm-jx-side .work-packages--info-row { flex-basis: 100%; order: 2; margin: 0 !important; line-height: 1.4; }
+html.blm-ios-wp .blm-jx-side .attributes-group:last-child { margin-bottom: 0 !important; }
+/* Narrow window: one column again, the side content between the summary and the tabs */
+@media (max-width: 900px) {
+  html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto;
+  }
+  html.blm-ios-wp .blm-jx-side { grid-column: 1; grid-row: 2; padding-top: 0; }
+  html.blm-ios-wp .work-packages--show-view .work-packages-full-view--split-container:has(> .blm-jx-side) > .work-packages-full-view--split-right { grid-row: 3; }
+}
+
+/* Child work items: a grouped-list section. Caption header with the done count
+   and two pill actions, a thin progress capsule, then one inset card of rows
+   (type · #id · title · assignee · status). */
+html.blm-ios-wp .blm-jx-children { container-type: inline-size; }
+html.blm-ios.blm-ios-wp .blm-jx-children { margin: 0 0 28px; padding: 0; font-family: var(--g-font); color: var(--g-text); }
+html.blm-ios.blm-ios-wp .blm-jx-children-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  margin: 0; padding: 0 4px 8px 16px;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children-title {
+  margin: 0; padding: 0; border: 0;
+  font-family: var(--g-font); font-size: 12px; font-weight: 500; font-style: normal;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--g-text3);
+}
+html.blm-ios.blm-ios-wp .blm-jx-children-sum {
+  margin-left: auto; font-size: 12px; color: var(--g-text3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children-actions { display: inline-flex; gap: 6px; margin-left: 4px; }
+html.blm-ios.blm-ios-wp .blm-jx-children-action {
+  height: 26px; margin: 0; padding: 0 11px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--g-fill); color: var(--g-accent);
+  font: 600 13px/26px var(--g-font); white-space: nowrap;
+  transition: background-color .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children-action:hover { background: var(--g-fill-hover); }
+html.blm-ios.blm-ios-wp .blm-jx-children-action:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios.blm-ios-wp .blm-jx-children-note { flex-basis: 100%; font-size: 12px; color: var(--g-red); text-align: right; }
+html.blm-ios.blm-ios-wp .blm-jx-children-bar {
+  display: flex; height: 4px; margin: 0 16px 10px; border-radius: 999px; overflow: hidden;
+  background: var(--g-fill);
+}
+html.blm-ios.blm-ios-wp .blm-jx-children-bar > .done { background: var(--g-green); }
+html.blm-ios.blm-ios-wp .blm-jx-children-bar > .progress { background: var(--g-accent); }
+html.blm-ios.blm-ios-wp .blm-jx-children ul {
+  list-style: none; margin: 0; padding: 0; border: 0;
+  background: var(--g-card); border-radius: var(--g-radius-card); overflow: hidden;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children li {
+  position: relative; display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 20px 64px minmax(0, 1fr) minmax(0, 190px) 118px;
+  min-height: var(--g-row); margin: 0; padding: 0 12px 0 16px; border: 0;
+  background: transparent; font-size: 15px; color: var(--g-text);
+  transition: background-color .14s ease-out;
+}
+/* Inset hairline from the #id onwards, the way iOS insets it past a row's icon */
+html.blm-ios.blm-ios-wp .blm-jx-children li + li::before {
+  content: ""; position: absolute; top: 0; left: 48px; right: 0;
+  height: 1px; background: var(--g-row-sep); pointer-events: none;
+}
+@media (min-resolution: 2dppx) {
+  html.blm-ios.blm-ios-wp .blm-jx-children li + li::before { transform: scaleY(.5); transform-origin: top; }
+}
+html.blm-ios.blm-ios-wp .blm-jx-children li:hover { background: color-mix(in srgb, var(--g-text) 3.5%, transparent); }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-icon {
+  width: 20px; height: 20px; margin: 0; border-radius: 6px; vertical-align: middle;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .key {
+  min-width: 0; font-size: 13px; font-weight: 500; color: var(--g-text3);
+  font-variant-numeric: tabular-nums; text-decoration: none;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .key:hover { color: var(--g-accent); text-decoration: none; }
+html.blm-ios.blm-ios-wp .blm-jx-children .key:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px; }
+html.blm-ios.blm-ios-wp .blm-jx-children .subject {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text); text-decoration: none;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject {
+  justify-self: start; max-width: calc(100% + 12px); box-sizing: border-box;
+  padding: 3px 6px; margin: 0 -6px; border-radius: 8px; cursor: text;
+  transition: background-color .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject:hover { background: var(--g-fill); }
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 0; }
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject.locked,
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject.locked:hover { cursor: default; background: transparent; }
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject.saving { opacity: .6; cursor: progress; }
+html.blm-ios.blm-ios-wp .blm-jx-children span.subject.error { color: var(--g-red); }
+html.blm-ios.blm-ios-wp .blm-jx-children input.subject {
+  width: calc(100% + 12px); min-width: 0; height: 30px; box-sizing: border-box; margin: 0 -6px; padding: 0 6px;
+  border: 0; border-radius: 8px; outline: none;
+  background: var(--g-card); box-shadow: 0 0 0 2px var(--g-focus);
+  font: inherit; color: var(--g-text);
+}
+/* Assignee: avatar and name, a plain button that gets a fill on hover */
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+  max-width: 100%; min-width: 0; height: 32px; box-sizing: border-box;
+  margin: 0 0 0 -6px; padding: 0 10px 0 4px; border: 0; border-radius: 999px;
+  background: transparent; cursor: pointer; white-space: nowrap;
+  font: 400 15px var(--g-font); color: var(--g-text2);
+  transition: background-color .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee:hover { background: var(--g-fill); color: var(--g-text); }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee[aria-expanded="true"] { background: var(--g-selected); color: var(--g-accent); }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee[aria-disabled="true"] { cursor: default; }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee[aria-disabled="true"]:hover { background: transparent; }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee.none { color: var(--g-text3); }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee.saving { opacity: .6; cursor: progress; }
+html.blm-ios.blm-ios-wp .blm-jx-children .assignee.error { color: var(--g-red); box-shadow: inset 0 0 0 1px var(--g-red); }
+html.blm-ios.blm-ios-wp .blm-jx-avatar.none { border-color: var(--g-text3); }
+/* Status: the same capsule as the list chips and the detail status button */
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge {
+  justify-self: start; display: inline-block;
+  max-width: 100%; height: 26px; box-sizing: border-box; overflow: hidden;
+  margin: 0; padding: 0 11px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 600 13px/26px var(--g-font); text-transform: none; letter-spacing: 0;
+  white-space: nowrap; text-overflow: ellipsis;
+  background: var(--g-chip-todo-bg); color: var(--g-chip-todo-fg);
+  transition: filter .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge[data-blm-tone="progress"] { background: var(--g-chip-progress-bg); color: var(--g-chip-progress-fg); }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge[data-blm-tone="done"] { background: var(--g-chip-done-bg); color: var(--g-chip-done-fg); }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge:hover { filter: brightness(.95); }
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp .blm-jx-children .blm-jx-lozenge:hover { filter: brightness(1.15); }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge[aria-disabled="true"] { cursor: default; filter: none; }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--g-focus); }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge.saving { opacity: .6; cursor: progress; }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-lozenge.error { box-shadow: inset 0 0 0 1px var(--g-red); }
+/* No children yet: a card with one quiet line */
+html.blm-ios.blm-ios-wp .blm-jx-children-empty {
+  margin: 0; padding: 12px 16px; background: var(--g-card); border-radius: var(--g-radius-card);
+  font-size: 15px; color: var(--g-text3);
+}
+/* + Create child: a new-item row inside the card */
+html.blm-ios.blm-ios-wp .blm-jx-children li.blm-jx-create-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 8px 12px 8px 16px; background: transparent;
+}
+html.blm-ios.blm-ios-wp :is(.blm-jx-create-type, .blm-jx-create-input) {
+  height: 34px; box-sizing: border-box; margin: 0; padding: 0 10px;
+  border: 0; border-radius: 9px; background: var(--g-fill); color: var(--g-text);
+  font: 400 15px var(--g-font);
+}
+html.blm-ios.blm-ios-wp .blm-jx-create-type { flex: none; max-width: 150px; }
+html.blm-ios.blm-ios-wp .blm-jx-create-input { flex: 1 1 200px; min-width: 0; }
+html.blm-ios.blm-ios-wp :is(.blm-jx-create-type, .blm-jx-create-input):focus { outline: none; box-shadow: 0 0 0 2px var(--g-focus); }
+html.blm-ios.blm-ios-wp :is(.blm-jx-create-go, .blm-jx-create-cancel) {
+  height: 34px; margin: 0; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 600 14px var(--g-font); transition: filter .14s ease-out, background-color .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-create-go { background: var(--g-accent); color: var(--g-on-accent); }
+html.blm-ios.blm-ios-wp .blm-jx-create-go:hover { filter: brightness(1.08); }
+html.blm-ios.blm-ios-wp .blm-jx-create-go:disabled { opacity: .6; cursor: progress; }
+html.blm-ios.blm-ios-wp .blm-jx-create-cancel { background: transparent; color: var(--g-accent); }
+html.blm-ios.blm-ios-wp .blm-jx-create-cancel:hover { background: var(--g-fill); }
+html.blm-ios.blm-ios-wp :is(.blm-jx-create-go, .blm-jx-create-cancel):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios.blm-ios-wp .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--g-red); }
+/* A narrow section (small window, slim split view): the assignee shrinks to its avatar */
+@container (max-width: 560px) {
+  html.blm-ios.blm-ios-wp .blm-jx-children li { grid-template-columns: 20px 56px minmax(0, 1fr) 32px 104px; gap: 8px; }
+  html.blm-ios.blm-ios-wp .blm-jx-children li + li::before { left: 44px; }
+  html.blm-ios.blm-ios-wp .blm-jx-children .assignee { margin: 0; padding: 0 4px; }
+  html.blm-ios.blm-ios-wp .blm-jx-children .assignee .name { display: none; }
+}
+
+/* Relations tab: the children are listed above, so its Children table goes;
+   OpenProject's create / add-existing controls there stay. */
+html.blm-ios-wp wp-relations-hierarchy .wp-relations--children > .attributes-group--header,
+html.blm-ios-wp wp-relations-hierarchy .wp-relations--children .work-package-table { display: none !important; }
+
+/* Relations: each group (RELATED TO, BLOCKS…) an inset-grouped card under its
+   section header; a row is #id, type, title and a status chip (tone from ios.js)
+   with round quiet info / remove buttons; "Create new relation" an accent add
+   row; "Group by" a small pill. OpenProject-internal: .relation-row(--grid,
+   --type, --grid-id, --grid-subject), .wp-relations-create-button. */
+html.blm-ios-wp :is(:has(> wp-relation-row), :has(> .relation-row)) {
+  margin: 0 0 18px; background: var(--g-card) !important; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp :is(:has(> wp-relation-row), :has(> .relation-row)) { box-shadow: none; }
+html.blm-ios-wp .relation-row {
+  position: relative; margin: 0 !important; padding: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 0 !important;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .relation-row:hover { background: var(--g-hover) !important; }
+/* hairline between rows, inset 16px as in an iOS list */
+html.blm-ios-wp :is(.relation-row + .relation-row, wp-relation-row + wp-relation-row .relation-row)::before {
+  content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--g-row-sep); pointer-events: none;
+}
+html.blm-ios-wp wp-relation-row { display: block; }
+html.blm-ios-wp .relation-row--grid {
+  display: flex !important; align-items: center; gap: 10px; min-height: 48px; box-sizing: border-box;
+  margin: 0 !important; padding: 6px 8px 6px 16px !important;
+  font: 400 15px/1.3 var(--g-font) !important; color: var(--g-text);
+}
+html.blm-ios-wp .relation-row--grid > * { flex: none; width: auto !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
+html.blm-ios-wp .relation-row--grid > :has(a.relation-row--grid-subject),
+html.blm-ios-wp .relation-row--grid > a.relation-row--grid-subject { flex: 1 1 auto; min-width: 0; }
+html.blm-ios-wp a.relation-row--grid-id {
+  color: var(--g-text3) !important; font: 500 13px var(--g-font) !important; font-variant-numeric: tabular-nums; text-decoration: none !important;
+}
+/* Type: small semibold in its own colour, no shouting caps */
+html.blm-ios-wp .relation-row--type,
+html.blm-ios-wp .relation-row--type > span:not(.hidden-for-sighted) {
+  font: 600 12px var(--g-font) !important; letter-spacing: .02em !important; text-transform: none !important; white-space: nowrap;
+}
+html.blm-ios-wp a.relation-row--grid-subject {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text) !important; font: 400 15px var(--g-font) !important; text-decoration: none !important;
+}
+html.blm-ios-wp :is(a.relation-row--grid-id, a.relation-row--grid-subject):hover { color: var(--g-accent) !important; }
+html.blm-ios-wp :is(a.relation-row--grid-id, a.relation-row--grid-subject):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px; }
+/* Status: the list's soft chip with a dot */
+html.blm-ios-wp .relation-row .inline-edit--display-field.status {
+  display: inline-flex !important; align-items: center; gap: 5px; width: auto !important;
+  height: 22px; padding: 0 10px 0 8px !important; margin: 0 !important;
+  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 600 12px/1 var(--g-font) !important; white-space: nowrap;
+}
+html.blm-ios-wp .relation-row .inline-edit--display-field.status[data-blm-i-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status[data-blm-i-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status * { color: inherit !important; font: inherit !important; background: transparent !important; }
+/* OpenProject's own grey status dot gives way to the chip's */
+html.blm-ios-wp .relation-row .inline-edit--display-field.status :is([class*="status-icon"], [class*="__hl_dot"], .op-status-dot) { display: none !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+html.blm-ios-wp .relation-row .inline-edit--display-field.status:hover { filter: brightness(.97); }
+/* Info / remove: round, quiet until hovered; remove goes red */
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject) {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; color: var(--g-text3) !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: none !important; text-decoration: none !important;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject) :is(.icon, [class*="icon-"], svg) {
+  color: inherit !important; font-size: 15px !important; line-height: 1 !important;
+}
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject):hover { background: var(--g-fill) !important; color: var(--g-accent) !important; }
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-remove, .icon-close, .icon-delete)):hover { color: var(--g-red) !important; }
+html.blm-ios-wp .relation-row :is(a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+/* The description / info panel a row opens */
+html.blm-ios-wp .relation-row :is(.relation-row--description, .wp-relation--description-wrapper, .wp-relation--description-read-value) {
+  padding: 0 16px 10px !important; color: var(--g-text2) !important; font: 400 13px/1.4 var(--g-font) !important;
+  background: transparent !important; border: 0 !important;
+}
+/* "+ Create new relation": an accent add row */
+html.blm-ios-wp .wp-relations-create-button { margin: 4px 0 0; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button) {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 10px !important;
+  background: transparent !important; color: var(--g-accent) !important;
+  border: 0 !important; border-radius: 10px !important; box-shadow: none !important;
+  font: 500 15px var(--g-font) !important; text-decoration: none !important; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button) * { color: inherit !important; font: inherit !important; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):hover { background: var(--g-fill) !important; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+/* "Group by work package type": a small grey pill */
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; min-height: 30px; padding: 0 12px !important; margin: 0 !important;
+  background: var(--g-btn) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 500 13px var(--g-font) !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) * { color: inherit !important; font: inherit !important; }
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):hover { background: var(--g-btn-hover) !important; color: var(--g-text) !important; }
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* "↓ Child work items": a floating capsule while the section is below the fold */
+html.blm-ios.blm-ios-wp .blm-jx-jump {
+  position: fixed; right: 24px; bottom: 72px; z-index: 50;
+  height: 36px; padding: 0 16px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--g-accent); color: var(--g-on-accent);
+  font: 600 14px/36px var(--g-font);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .1), 0 10px 28px rgba(0, 0, 0, .16);
+  transition: filter .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-jump[hidden] { display: none; }
+html.blm-ios.blm-ios-wp .blm-jx-jump:hover { filter: brightness(1.08); }
+html.blm-ios.blm-ios-wp .blm-jx-jump:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
+/* Assignee / status picker: the same frosted pull-down as the status menu */
+html.blm-ios.blm-ios-wp .blm-jx-picker {
+  width: 264px; padding: 6px;
+  background: color-mix(in srgb, var(--g-raised) 86%, transparent);
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline); border-radius: var(--g-radius);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16);
+  font-family: var(--g-font); font-size: 15px; color: var(--g-text);
+  transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp .blm-jx-picker { box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5); }
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios.blm-ios-wp .blm-jx-picker { background: var(--g-raised); }
+}
+html.blm-ios.blm-ios-wp .blm-jx-picker input {
+  height: 34px; margin: 0 0 6px; padding: 0 10px;
+  border: 0; border-radius: 9px; background: var(--g-fill); color: var(--g-text);
+  font: 400 15px var(--g-font);
+}
+html.blm-ios.blm-ios-wp .blm-jx-picker input:focus { outline: none; box-shadow: 0 0 0 2px var(--g-focus); }
+html.blm-ios.blm-ios-wp .blm-jx-picker-option {
+  min-height: 36px; box-sizing: border-box; padding: 0 10px; border-radius: 8px;
+  font-size: 15px; line-height: 20px;
+}
+html.blm-ios.blm-ios-wp .blm-jx-picker-option.active,
+html.blm-ios.blm-ios-wp .blm-jx-picker-option:hover { background: var(--g-fill); }
+html.blm-ios.blm-ios-wp .blm-jx-picker-option.current { color: var(--g-accent); font-weight: 600; }
+html.blm-ios.blm-ios-wp .blm-jx-picker-option[data-blm-tone]::before { flex: none; width: 10px; height: 10px; margin: 0; background: var(--g-text3); }
+html.blm-ios.blm-ios-wp .blm-jx-picker-option[data-blm-tone="progress"]::before { background: var(--g-accent); }
+html.blm-ios.blm-ios-wp .blm-jx-picker-option[data-blm-tone="done"]::before { background: var(--g-green); }
+html.blm-ios.blm-ios-wp .blm-jx-picker-note { padding: 8px 10px; font-size: 13px; color: var(--g-text3); }
+
+/* Error toast for a write that failed */
+html.blm-ios.blm-ios-wp .blm-jx-toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 2147483646; transform: translateX(-50%);
+  max-width: min(440px, calc(100vw - 32px)); padding: 10px 16px;
+  background: var(--g-raised); color: var(--g-text); border: .5px solid var(--g-hairline);
+  border-radius: var(--g-radius); box-shadow: 0 2px 6px rgba(0, 0, 0, .08), 0 14px 40px rgba(0, 0, 0, .18);
+  font: 400 14px/20px var(--g-font);
+}
+html.blm-ios.blm-ios-wp .blm-jx-toast::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px;
+  border-radius: 50%; background: var(--g-red); vertical-align: 1px;
+}
+
 /* ── Dark: text that OpenProject keeps grey nearly vanishes on dark glass ── */
 html.blm-ios[data-blm-ios-theme="dark"] .work-packages--details,
 html.blm-ios[data-blm-ios-theme="dark"] .work-packages--show-view,
@@ -399,6 +1046,8 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-principal--avatar { background-color
 html.blm-ios[data-blm-ios-theme="dark"] .op-tab-row--link_selected { box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
 
 @media (prefers-reduced-motion: reduce) {
+  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select :is(.ng-select-container, .ng-arrow, .ng-clear-wrapper::before) { transition: none !important; }
   html.blm-ios-wp .op-tab-row--link,
   html.blm-ios-wp .blm-i-status,
   html.blm-ios-wp .op-back-button,
@@ -406,6 +1055,13 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-tab-row--link_selected { box-shadow:
   html.blm-ios-wp .work-package-comment.inline-edit--display-field,
   html.blm-ios-wp .inline-edit--display-field,
   html.blm-ios-wp #wp-status-context-menu .menu-item,
-  html.blm-ios-wp .attributes-key-value--value-container .inline-edit--display-field { transition: none !important; }
-  html.blm-ios-wp #wp-status-context-menu .dropdown-menu { animation: none; }
+  html.blm-ios-wp .attributes-key-value--value-container .inline-edit--display-field,
+  html.blm-ios-wp .blm-jx-children :is(li, span.subject, .assignee, .blm-jx-lozenge, .blm-jx-children-action),
+  html.blm-ios-wp :is(.blm-jx-create-go, .blm-jx-create-cancel, .blm-jx-jump) { transition: none !important; }
+  html.blm-ios-wp #wp-status-context-menu .dropdown-menu,
+  html.blm-ios-wp .blm-jx-picker,
+  html.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp .work-packages--type-selector .ng-select .ng-select-container,
+  html.blm-ios-wp .work-packages--type-selector .inline-edit--display-field.type,
+  html.blm-ios-wp .ng-dropdown-panel .ng-option { transition: none !important; }
 }

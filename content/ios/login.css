@@ -1,0 +1,156 @@
+/* iOS skin: the sign-in page (/login). A frosted card on the canvas with a large
+   title, the username and password as one inset-grouped list (label on the left,
+   field on the right, a hairline between the rows) and a full-width filled button.
+   Scoped under html.blm-ios-login, set by ios.js on /login only.
+   OpenProject-internal selectors: #login-form / .login-form (the box), .form--field
+   (a label + input row), .form--label, the submit input/button. The header's own
+   "Sign in" drop-down is left alone. */
+
+/* The card */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) {
+  box-sizing: border-box;
+  width: min(400px, calc(100vw - 32px)) !important; max-width: none !important;
+  margin: 8vh auto 40px !important; padding: 28px 24px 24px !important;
+  background: var(--g-grouped) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: 22px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .05), 0 20px 50px rgba(0, 0, 0, .12) !important;
+  color: var(--g-text); font-family: var(--g-font);
+  animation: blm-i-login-in .28s ease-out;
+}
+html.blm-ios-login[data-blm-ios-theme="dark"] :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 20px 50px rgba(0, 0, 0, .45) !important;
+}
+@keyframes blm-i-login-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(form, fieldset) {
+  margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important;
+}
+
+/* Large title, no rule under it */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(h1, h2, h3, legend) {
+  margin: 0 0 22px !important; padding: 0 !important; border: 0 !important;
+  color: var(--g-text) !important; font: 700 28px/1.15 var(--g-font) !important;
+  letter-spacing: -.02em; text-align: left;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) hr { display: none !important; }
+
+/* Field rows: one inset group. A row only rounds the corners at the group's ends. */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])) {
+  display: flex !important; align-items: center; gap: 12px;
+  box-sizing: border-box; min-height: 48px; margin: 0 !important; padding: 0 16px !important;
+  background: var(--g-card) !important; border: 0 !important; border-radius: 12px;
+  transition: outline-color .12s ease-out;
+  outline: 1.5px solid transparent; outline-offset: -1.5px;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])):has(+ .form--field input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])) {
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])) + .form--field:has(input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])) {
+  border-top: .5px solid var(--g-row-sep) !important;
+  border-top-left-radius: 0; border-top-right-radius: 0;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input:not([type="hidden"], [type="submit"], [type="checkbox"], [type="radio"])):focus-within {
+  /* An outline, not an inset shadow: it paints above the input, whose autofill
+     shadow below would otherwise cover the ring wherever the field is */
+  outline-color: var(--g-focus);
+}
+
+/* Label on the left, the asterisk quiet */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field .form--label,
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field > label {
+  flex: 0 0 92px; width: auto !important; max-width: none !important;
+  margin: 0 !important; padding: 0 !important;
+  color: var(--g-text) !important; font: 400 15px/1.2 var(--g-font) !important; text-align: left;
+  white-space: nowrap;
+}
+/* OpenProject's label and field wrappers are scroll boxes that overflow by a pixel,
+   and base.css's slim scrollbars cover all of #content: each showed a grey thumb */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field,
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field * {
+  overflow: visible !important; scrollbar-width: none !important;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field::-webkit-scrollbar,
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field *::-webkit-scrollbar {
+  display: none !important; width: 0 !important; height: 0 !important;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--label :is(.form--label-required, abbr, [class*="required"]) {
+  display: none;
+}
+
+/* The input: borderless, fills the rest of the row */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field :is(.form--field-container, .form--text-field-container) {
+  flex: 1 1 auto; min-width: 0; width: auto !important; max-width: none !important;
+  margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important;
+  box-shadow: none !important;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input:is([type="text"], [type="password"], [type="email"], :not([type])) {
+  flex: 1 1 auto; box-sizing: border-box; width: 100% !important; min-width: 0; height: 46px !important;
+  margin: 0 !important; padding: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 0 !important;
+  box-shadow: none !important; outline: none !important;
+  color: var(--g-text) !important; font: 400 15px var(--g-font) !important;
+  caret-color: var(--g-accent);
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input::placeholder { color: var(--g-text3) !important; opacity: 1; }
+/* Chrome's autofill paints the field light blue: keep the row's own colour */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input:-webkit-autofill,
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input:-webkit-autofill:hover,
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 40px var(--g-card) inset !important;
+  -webkit-text-fill-color: var(--g-text) !important;
+  caret-color: var(--g-accent);
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* "Stay signed in" and other checkboxes: a plain line under the group */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input[type="checkbox"]) {
+  display: flex !important; align-items: center; gap: 10px; margin: 14px 4px 0 !important; padding: 0 !important;
+  color: var(--g-text2); font: 400 14px var(--g-font);
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) .form--field:has(input[type="checkbox"]) label {
+  flex: none; width: auto !important; margin: 0 !important; color: var(--g-text2) !important; font: inherit !important;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) input[type="checkbox"] { accent-color: var(--g-accent); width: 16px; height: 16px; }
+
+/* Sign in: a full-width filled button */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(input[type="submit"], button[type="submit"], .button.-primary, .button.-highlight) {
+  display: flex !important; align-items: center; justify-content: center;
+  box-sizing: border-box; width: 100% !important; height: 50px !important;
+  margin: 22px 0 0 !important; padding: 0 20px !important;
+  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+  border: 0 !important; border-radius: 14px !important; box-shadow: none !important;
+  font: 600 16px var(--g-font) !important; letter-spacing: -.01em; text-transform: none;
+  cursor: pointer; transition: filter .12s ease-out, transform .08s ease-out, opacity .12s;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(input[type="submit"], button[type="submit"], .button.-primary, .button.-highlight):hover { filter: brightness(1.08); }
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(input[type="submit"], button[type="submit"], .button.-primary, .button.-highlight):active { transform: scale(.985); opacity: .85; }
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(input[type="submit"], button[type="submit"], .button.-primary, .button.-highlight):focus-visible {
+  outline: 2px solid var(--g-focus); outline-offset: 3px;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :is(input[type="submit"], button[type="submit"]):disabled { opacity: .4; cursor: default; }
+/* The button's own wrapper is indented to sit under the inputs: line it up with the group */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) :has(> :is(input[type="submit"], button[type="submit"])) {
+  margin-left: 0 !important; padding-left: 0 !important; width: auto !important; max-width: none !important;
+}
+
+/* Lost password / register / other sign-in links: accent text, centred */
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) a {
+  color: var(--g-accent) !important; font-family: var(--g-font); text-decoration: none;
+}
+html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) a:hover { text-decoration: underline; }
+
+/* Error toast after a wrong password: rounded, on the card's width */
+html.blm-ios-login :is(.op-toast, .flash, .notification-box) {
+  border-radius: 12px !important; font-family: var(--g-font);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *),
+  html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) * { animation: none !important; transition: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-login :is(#login-form, .login-form):not(.op-app-header *, #top-menu *) { background: var(--g-grouped-solid) !important; }
+}

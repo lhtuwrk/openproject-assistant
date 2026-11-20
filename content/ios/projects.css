@@ -1,0 +1,164 @@
+/* iOS skin: the global project list (/projects). A large title, pill buttons in the
+   toolbar, and the table as one inset-grouped card: small grey column labels, 44px
+   rows with inset hairlines, project names in body text, subprojects indented
+   under their parent. Scoped under html.blm-ios-projects, set by ios.js on /projects.
+   OpenProject-internal selectors: .toolbar-container (title, #toolbar-items .button),
+   .generic-table--container / --results-container, table.generic-table (thead th
+   .generic-table--sort-header, tbody tr td), the filter form, .op-pagination. */
+
+/* Large title */
+html.blm-ios-projects .toolbar-container { font-family: var(--g-font); margin-bottom: 18px; }
+html.blm-ios-projects .toolbar-container :is(.title-container, .title-container *, h2) {
+  font-family: var(--g-font) !important; font-size: 30px !important; font-weight: 700 !important;
+  letter-spacing: -.02em; color: var(--g-text) !important; border: 0 !important;
+}
+
+/* Toolbar buttons: grey pills, the icon-only ones round */
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; min-height: 34px; padding: 0 14px; margin: 0;
+  background: var(--g-btn) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 500 14px var(--g-font) !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .14s ease-out, color .14s ease-out;
+}
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button * { color: inherit !important; }
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:hover {
+  background: var(--g-btn-hover) !important; color: var(--g-text) !important;
+}
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-active, [aria-expanded="true"]) {
+  background: var(--g-selected) !important; color: var(--g-accent) !important;
+}
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:not(:has(.button--text)):has(> :is(.button--icon, .icon, op-icon, svg):only-child) {
+  justify-content: center; width: 34px; padding: 0;
+}
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-highlight, .-alt-highlight, .-primary) {
+  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+}
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-highlight, .-alt-highlight, .-primary):hover { filter: brightness(1.08); }
+html.blm-ios-projects :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:focus-visible {
+  outline: 2px solid var(--g-focus); outline-offset: 2px;
+}
+
+/* Filters (the funnel button opens them): a rounded card above the list */
+html.blm-ios-projects :is(.project-filters, .op-filters-form, .advanced-filters--container) {
+  background: var(--g-card) !important; border: 0 !important; border-radius: 12px !important;
+  box-shadow: none !important; padding: 14px 16px !important; margin-bottom: 16px;
+  font-family: var(--g-font); color: var(--g-text);
+}
+
+/* The list: one inset-grouped card */
+html.blm-ios-projects .generic-table--container {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+html.blm-ios-projects .generic-table--results-container {
+  background: var(--g-card) !important; border: 0 !important; border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-projects .generic-table--results-container { box-shadow: none; }
+html.blm-ios-projects table.generic-table {
+  width: 100%; border-collapse: separate !important; border-spacing: 0;
+  background: transparent !important; font-family: var(--g-font); color: var(--g-text);
+}
+/* The header strip OpenProject paints behind thead */
+html.blm-ios-projects .generic-table--header-background { display: none !important; }
+
+/* Column labels: small grey caps, sitting on the card's top edge */
+html.blm-ios-projects table.generic-table thead th {
+  height: 36px; padding: 0 16px !important;
+  background: transparent !important; border: 0 !important;
+  border-bottom: .5px solid var(--g-row-sep) !important; box-shadow: none !important;
+  vertical-align: middle;
+}
+html.blm-ios-projects table.generic-table thead :is(th, th *) {
+  color: var(--g-text3) !important; font-family: var(--g-font) !important;
+  font-size: 12px !important; font-weight: 500 !important; letter-spacing: .04em;
+  text-decoration: none;
+}
+html.blm-ios-projects table.generic-table thead :is(.generic-table--sort-header-outer, .generic-table--sort-header) {
+  position: static !important; height: auto !important; padding: 0 !important; margin: 0 !important;
+  border: 0 !important; background: transparent !important;
+}
+html.blm-ios-projects table.generic-table thead th a:hover,
+html.blm-ios-projects table.generic-table thead th a:hover * { color: var(--g-text) !important; }
+
+/* Rows: 44px, a hairline inset from the left edge, a light tint on hover */
+html.blm-ios-projects table.generic-table tbody tr {
+  background: transparent !important; transition: background-color .12s ease-out;
+}
+html.blm-ios-projects table.generic-table tbody tr:hover { background: var(--g-hover) !important; }
+html.blm-ios-projects table.generic-table tbody td {
+  height: 44px; padding: 0 16px !important;
+  background: transparent !important; border: 0 !important;
+  box-shadow: inset 0 -.5px 0 var(--g-row-sep);
+  color: var(--g-text); font: 400 15px var(--g-font); vertical-align: middle;
+}
+/* the first cell's hairline starts 16px in, as in an iOS list */
+html.blm-ios-projects table.generic-table tbody td:first-child {
+  box-shadow: none; background-image: linear-gradient(var(--g-row-sep), var(--g-row-sep)) !important;
+  background-size: calc(100% - 16px) .5px !important; background-position: right bottom !important; background-repeat: no-repeat !important;
+}
+html.blm-ios-projects table.generic-table tbody tr:last-child td { box-shadow: none; background-image: none !important; }
+html.blm-ios-projects table.generic-table tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+html.blm-ios-projects table.generic-table tbody tr:last-child td:last-child { border-bottom-right-radius: 12px; }
+
+/* Project names: body text, the accent only on hover */
+html.blm-ios-projects table.generic-table tbody td a {
+  color: var(--g-text) !important; font: 400 15px var(--g-font); text-decoration: none !important;
+}
+html.blm-ios-projects table.generic-table tbody td a:hover { color: var(--g-accent) !important; }
+html.blm-ios-projects table.generic-table tbody td a:focus-visible {
+  outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px;
+}
+/* Expand arrows of parent projects: quiet grey disclosure triangles */
+html.blm-ios-projects table.generic-table tbody td :is([class*="icon-arrow"], [class*="icon-small-arrow"], .hierarchy-indicator, [class*="hierarchy"] .icon) {
+  color: var(--g-text3) !important; transition: transform .16s ease-out;
+}
+/* Descriptions shown by "Expand all": secondary text under the name */
+html.blm-ios-projects table.generic-table tbody tr:is(.project-description, [class*="description"]) td {
+  height: auto; padding-top: 0 !important; padding-bottom: 10px !important;
+  color: var(--g-text2); font-size: 13px;
+}
+/* Status (on track / at risk / off track): a small chip */
+html.blm-ios-projects table.generic-table tbody td :is(.project-status--name, [class*="project-status--name"]) {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+  border-radius: 999px; background: var(--g-fill); color: var(--g-text2);
+  font: 500 12px var(--g-font);
+}
+
+/* Cells and labels never show base.css's slim scroll thumbs */
+html.blm-ios-projects table.generic-table :is(th, td, th *, td *) { scrollbar-width: none !important; }
+html.blm-ios-projects table.generic-table :is(th, td, th *, td *)::-webkit-scrollbar {
+  display: none !important; width: 0 !important; height: 0 !important;
+}
+
+/* Pagination: range on the left, "Per page" as a small segmented control */
+html.blm-ios-projects .op-pagination { margin-top: 14px; font-family: var(--g-font); }
+html.blm-ios-projects :is(.op-pagination--range, .op-pagination--label) {
+  color: var(--g-text3) !important; font: 400 13px var(--g-font) !important;
+}
+html.blm-ios-projects .op-pagination--items:has(.op-pagination--item_current) {
+  display: inline-flex; align-items: center; gap: 2px;
+}
+html.blm-ios-projects .op-pagination--item-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 28px; padding: 0 10px;
+  background: transparent !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 8px !important; box-shadow: none !important;
+  font: 500 13px var(--g-font) !important; font-variant-numeric: tabular-nums; text-decoration: none !important;
+}
+html.blm-ios-projects .op-pagination--item-link:hover { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-projects .op-pagination--item-link:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios-projects .op-pagination--item_current {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 28px; padding: 0 10px;
+  background: var(--g-card) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .04) !important;
+  font: 600 13px var(--g-font) !important; font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios-projects table.generic-table *,
+  html.blm-ios-projects .toolbar-container * { transition: none !important; }
+}
