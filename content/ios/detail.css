@@ -595,7 +595,7 @@ html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-a
 html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select-opened .ng-arrow-wrapper .ng-arrow { transform: rotate(180deg); }
 
 /* The list */
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel {
   min-width: 220px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
   background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
@@ -604,52 +604,52 @@ html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-o
   color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
   transform-origin: top center; animation: blm-i-menu-in .16s ease-out;
 }
-html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel {
   box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
 }
 @media (prefers-reduced-transparency: reduce) {
-  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+  html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel :is(.ng-dropdown-panel-items, .ng-dropdown-header, .ng-dropdown-footer) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel :is(.ng-dropdown-panel-items, .ng-dropdown-header, .ng-dropdown-footer) {
   border: 0 !important; background: transparent !important;
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(50vh, 320px) !important; scrollbar-width: thin; }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(50vh, 320px) !important; scrollbar-width: thin; }
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
   position: relative; display: flex !important; align-items: center; gap: 10px;
   min-height: 40px; box-sizing: border-box; padding: 0 34px 0 10px !important;
   border: 0 !important; border-radius: 8px !important; background: transparent !important;
   font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
   white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * {
   font-family: var(--g-font) !important; font-size: inherit !important; color: inherit !important; background-color: transparent;
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.ng-option-label, .op-principal, op-principal) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.ng-option-label, .op-principal, op-principal) {
   display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-principal--name, .op-principal--name *) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-principal--name, .op-principal--name *) {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400 !important; text-decoration: none !important;
 }
 /* Avatars: 26px discs */
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-avatar, .op-principal--avatar, img.avatar) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-avatar, .op-principal--avatar, img.avatar) {
   flex: none; width: 26px !important; height: 26px !important; min-width: 26px; margin: 0 !important;
   border-radius: 50% !important; font-size: 11px !important; line-height: 26px !important;
 }
 /* The typed letters: bold, in body colour (OpenProject paints them blue) */
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.highlighted, mark, b, strong) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.highlighted, mark, b, strong) {
   font-weight: 700 !important; color: var(--g-text) !important; background: none !important; padding: 0 !important;
 }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
   content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
   background: var(--g-accent);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
           mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
 }
 /* "No items found", "Loading…": quiet centred grey text */
-html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled:not(:has(:is(.op-avatar, op-principal))) {
+html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled:not(:has(:is(.op-avatar, op-principal))) {
   justify-content: center; padding: 0 10px !important; color: var(--g-text3) !important; font-size: 14px !important; background: transparent !important; cursor: default;
 }
 
@@ -968,6 +968,111 @@ html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section
 html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):hover { background: var(--g-btn-hover) !important; color: var(--g-text) !important; }
 html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
+/* Watchers tab: the watchers an inset-grouped card of 48 px rows (a 28 px round
+   avatar, the name, a round quiet × that goes red), split by inset hairlines,
+   under a WATCHING section header; "Type to search" an iOS search field (filled,
+   rounded, a magnifier, no box or chevron) whose list is the attribute pickers'
+   frosted pull-down (see above).
+   OpenProject-internal: wp-watchers-tab, .detail-panel-watchers, wp-watcher-entry,
+   .work-package--watcher, .remove-watcher-btn, .work-package--watchers-lookup,
+   op-principal / .op-principal--name, .op-avatar. */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) { display: block; font-family: var(--g-font); }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) .work-package--details--long-field { margin: 0 !important; padding: 0 !important; border: 0 !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) :has(> wp-watcher-entry) {
+  display: block !important; margin: 4px 0 18px !important; padding: 0 !important;
+  background: transparent !important; border: 0 !important;
+}
+/* section header over the card, as iOS Settings does */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) :has(> wp-watcher-entry)::before {
+  content: "Watching"; display: block; padding: 0 16px 6px;
+  color: var(--g-text3); font: 400 13px/1.3 var(--g-font); text-transform: uppercase; letter-spacing: .02em;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry {
+  position: relative; display: block !important; width: auto !important; margin: 0 !important; padding: 0 !important;
+  background: var(--g-card) !important; border: 0 !important; box-shadow: none !important;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry:first-of-type { border-top-left-radius: 12px !important; border-top-right-radius: 12px !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry:last-of-type {
+  border-bottom-left-radius: 12px !important; border-bottom-right-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04) !important;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry { box-shadow: none !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry:hover { background: linear-gradient(var(--g-hover), var(--g-hover)), var(--g-card) !important; }
+/* hairline between rows, inset past the avatar */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry + wp-watcher-entry::before {
+  content: ""; position: absolute; top: 0; left: 54px; right: 0; height: .5px; background: var(--g-row-sep); pointer-events: none;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry > * {
+  display: flex !important; align-items: center; gap: 10px; min-height: 48px; box-sizing: border-box;
+  width: 100% !important; margin: 0 !important; padding: 6px 10px 6px 16px !important;
+  background: transparent !important; border: 0 !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry :is(op-principal, .op-principal) {
+  display: flex !important; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0;
+  background: transparent !important; border: 0 !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry :is(.op-avatar, .op-principal--avatar, img.avatar) {
+  flex: none; width: 28px !important; height: 28px !important; min-width: 28px; margin: 0 !important;
+  border-radius: 50% !important; font-size: 11px !important; line-height: 28px !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry :is(.op-principal--name, .op-principal--name *) {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text) !important; font: 400 15px var(--g-font) !important; text-decoration: none !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry a.op-principal--name:hover { color: var(--g-accent) !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry a:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px; }
+/* Remove: a round quiet button that turns red on hover */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry .remove-watcher-btn {
+  flex: none; display: inline-flex !important; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0 !important; margin: 0 0 0 auto !important;
+  background: transparent !important; color: var(--g-text3) !important; opacity: 1 !important; visibility: visible !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: none !important; text-decoration: none !important; cursor: pointer;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry .remove-watcher-btn :is(a, button, op-icon, .icon, [class*="icon-"], svg) {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 !important; margin: 0 !important;
+  color: inherit !important; background: transparent !important; border: 0 !important;
+  font-size: 14px !important; line-height: 1 !important; text-decoration: none !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry .remove-watcher-btn:hover { background: var(--g-fill) !important; color: var(--g-red) !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) wp-watcher-entry .remove-watcher-btn:has(:focus-visible) { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+/* Add watcher: an iOS search field */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) .work-package--watchers-lookup { margin: 0 !important; padding: 0 !important; background: transparent !important; border: 0 !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select {
+  width: 100%; padding: 0 !important; margin: 0 !important; border: 0 !important;
+  background: transparent !important; box-shadow: none !important; font-family: var(--g-font);
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-select-container {
+  min-height: 36px !important; height: 36px !important; padding: 0 !important; overflow: visible;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 10px !important;
+  box-shadow: none !important; color: var(--g-text) !important; cursor: text !important;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select:is(.ng-select-focused, :focus-within) .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+/* magnifier in front of the text */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-select-container::before {
+  content: ""; flex: none; align-self: center; width: 15px; height: 15px; margin: 0 0 0 10px; background: var(--g-text3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6.8' cy='6.8' r='4.8' fill='none' stroke='black' stroke-width='1.7'/%3E%3Cpath d='M10.4 10.4 14 14' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E") center / 15px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6.8' cy='6.8' r='4.8' fill='none' stroke='black' stroke-width='1.7'/%3E%3Cpath d='M10.4 10.4 14 14' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E") center / 15px no-repeat;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-value-container {
+  height: 36px !important; padding: 0 0 0 7px !important; align-items: center !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-value-container .ng-input {
+  top: 0 !important; bottom: 0; display: flex; align-items: center; padding: 0 10px 0 7px !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select :is(.ng-placeholder, .ng-input input) {
+  font: 400 15px/20px var(--g-font) !important; color: var(--g-text) !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important;
+}
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-placeholder { top: auto !important; padding: 0 !important; color: var(--g-text3) !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-input input { height: 36px !important; padding: 0 !important; caret-color: var(--g-accent); cursor: text !important; }
+/* a search field has no chevron */
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-arrow-wrapper { display: none !important; }
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select .ng-clear-wrapper { color: var(--g-text3) !important; width: 28px !important; }
+
 /* "↓ Child work items": a floating capsule while the section is below the fold */
 html.blm-ios.blm-ios-wp .blm-jx-jump {
   position: fixed; right: 24px; bottom: 72px; z-index: 50;
@@ -1046,7 +1151,7 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-principal--avatar { background-color
 html.blm-ios[data-blm-ios-theme="dark"] .op-tab-row--link_selected { box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
 
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp:has(:is(.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers) ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
   html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select :is(.ng-select-container, .ng-arrow, .ng-clear-wrapper::before) { transition: none !important; }
   html.blm-ios-wp .op-tab-row--link,
   html.blm-ios-wp .blm-i-status,
