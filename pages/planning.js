@@ -1212,14 +1212,14 @@ const TC_SCHEMA = obj({
 // A short read, not the full brief: the goal, what must be done, what blocks it; once per language.
 const SUM_LANG = obj({ goal: str, points: strs, questions: strs });
 const SUM_SCHEMA = obj({ size: { type: 'string', enum: ['Small', 'Medium', 'Large', 'XL'] }, vi: SUM_LANG, en: SUM_LANG });
-const SUM_LANGS = { vi: 'Tiếng Việt', en: 'English' };
+const SUM_LANGS = { en: 'English', vi: 'Vietnamese' };
 
 // What the thinking panel says while Claude works. Timed, not real progress: the bridge
 // only answers at the end. The skill-driven ones follow their skill's own stages.
 const AI_ASKS = {
   sub: { label: 'Suggesting subtasks', every: 2500, steps: ['Reading the story', "Checking the team's usual subtasks", 'Splitting the work', 'Ordering the subtasks'] },
   tc:  { label: 'Designing test cases · rocket:design-test-case', every: 6000, steps: ['Reading the story', 'Building the feature model', 'Extracting rules and acceptance criteria', 'Exploring happy, negative and boundary paths', 'Naming the cases', 'Removing duplicate cases'] },
-  sum: { label: 'Summarizing the requirement · rocket:story-summary', every: 4000, steps: ['Reading the story and its comments', 'Finding where the ticket landed', 'Boiling it down to the essentials', 'Writing it in Vietnamese and English'] },
+  sum: { label: 'Summarizing the requirement · rocket:story-summary', every: 4000, steps: ['Reading the story and its comments', 'Finding where the ticket landed', 'Boiling it down to the essentials', 'Writing it in English and Vietnamese'] },
 };
 let aiTimer = null;
 
@@ -1290,7 +1290,7 @@ Write it twice with the same content: "vi" in Vietnamese and "en" in English. Ke
 
 ${storyBrief(id, d, true)}`;
   const r = await askAbout(id, 'sum', prompt, SUM_SCHEMA, 'rocket:story-summary');
-  if (r) { rt.aiOut = { for: id, kind: 'sum', data: r, lang: 'vi', busy: false, posted: false }; render(); announce('Claude summarized the requirement'); }
+  if (r) { rt.aiOut = { for: id, kind: 'sum', data: r, lang: 'en', busy: false, posted: false }; render(); announce('Claude summarized the requirement'); }
 }
 
 const oneLine = t => String(t).replace(/\s*\n\s*/g, ' ').trim();
@@ -1307,7 +1307,7 @@ function aiOutMarkdown(out) {
     return [`**${SUM_LANGS[lang]}**`, '', oneLine(t.goal), '', ...t.points.map(p => `- ${oneLine(p)}`),
       ...(t.questions.length ? ['', `_${qLabel}_`, ...t.questions.map(q => `- ${oneLine(q)}`)] : [])].join('\n');
   };
-  return `## Requirement summary · ${r.size}\n\n${part('vi', 'Câu hỏi đang chặn')}\n\n---\n\n${part('en', 'Blocking questions')}`;
+  return `## Requirement summary · ${r.size}\n\n${part('en', 'Blocking questions')}\n\n---\n\n${part('vi', 'Blocking questions')}`;
 }
 
 async function postAiOut(id) {
@@ -1358,11 +1358,11 @@ function summaryBody(out) {
   const tab = l => `<button type="button" role="tab" class="lang-tab" data-act="ai-lang" data-lang="${l}" aria-selected="${out.lang === l}">${l.toUpperCase()}</button>`;
   return `<div class="sug-head"><h2 class="tc-h">Requirement summary</h2><span class="tc-pri ${SIZE_CLS[r.size] ?? 'pri-low'}">${esc(r.size)}</span>
         <span class="muted">rocket:story-summary</span><span class="spacer"></span>
-        <span class="lang-tabs" role="tablist" aria-label="Language">${tab('vi')}${tab('en')}</span></div>
+        <span class="lang-tabs" role="tablist" aria-label="Language">${tab('en')}${tab('vi')}</span></div>
       <div class="sum-body" data-key="sum-${out.lang}" lang="${out.lang}">
         <p class="sum-goal ai-in">${esc(t.goal)}</p>
         <ul class="sum-points">${t.points.map((p, i) => `<li class="ai-in" style="--i:${i + 1}">${esc(p)}</li>`).join('')}</ul>
-        ${t.questions.length ? `<div class="sum-qs ai-in" style="--i:${t.points.length + 1}"><b>${out.lang === 'vi' ? 'Câu hỏi đang chặn' : 'Blocking questions'}</b>
+        ${t.questions.length ? `<div class="sum-qs ai-in" style="--i:${t.points.length + 1}"><b>Blocking questions</b>
           <ul>${t.questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul></div>` : ''}
       </div>`;
 }
@@ -1378,7 +1378,7 @@ function aiOutHtml(out) {
 
 // ─── Claude: a streamed chat about the story on the table ─
 
-const CHAT_STARTERS = ['Story này yêu cầu gì?', 'What could go wrong when we build this?', 'Viết acceptance criteria cho story này'];
+const CHAT_STARTERS = ['What does this story ask for?', 'What could go wrong when we build this?', 'Write acceptance criteria for this story'];
 
 /** The chat for a story: one at a time, started fresh when another story is opened. */
 function chatFor(id) {

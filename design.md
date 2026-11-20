@@ -198,7 +198,7 @@ OpenProject mention so that person is notified.
 ### Claude on Planning (Experimental)
 A "Claude" strip above a story's tabs, behind `__blm_claude_ai`, asks the local claude-bridge to
 summarize the requirement with rocket:story-summary's reading rules (a "Requirement summary"
-heading with a size chip and a VI | EN switch, then one goal sentence, 3–6 short bullets and up
+heading with a size chip and an EN | VI switch (English first), then one goal sentence, 3–6 short bullets and up
 to 3 blocking questions; Copy and Post write both languages), suggest subtasks (they land in Suggested subtasks) or design the main test cases with
 rocket:design-test-case: a "QA notes" heading over one bullet per case (ID, one-line title,
 priority chip; no steps), open questions folded below, Copy · Post as comment (posted as
