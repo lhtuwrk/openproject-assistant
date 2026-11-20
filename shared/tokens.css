@@ -151,6 +151,12 @@
 }
 .avatar.has-img { color: transparent; }
 
+.skel-stack { display: grid; gap: var(--space-xs); }
+.skel-line { height: 12px; border-radius: var(--radius-sm); background: var(--overlay); }
+.skel-line.lg { height: 20px; width: 55%; }
+.skel-line.md { width: 78%; }
+.skel-line.sm { width: 40%; }
+
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* Switch — a real checkbox, restyled. States: default · hover · focus · active · checked · disabled */

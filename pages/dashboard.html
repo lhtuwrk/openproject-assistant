@@ -291,6 +291,19 @@
           <div class="control"><input type="checkbox" class="switch" id="f-smartlog" /></div>
           <div class="meta"><span class="scope">Time log</span></div>
         </li>
+        <li class="feature" data-key="__blm_claude_ai" data-default="false">
+          <label class="name" for="f-claude">Claude on Planning</label>
+          <p class="desc">Adds a Claude strip to a story on the Planning page: Summarize requirement, Suggest subtasks, Design test cases and a chat about the story. They ask Claude through the local claude-bridge container, which runs Claude Code on your own subscription with every tool switched off. Nothing is written until you create the subtasks or post the cases.</p>
+          <div class="control"><input type="checkbox" class="switch" id="f-claude" /></div>
+          <div class="meta"><span class="scope">Planning · calls the bridge on this machine</span></div>
+          <div class="cfg">
+            <label class="fld fld-wide">Bridge URL <input type="url" class="ctrl" id="cb-url" placeholder="http://127.0.0.1:8787" spellcheck="false" /></label>
+            <label class="fld fld-wide">Bridge token <input type="password" class="ctrl" id="cb-token" autocomplete="off" spellcheck="false" /></label>
+            <label class="fld fld-wide">Model <select class="ctrl" id="cb-model"></select></label>
+            <button type="button" class="ghost" id="cb-test">Test</button>
+            <span class="status" id="cb-status" aria-live="polite"></span>
+          </div>
+        </li>
       </ul>
     </section>
     </div>

@@ -21,21 +21,78 @@ async function base() {
 
 // ─── Core fetch ─────────────────────────────────────────────────────────────
 
-async function apiFetch(path) {
-  const BASE = await base();
-  const res = await fetch(`${BASE}${path}`, {
-    credentials: 'include',
-    headers: { Accept: 'application/hal+json' },
+const READ_TIMEOUT_MS  = 15000;
+const WRITE_TIMEOUT_MS = 20000;
+const BLOB_TIMEOUT_MS  = 30000;
+const PAGE_CONCURRENCY = 4;
+
+const inflightGets = new Map();   // path -> Promise<Object>
+
+function timeoutSignal(ms, callerSignal) {
+  const timer = AbortSignal.timeout(ms);
+  return callerSignal ? AbortSignal.any([timer, callerSignal]) : timer;
+}
+
+function mapTimeoutError(err, timeoutMs, label) {
+  if (err?.name !== 'TimeoutError') return err;
+  const te = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s (${label})`);
+  te.code = 'TIMEOUT';
+  return te;
+}
+
+async function withTimeout(timeoutMs, label, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    throw mapTimeoutError(err, timeoutMs, label);
+  }
+}
+
+async function apiFetch(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
+  if (!signal && inflightGets.has(path)) return structuredClone(await inflightGets.get(path));
+
+  const run = withTimeout(timeoutMs, path, async () => {
+    const BASE = await base();
+    const res = await fetch(`${BASE}${path}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/hal+json' },
+      signal: timeoutSignal(timeoutMs, signal),
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error('Not authenticated — please log in to the backlog.');
+      err.code = 'NOT_AUTHENTICATED';
+      throw err;
+    }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
+    return res.json();
   });
 
-  if (res.status === 401 || res.status === 403) {
-    const err = new Error('Not authenticated — please log in to the backlog.');
-    err.code = 'NOT_AUTHENTICATED';
-    throw err;
+  if (signal) return run;
+  inflightGets.set(path, run);
+  try {
+    return structuredClone(await run);
+  } finally {
+    inflightGets.delete(path);
   }
+}
 
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
-  return res.json();
+/** Collects page 1 plus pages 2..N (in parallel batches) from a HAL collection. */
+async function collectPages(pageUrl, defaultSize, maxPages = Infinity) {
+  if (maxPages < 1) return [];
+  const first = await apiFetch(pageUrl(1));
+  const items = [...(first._embedded?.elements ?? [])];
+  const pageSize = first.pageSize ?? defaultSize;
+  const totalPages = Math.min(maxPages, Math.ceil((first.total ?? items.length) / pageSize));
+  if (items.length < pageSize || totalPages <= 1) return items;
+
+  const restOffsets = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+  for (let i = 0; i < restOffsets.length; i += PAGE_CONCURRENCY) {
+    const pages = await Promise.all(restOffsets.slice(i, i + PAGE_CONCURRENCY).map(o => apiFetch(pageUrl(o))));
+    for (const d of pages) items.push(...(d._embedded?.elements ?? []));
+  }
+  return items;
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────
@@ -108,24 +165,10 @@ export async function fetchWorkPackagesByVersion(projectId, versionId) {
  */
 export async function fetchProjectWorkPackages(projectId, filters) {
   const filter = encodeURIComponent(JSON.stringify(filters));
-
-  const items = [];
-  let offset = 1;
-
-  while (true) {
-    const data = await apiFetch(
-      `/api/v3/projects/${projectId}/work_packages?filters=${filter}&pageSize=200&offset=${offset}`
-    );
-    const elements = data._embedded?.elements ?? [];
-    items.push(...elements);
-
-    // Stop when we have everything or the page was short (last page).
-    // OpenProject's `offset` is a 1-based page number, not an item index.
-    if (items.length >= (data.total ?? 0) || elements.length < (data.pageSize ?? 200)) break;
-    offset++;
-  }
-
-  return items;
+  return collectPages(
+    offset => `/api/v3/projects/${projectId}/work_packages?filters=${filter}&pageSize=200&offset=${offset}`,
+    200,
+  );
 }
 
 /**
@@ -138,17 +181,11 @@ export async function fetchProjectWorkPackages(projectId, filters) {
 export async function fetchRecentWorkPackages(filters, maxPages) {
   const filter = encodeURIComponent(JSON.stringify(filters));
   const sort   = encodeURIComponent(JSON.stringify([['updatedAt', 'desc']]));
-
-  const items = [];
-  for (let offset = 1; offset <= maxPages; offset++) {
-    const data = await apiFetch(
-      `/api/v3/work_packages?filters=${filter}&sortBy=${sort}&pageSize=200&offset=${offset}`
-    );
-    const elements = data._embedded?.elements ?? [];
-    items.push(...elements);
-    if (items.length >= (data.total ?? 0) || elements.length < (data.pageSize ?? 200)) break;
-  }
-  return items;
+  return collectPages(
+    offset => `/api/v3/work_packages?filters=${filter}&sortBy=${sort}&pageSize=200&offset=${offset}`,
+    200,
+    maxPages,
+  );
 }
 
 /**
@@ -207,26 +244,32 @@ export async function patchWorkPackage(wpId, changes) {
 
 /** A JSON (or, for a FormData body, multipart) write with the session cookie; throws
  *  with OpenProject's own message when it refuses. */
-async function apiWrite(method, path, body) {
-  const BASE = await base();
-  const isForm = body instanceof FormData;
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/hal+json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
-    },
-    body: isForm ? body : JSON.stringify(body),
+async function apiWrite(method, path, body, { timeoutMs = WRITE_TIMEOUT_MS, signal } = {}) {
+  return withTimeout(timeoutMs, path, async () => {
+    const BASE = await base();
+    const isForm = body instanceof FormData;
+    const res = await fetch(`${BASE}${path}`, {
+      method,
+      credentials: 'include',
+      headers: {
+        Accept: 'application/hal+json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: isForm ? body : JSON.stringify(body),
+      signal: timeoutSignal(timeoutMs, signal),
+    });
+    const data = await res.json().catch(err => {
+      if (err?.name === 'TimeoutError') throw err;
+      return null;
+    });
+    if (!res.ok) {
+      const err = new Error(data?.message ?? `HTTP ${res.status}`);
+      if (res.status === 401) err.code = 'NOT_AUTHENTICATED';
+      throw err;
+    }
+    return data;
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const err = new Error(data?.message ?? `HTTP ${res.status}`);
-    if (res.status === 401) err.code = 'NOT_AUTHENTICATED';
-    throw err;
-  }
-  return data;
 }
 
 /**
@@ -374,12 +417,14 @@ export async function fetchProjectTypes(projectId) {
  * @returns {Promise<Blob>}
  */
 export async function fetchBacklogBlob(path) {
-  const BASE = await base();
-  const url = /^https?:\/\//.test(path) ? path : `${BASE}${path}`;
-  if (!url.startsWith(`${BASE}/`)) throw new Error('not a backlog file');
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.blob();
+  return withTimeout(BLOB_TIMEOUT_MS, path, async () => {
+    const BASE = await base();
+    const url = /^https?:\/\//.test(path) ? path : `${BASE}${path}`;
+    if (!url.startsWith(`${BASE}/`)) throw new Error('not a backlog file');
+    const res = await fetch(url, { credentials: 'include', signal: timeoutSignal(BLOB_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  });
 }
 
 /**
@@ -462,17 +507,10 @@ export async function fetchTimeEntries(projectIds, from, to, { user } = {}) {
   if (user)               filters.push({ user:    { operator: '=', values: [String(user)] } });
   const filter = encodeURIComponent(JSON.stringify(filters));
 
-  const pageUrl = (offset) => `/api/v3/time_entries?filters=${filter}&pageSize=500&offset=${offset}`;
-  const first = await apiFetch(pageUrl(1));
-  const items = [...(first._embedded?.elements ?? [])];
-  const pageSize = first.pageSize ?? 500;
-  const pages = Math.ceil((first.total ?? 0) / pageSize);
-  if (pages > 1) {
-    // the first response gives the total, so the remaining pages can load together
-    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => apiFetch(pageUrl(i + 2))));
-    for (const d of rest) items.push(...(d._embedded?.elements ?? []));
-  }
-
+  const items = await collectPages(
+    offset => `/api/v3/time_entries?filters=${filter}&pageSize=500&offset=${offset}`,
+    500,
+  );
   return items.map(timeEntryRow);
 }
 
@@ -701,7 +739,10 @@ export async function fetchUserName(userId) {
 export async function fetchUserAvatar(userId) {
   try {
     const BASE = await base();
-    const res = await fetch(`${BASE}/api/v3/users/${userId}/avatar`, { credentials: 'include' });
+    const res = await fetch(`${BASE}/api/v3/users/${userId}/avatar`, {
+      credentials: 'include',
+      signal: timeoutSignal(READ_TIMEOUT_MS),
+    });
     if (res.status >= 500 || res.status === 401 || res.status === 403 || res.status === 429) return undefined;
     if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
     return await res.blob();
