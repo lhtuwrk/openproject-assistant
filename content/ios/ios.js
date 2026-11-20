@@ -1,7 +1,7 @@
 // ios.js — iOS skin switch for OpenProject work-package and Backlogs pages.
 // Only toggles html classes; every visual rule lives in content/ios/*.css and is
 // scoped under html.blm-ios, so switch off = native OpenProject.
-// Registered by background.js for the configured host on work-package, Backlogs and sign-in routes.
+// Registered by background.js for the configured host on work-package, Backlogs, sign-in, project-list and notification routes.
 
 (() => {
 'use strict';
@@ -12,6 +12,8 @@ const ROOT_CLASS = 'blm-ios';
 const WP_CLASS   = 'blm-ios-wp';
 const BL_CLASS   = 'blm-ios-bl';
 const LOGIN_CLASS = 'blm-ios-login';
+const PROJECTS_CLASS = 'blm-ios-projects';
+const NOTIF_CLASS = 'blm-ios-notif';
 
 // The switch and theme are cached in the host page's localStorage so the first
 // paint is already right; chrome.storage is async and lands after it.
@@ -23,6 +25,10 @@ let theme = cached(CFG_THEME) === 'light' ? 'light' : 'dark';
 const onWorkPackagePage = () => /\/work_packages(\/|$)/.test(location.pathname);
 const onBacklogsPage    = () => /\/backlogs(\/|$)/.test(location.pathname);
 const onLoginPage       = () => /^\/login(\/|$)/.test(location.pathname);
+const onProjectsPage    = () => /^\/projects\/?$/.test(location.pathname);
+// The notification centre opens work packages in a split view: it also gets the
+// work-package class, so that pane and the toolbar share list.css and detail.css.
+const onNotificationsPage = () => /^\/notifications(\/|$)/.test(location.pathname);
 
 // Status chips: tag the text leaf of each td.status with a tone. The tone is
 // guessed from English status names (same heuristic as the Jira skin); unknown
@@ -93,6 +99,15 @@ function tagCells() {
     if (btn.dataset.blmITone !== tone) {
       btn.classList.add('blm-i-status');
       btn.dataset.blmITone = tone;
+    }
+  }
+  // Notification rows: the status badge is a solid OpenProject colour; give it a tone
+  // so notifications.css can draw the same soft chip as the list.
+  for (const b of document.querySelectorAll('.op-ian-item [class*="__hl_background_status"]')) {
+    const tone = statusTone(b.textContent.trim().toLowerCase());
+    if (b.dataset.blmITone !== tone) {
+      b.classList.add('blm-i-chip');
+      b.dataset.blmITone = tone;
     }
   }
   tagEmptyFields();
@@ -210,7 +225,7 @@ function schedule() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    if (enabled && (onWorkPackagePage() || onBacklogsPage())) tagCells();
+    if (enabled && (onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) tagCells();
   });
 }
 function observe() {
@@ -223,9 +238,11 @@ else document.addEventListener('DOMContentLoaded', observe, { once: true });
 function apply() {
   const root = document.documentElement;
   root.classList.toggle(ROOT_CLASS, enabled);
-  root.classList.toggle(WP_CLASS, enabled && onWorkPackagePage());
+  root.classList.toggle(WP_CLASS, enabled && (onWorkPackagePage() || onNotificationsPage()));
   root.classList.toggle(BL_CLASS, enabled && onBacklogsPage());
   root.classList.toggle(LOGIN_CLASS, enabled && onLoginPage());
+  root.classList.toggle(PROJECTS_CLASS, enabled && onProjectsPage());
+  root.classList.toggle(NOTIF_CLASS, enabled && onNotificationsPage());
   if (enabled) schedule();
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off
