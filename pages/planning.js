@@ -3390,9 +3390,9 @@ function paintCardClock(card) {
 
 const TYPE_GLYPH = {
   bug:   '<circle cx="12" cy="13" r="5"/><path d="M12 8V5M7 13H4M20 13h-3M8 9 6 7M16 9l2-2"/>',
-  story: '<path d="M7 4h10v16l-5-4-5 4z"/>',
-  task:  '<path d="m6 12 4 4 8-8"/>',
-  epic:  '<path d="M13 3 6 13h5l-1 8 7-10h-5z"/>',
+  story: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-6.5 7-6.5s7 2.6 7 6.5"/>',
+  task:  '<circle cx="6.5" cy="8" r="1.6" fill="currentColor" stroke="none"/><circle cx="6.5" cy="16" r="1.6" fill="currentColor" stroke="none"/><path d="M11 8h7M11 16h7"/>',
+  epic:  '<path d="M12 4 20 8.5 12 13 4 8.5z"/><path d="M4 14l8 4.5 8-4.5"/>',
   other: '<rect x="7" y="7" width="10" height="10" rx="2"/>',
 };
 function typeKind(name) {

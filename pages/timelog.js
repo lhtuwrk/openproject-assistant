@@ -997,10 +997,11 @@ function recentWps() {
 }
 
 const TYPE_GLYPH = {
-  bug:   '<circle cx="8" cy="8" r="3.2" fill="currentColor"/>',
-  story: '<path d="M5.2 3.2h5.6v9.6L8 10.6l-2.8 2.2z" fill="currentColor"/>',
-  task:  '<path d="M4.6 8.4l2.3 2.3 4.5-4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  epic:  '<path d="M9 2.5L4.5 9h3L7 13.5 11.5 7h-3z" fill="currentColor"/>',
+  // Same glyphs as the skin's GLYPH in content/jira-skin.js (our own, not Jira's).
+  bug:   '<rect x="5.2" y="5.6" width="5.6" height="7.6" rx="2.8" fill="currentColor"/><path d="M6.6 5.2 5.4 3.4M9.4 5.2l1.2-1.8M5 8.6H3M11 8.6h2M5.2 11.4l-1.8 1.4M10.8 11.4l1.8 1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  story: '<circle cx="8" cy="5.2" r="2.6" fill="currentColor"/><path d="M3.4 13.6c0-2.7 2.1-4.4 4.6-4.4s4.6 1.7 4.6 4.4z" fill="currentColor"/>',
+  task:  '<circle cx="4.6" cy="5.4" r="1.5" fill="currentColor"/><circle cx="4.6" cy="10.6" r="1.5" fill="currentColor"/><path d="M8 5.4h4.6M8 10.6h4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  epic:  '<path d="M8 3 13.5 6 8 9 2.5 6z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M3 10 8 12.8 13 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 function typeIcon(type = '') {
