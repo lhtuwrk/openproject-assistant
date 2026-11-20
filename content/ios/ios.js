@@ -186,6 +186,25 @@ const OPEN_SELECT_IN = {
   'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers',
 };
 const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SELECT_IN)];
+
+// Pop-ups the CSS used to recognise with `:is(#id .x, .x:has(…)) descendant`: such a
+// selector in an ancestor position re-walks every ancestor's ancestors for every
+// element on the page. Tagged here once instead (they are few and small).
+//   .blm-i-projsel   the header's "Select a project" pull-down (base.css, every route)
+//   .blm-i-menu      the list's view-settings and Create-type menus (list.css)
+//   .blm-i-type-menu the Create-type menu alone
+function tagPopups() {
+  for (const b of document.querySelectorAll('.spot-drop-modal--body')) {
+    const on = !!(b.closest('.op-app-header, #top-menu') || b.querySelector('[class*="header-project-select"]'));
+    if (b.classList.contains('blm-i-projsel') !== on) b.classList.toggle('blm-i-projsel', on);
+  }
+  for (const m of document.querySelectorAll('.dropdown-menu')) {
+    const type = !!(m.closest('#types-context-menu') || m.querySelector(':scope > li [class*="__hl_inline_type"]'));
+    const menu = type || !!(m.closest('#settingsDropdown') || m.querySelector(':scope > li .icon-group-by'));
+    if (m.classList.contains('blm-i-menu') !== menu) m.classList.toggle('blm-i-menu', menu);
+    if (m.classList.contains('blm-i-type-menu') !== type) m.classList.toggle('blm-i-type-menu', type);
+  }
+}
 function tagPage() {
   const root = document.documentElement;
   const want = new Set();
@@ -277,6 +296,8 @@ function untagCells() {
     for (const a of ATTRS) el.removeAttribute(a);
   });
   document.documentElement.classList.remove(...PAGE_FLAGS);
+  document.querySelectorAll('.blm-i-projsel, .blm-i-menu, .blm-i-type-menu')
+    .forEach(el => el.classList.remove('blm-i-projsel', 'blm-i-menu', 'blm-i-type-menu'));
   document.querySelectorAll('[data-blm-i-pending]').forEach(el => { delete el.dataset.blmIPending; });
   document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
     .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
@@ -508,7 +529,9 @@ function schedule() {
     const roots = full ? [document.documentElement] : outermost(dirty);
     fullPass = false;
     dirty.clear();
-    if (!enabled || !(onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) return;
+    if (!enabled) return;
+    tagPopups();
+    if (!(onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) return;
     tagPage();
     for (const root of roots) tagIn(root);
     syncOpening();
