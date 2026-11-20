@@ -280,6 +280,31 @@ html.blm-ios-wp .work-package-table .blm-i-chip[data-blm-i-tone="done"] {
   background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important;
 }
 
+/* Editable cells: OpenProject outlines the value with a border on hover. Here
+   the value sits in a soft rounded fill instead (as a tappable iOS value), the
+   status chip just deepens a touch, and keyboard focus gets the focus ring.
+   The negative margin keeps the text where it was. */
+html.blm-ios-wp .work-package-table td .inline-edit--display-field {
+  border: 0 !important; outline: none; box-shadow: none !important;
+  transition: background-color .12s ease-out, filter .12s ease-out;
+}
+html.blm-ios-wp .work-package-table td .inline-edit--display-field:not(.blm-i-chip) {
+  display: inline-flex; align-items: center; max-width: calc(100% + 12px); box-sizing: border-box;
+  min-height: 26px; padding: 0 6px !important; margin: 0 -6px !important;
+  border-radius: 7px !important; background: transparent !important;
+}
+html.blm-ios-wp .work-package-table td .inline-edit--display-field.-editable:not(.blm-i-chip):hover {
+  background: var(--g-fill) !important; cursor: pointer;
+}
+html.blm-ios-wp .work-package-table td .inline-edit--display-field.-editable:not(.blm-i-chip):active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp .work-package-table td .inline-edit--display-field.-editable.blm-i-chip:hover { filter: brightness(.95); cursor: pointer; }
+html[data-blm-ios-theme="dark"].blm-ios-wp .work-package-table td .inline-edit--display-field.-editable.blm-i-chip:hover { filter: brightness(1.15); }
+html.blm-ios-wp .work-package-table td .inline-edit--display-field:focus-visible {
+  outline: 2px solid var(--g-focus) !important; outline-offset: 0;
+}
+/* the cell itself never draws OpenProject's hover border either */
+html.blm-ios-wp .work-package-table tbody td:is(:hover, :focus-within) { outline: none !important; }
+
 /* Avatars */
 html.blm-ios-wp .work-package-table td.assignee .op-principal--avatar,
 html.blm-ios-wp .work-package-table td.assignee .op-avatar,
@@ -500,6 +525,7 @@ html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .n
   html.blm-ios-wp .work-package-table tbody td,
   html.blm-ios-wp .work-package-table .expander,
   html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link { transition: none; }
+  html.blm-ios-wp .work-package-table td .inline-edit--display-field,
   html.blm-ios-wp .work-package-table td.status ng-select .ng-select-container,
   html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
   html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
