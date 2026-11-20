@@ -4634,13 +4634,77 @@ html.${ROOT_CLASS} .blm-jx-timelog-note.-error { color: var(--jx-error); }
 `;
 const STYLE = CSS + DARK + MODAL + MOTION + DRAG + EXTRAS;
 
+// STYLE is mostly the Jira skin itself (rules under html.blm-jira) plus the motion
+// rules (html:is(.blm-jira, .blm-motion)); the rest serves features that run under
+// any skin (assignee cells, activity filter, file cards, the iOS layout…). Every
+// rule in a page's sheets costs style time on every element, even when its html
+// class is off, so the skin and motion rules sit in their own <style> chunks that
+// are disabled while unused. Chunks keep STYLE's order, so the cascade is unchanged.
+const SKIN_SEL   = new RegExp(`^html\\.${ROOT_CLASS}(?![\\w])`);
+const MOTION_SEL = new RegExp(`^html:is\\(\\.${ROOT_CLASS},\\s*\\.${MOTION_CLASS}\\)`);
+
+function splitTopLevel(text) {
+  const out = []; let depth = 0, cur = '';
+  for (const c of text) {
+    if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    if (c === ',' && !depth) { out.push(cur.trim()); cur = ''; } else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+/** 'skin' | 'motion' | 'shared' for one parsed rule. */
+function ruleGate(rule) {
+  if (rule.selectorText != null) {
+    const sels = splitTopLevel(rule.selectorText);
+    if (sels.every(s => SKIN_SEL.test(s))) return 'skin';
+    if (sels.every(s => SKIN_SEL.test(s) || MOTION_SEL.test(s))) return 'motion';
+    return 'shared';
+  }
+  if (rule.cssRules && (rule.conditionText != null)) {   // @media / @supports: by their contents
+    const gates = new Set([...rule.cssRules].map(ruleGate));
+    return gates.size === 1 ? [...gates][0] : 'mixed';
+  }
+  return 'shared';   // @keyframes, @font-face, …
+}
+
+/** STYLE as consecutive [gate, cssText] chunks. */
+function styleChunks() {
+  const sheet = new CSSStyleSheet();
+  try { sheet.replaceSync(STYLE); } catch { return [['shared', STYLE]]; }
+  const chunks = [];
+  const push = (gate, text) => {
+    const last = chunks.at(-1);
+    if (last && last[0] === gate) last[1] += `\n${text}`; else chunks.push([gate, text]);
+  };
+  for (const rule of sheet.cssRules) {
+    const gate = ruleGate(rule);
+    if (gate !== 'mixed') { push(gate, rule.cssText); continue; }
+    // A condition block holding both: split it, one copy per run of its rules.
+    const kw = rule instanceof CSSMediaRule ? '@media' : '@supports';
+    for (const inner of rule.cssRules) push(ruleGate(inner), `${kw} ${rule.conditionText} { ${inner.cssText} }`);
+  }
+  return chunks;
+}
+
+let styleEls = null;   // [{ gate, el }]
 function ensureStyle() {
-  let s = document.getElementById('__blm-jira-style');
-  if (!s) {
-    s = document.createElement('style');
-    s.id = '__blm-jira-style';
-    s.textContent = STYLE;
-    (document.head || document.documentElement).appendChild(s);
+  if (!styleEls) {
+    const parent = document.head || document.documentElement;
+    styleEls = styleChunks().map(([gate, text], i) => {
+      const el = document.createElement('style');
+      el.id = `__blm-jira-style-${i}`;
+      el.dataset.gate = gate;
+      el.textContent = text;
+      parent.appendChild(el);
+      return { gate, el };
+    });
+  }
+  const motion = skinEnabled || document.documentElement.classList.contains(MOTION_CLASS);
+  for (const { gate, el } of styleEls) {
+    const off = (gate === 'skin' && !skinEnabled) || (gate === 'motion' && !motion);
+    if (el.disabled !== off) el.disabled = off;
   }
 }
 
@@ -4655,7 +4719,7 @@ function applyClasses() {
   root.classList.toggle(AS_CLASS, assignEnabled && onWorkPackagePage());
   root.classList.toggle(ACT_CLASS, activityEnabled && onWorkPackagePage());
   root.classList.toggle(FILES_CLASS, filesEnabled && onWorkPackagePage());
-  if (anyEnabled() || animationEnabled) ensureStyle();
+  if (anyEnabled() || animationEnabled || styleEls) ensureStyle();
 }
 
 const anyEnabled = () => skinEnabled || iosLayout() || assignEnabled || activityEnabled || quoteEnabled || filesEnabled;

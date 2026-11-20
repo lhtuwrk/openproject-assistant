@@ -68,7 +68,7 @@ html.blm-ios-wp .toolbar-container .button:focus-visible { outline: 2px solid va
    carry OpenProject's __hl_inline_type_* colour classes) shares the panel and
    rows; its own tweaks follow the shared rules.
    OpenProject markup: .dropdown-menu > li > a.menu-item > op-icon i.icon-* + span. */
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) {
   min-width: 248px; padding: 0 !important; margin-top: 6px; overflow: hidden;
   background: color-mix(in srgb, var(--g-raised) 86%, transparent) !important;
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
@@ -78,30 +78,30 @@ html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .i
   transform-origin: top right; animation: blm-i-menu-in .16s ease-out;
   --blm-i-menu-gap: rgba(0, 0, 0, .07);
 }
-html.blm-ios[data-blm-ios-theme="dark"] :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+html.blm-ios[data-blm-ios-theme="dark"] .blm-i-menu:not(#blm-x) {
   box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
   --blm-i-menu-gap: rgba(0, 0, 0, .32);
 }
 @media (prefers-reduced-transparency: reduce) {
-  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) { background: var(--g-raised) !important; }
+  html.blm-ios-wp .blm-i-menu:not(#blm-x) { background: var(--g-raised) !important; }
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"]))::before,
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"]))::after { display: none !important; }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li {
+html.blm-ios-wp .blm-i-menu:not(#blm-x)::before,
+html.blm-ios-wp .blm-i-menu:not(#blm-x)::after { display: none !important; }
+html.blm-ios-wp .blm-i-menu:not(#blm-x) > li {
   margin: 0; padding: 0; border: 0; list-style: none;
 }
 /* hairline between rows; a thick band where a new group starts */
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li + li {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) > li + li {
   border-top: .5px solid var(--g-row-sep);
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) > li + li:has(:is(.icon-edit, .icon-export)) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) > li + li:has(:is(.icon-edit, .icon-export)) {
   border-top: 8px solid var(--blm-i-menu-gap);
 }
 /* OpenProject's own separators: the same band */
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) :is(hr, .dropdown-divider) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) :is(hr, .dropdown-divider) {
   height: 8px; margin: 0; border: 0; background: var(--blm-i-menu-gap);
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item {
   display: flex !important; flex-direction: row-reverse; align-items: center; justify-content: space-between;
   gap: 16px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px !important;
   border: 0 !important; border-radius: 0 !important; background: transparent !important;
@@ -109,79 +109,79 @@ html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .i
   text-align: left; text-decoration: none !important; cursor: pointer; outline: none !important;
   transition: background-color .1s ease-out;
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item > span {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item > span {
   flex: 1 1 auto; min-width: 0; color: inherit !important; font: inherit !important;
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item :is(op-icon, [class*="icon-"]) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item :is(op-icon, [class*="icon-"]) {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 20px; margin: 0 !important; padding: 0 !important;
   color: inherit !important; font-size: 16px; line-height: 1;
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item [class*="icon-"]::before {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item [class*="icon-"]::before {
   margin: 0 !important; padding: 0 !important; color: inherit !important;
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:is(:hover, :focus-visible) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:is(:hover, :focus-visible) {
   background: var(--g-fill) !important;
 }
 /* a Create item carrying a type colour class keeps it, for its dot */
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:not([class*="__hl_inline_type"]) { color: var(--g-text) !important; }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:active {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:not([class*="__hl_inline_type"]) { color: var(--g-text) !important; }
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:active {
   background: var(--g-fill-hover) !important;
 }
 /* destructive */
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:has(.icon-delete),
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:has(.icon-delete):is(:hover, :focus-visible) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:has(.icon-delete),
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:has(.icon-delete):is(:hover, :focus-visible) {
   color: var(--g-red) !important;
 }
-html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item:is(.inactive, [aria-disabled="true"], [disabled]) {
+html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:is(.inactive, [aria-disabled="true"], [disabled]) {
   opacity: .38; cursor: default; background: transparent !important;
 }
 /* Create menu: opens from the left, type names in sentence case with the
    type's colour as a leading dot instead of coloured capitals */
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) {
   min-width: 200px; transform-origin: top left;
 }
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) .menu-item {
   flex-direction: row; justify-content: flex-start; gap: 0;
 }
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"] {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"] {
   display: inline-flex; align-items: center; gap: 10px;
   text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
   -webkit-text-fill-color: var(--g-text);
 }
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"] * {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"] * {
   text-transform: none !important; -webkit-text-fill-color: var(--g-text);
 }
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) [class*="__hl_inline_type"]::before {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"]::before {
   content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
   background: currentColor; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .18);
 }
-html.blm-ios-wp :is(#types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item > span:not([class*="__hl_inline_type"]) {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) .menu-item > span:not([class*="__hl_inline_type"]) {
   text-transform: none !important;
 }
 
 /* Page: the iOS grouped background (as on the detail page), so the list reads as
    inset cards on grey instead of one white sheet */
-html.blm-ios-wp:has(.work-package-table),
-html.blm-ios-wp:has(.work-package-table) body { background: var(--g-grouped-solid) !important; }
-html.blm-ios-wp:has(.work-package-table) #content-wrapper,
-html.blm-ios-wp:has(.work-package-table) #content,
+html.blm-ios-wp.blm-i-has-table,
+html.blm-ios-wp.blm-i-has-table body { background: var(--g-grouped-solid) !important; }
+html.blm-ios-wp.blm-i-has-table #content-wrapper,
+html.blm-ios-wp.blm-i-has-table #content,
 html.blm-ios-wp .work-packages--list-container,
 html.blm-ios-wp .wp-table--container,
 html.blm-ios-wp .generic-table--container { background: transparent !important; }
 
 /* Table: an inset-grouped list. Each group is its own rounded card with its name
    above it in small grey capitals; without grouping the whole list is one card.
-   Rows paint --blm-i-row so hover and selection stay opaque on the card. */
+   Cells paint --blm-i-cell so hover and selection stay opaque on the card. */
 html.blm-ios-wp .work-package-table {
   font-family: var(--g-font); font-size: 14px; color: var(--g-text);
   background: transparent; border: 0; border-collapse: separate; border-spacing: 0;
   box-shadow: none; border-radius: 0;
 }
-/* Column titles sit on the grey above the cards; translucent while they stick */
+/* Column titles sit on the grey above the cards; opaque, because a blur per
+   sticky cell is redrawn on every scroll frame */
 html.blm-ios-wp .work-package-table thead th {
-  background: var(--g-grouped) !important;
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  background: var(--g-grouped-solid) !important;
   border: 0; height: 34px; padding: 0 10px; vertical-align: middle;
 }
 html.blm-ios-wp .work-package-table thead th *,
@@ -195,25 +195,28 @@ html.blm-ios-wp .work-package-table thead th span {
 }
 html.blm-ios-wp .work-package-table thead th a:hover { color: var(--g-text); text-decoration: none; }
 
-html.blm-ios-wp .work-package-table tbody tr { --blm-i-row: var(--g-card); }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row:not([class*="sums"]):hover {
-  --blm-i-row: color-mix(in srgb, var(--g-text) 4%, var(--g-card));
+/* The row colour is set on each cell and not inherited (@property), so hovering a
+   row restyles its cells only, not everything inside them. No fade: the tint
+   follows the pointer at once, as on iOS. */
+@property --blm-i-cell { syntax: '<color>'; inherits: false; initial-value: transparent; }
+html.blm-ios-wp .work-package-table tbody tr > td { --blm-i-cell: var(--g-card); }
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row:not([class*="sums"]):hover > td {
+  --blm-i-cell: color-mix(in srgb, var(--g-text) 4%, var(--g-card));
 }
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked,
-html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover {
-  --blm-i-row: color-mix(in srgb, var(--g-accent) 14%, var(--g-card));
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked > td,
+html.blm-ios-wp .work-package-table tbody tr.wp-table--row.-checked:hover > td {
+  --blm-i-cell: color-mix(in srgb, var(--g-accent) 14%, var(--g-card));
 }
 html.blm-ios-wp .work-package-table tbody td {
   height: var(--g-row); padding: 0 10px; vertical-align: middle;
   border: 0; border-bottom: 1px solid var(--g-row-sep);
-  background: var(--blm-i-row) !important; color: var(--g-text);
-  transition: background-color .12s ease-out;
+  background: var(--blm-i-cell) !important; color: var(--g-text);
 }
 /* Separators start after the leading inset, like iOS cells */
 html.blm-ios-wp .work-package-table tbody tr > td:first-child {
   border-bottom-color: transparent;
   background: linear-gradient(var(--g-row-sep), var(--g-row-sep)) right bottom / calc(100% - 16px) 1px no-repeat,
-              var(--blm-i-row) !important;
+              var(--blm-i-cell) !important;
 }
 /* Card corners: first row of the list or of a group, last row before the next
    group or the end of the list (the group's Sum row, when there is one);
@@ -223,11 +226,11 @@ html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-head
 html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:first-child { border-top-left-radius: var(--g-radius-card); }
 html.blm-ios-wp .work-package-table tbody tr:first-child:not([class*="group-header"]) > td:last-child,
 html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] + tr > td:last-child { border-top-right-radius: var(--g-radius-card); }
-html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td { border-bottom-color: transparent; }
-html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:first-child {
-  background: var(--blm-i-row) !important; border-bottom-left-radius: var(--g-radius-card);
+html.blm-ios-wp .work-package-table tbody tr[data-blm-i-last]:not([class*="group-header"], .wp-inline-create-button-row) > td { border-bottom-color: transparent; }
+html.blm-ios-wp .work-package-table tbody tr[data-blm-i-last]:not([class*="group-header"], .wp-inline-create-button-row) > td:first-child {
+  background: var(--blm-i-cell) !important; border-bottom-left-radius: var(--g-radius-card);
 }
-html.blm-ios-wp .work-package-table tbody tr:is(:last-child, :has(+ tr[class*="group-header"]), :has(+ tr.wp-inline-create-button-row)):not([class*="group-header"], .wp-inline-create-button-row) > td:last-child { border-bottom-right-radius: var(--g-radius-card); }
+html.blm-ios-wp .work-package-table tbody tr[data-blm-i-last]:not([class*="group-header"], .wp-inline-create-button-row) > td:last-child { border-bottom-right-radius: var(--g-radius-card); }
 
 html.blm-ios-wp .work-package-table td.id a {
   color: var(--g-accent); font-weight: 500; text-decoration: none; font-variant-numeric: tabular-nums;
@@ -378,8 +381,8 @@ html.blm-ios-wp .work-package-table tr[class*="group-header"] .count[data-blm-i-
 }
 
 /* Sum row: the card's footer, a faint tint, quiet label, totals in tabular figures */
-html.blm-ios-wp .work-package-table tbody tr[class*="sums"] {
-  --blm-i-row: color-mix(in srgb, var(--g-text) 2.5%, var(--g-card));
+html.blm-ios-wp .work-package-table tbody tr[class*="sums"] > td {
+  --blm-i-cell: color-mix(in srgb, var(--g-text) 2.5%, var(--g-card));
 }
 html.blm-ios-wp .work-package-table tr[class*="sums"] > td {
   height: 36px; color: var(--g-text);
@@ -500,7 +503,7 @@ html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-
   animation: blm-i-spin .7s linear infinite;
 }
 @keyframes blm-i-spin { to { transform: rotate(360deg); } }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel {
   min-width: 200px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
   background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
@@ -509,30 +512,30 @@ html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .n
   color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
   transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
 }
-html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp.blm-i-open-status .ng-dropdown-panel {
   box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
 }
 @media (prefers-reduced-transparency: reduce) {
-  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+  html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel { background: var(--g-raised) !important; }
 }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option {
   position: relative; display: flex !important; align-items: center; gap: 10px;
   min-height: 36px; box-sizing: border-box; padding: 0 16px 0 12px !important;
   border: 0 !important; border-radius: 8px !important; background: transparent !important;
   font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
   white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
 }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option .ng-option-label { overflow: hidden; text-overflow: ellipsis; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option::before {
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option .ng-option-label { overflow: hidden; text-overflow: ellipsis; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option::before {
   content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
   background: var(--blm-dot, transparent); box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .18);
 }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
-html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
 
 /* ── Type of a row being edited: the type picker of the details view, cell-sized.
    Closed, a filled pop-up button with the type's icon and up/down chevrons; open,
@@ -583,20 +586,20 @@ html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-arrow-wrappe
 }
 /* type icon: a rounded square in the type colour, the glyph a white masked overlay */
 html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::before,
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type]::before {
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option[data-blm-type]::before {
   content: ""; flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--jx-type-c);
 }
 html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::after,
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before {
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before {
   content: ""; position: absolute; top: 50%; width: 18px; height: 18px; margin-top: -9px;
   background: var(--jx-on-icon);
   -webkit-mask: var(--jx-glyph) center / 12px no-repeat;
           mask: var(--jx-glyph) center / 12px no-repeat;
 }
 html.blm-ios-wp .work-package-table td.type ng-select.ng-select .ng-value[data-blm-type]::after { left: 0; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before { left: 10px; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option[data-blm-type] .ng-option-label::before { left: 10px; }
 
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel {
   min-width: 200px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
   background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
@@ -605,37 +608,37 @@ html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-
   color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
   transform-origin: top left; animation: blm-i-menu-in .16s ease-out;
 }
-html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel {
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp.blm-i-open-type .ng-dropdown-panel {
   box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
 }
 @media (prefers-reduced-transparency: reduce) {
-  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+  html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel { background: var(--g-raised) !important; }
 }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(70vh, 460px) !important; border: 0 !important; background: transparent !important; scrollbar-width: thin; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option {
   position: relative; display: flex !important; align-items: center; gap: 10px;
   min-height: 36px; box-sizing: border-box; padding: 0 34px 0 10px !important;
   border: 0 !important; border-radius: 8px !important; background: transparent !important;
   font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
   white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
 }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; background-color: transparent !important; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option .ng-option-label { position: static !important; overflow: hidden; text-overflow: ellipsis; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected { font-weight: 600 !important; }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option * { font: inherit !important; color: inherit !important; background-color: transparent !important; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option .ng-option-label { position: static !important; overflow: hidden; text-overflow: ellipsis; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option.ng-option-selected { font-weight: 600 !important; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option.ng-option-selected::after {
   content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
   background: var(--g-accent);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
           mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
 }
-html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
+html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
 
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) { animation: none; }
-  html.blm-ios-wp :is(#settingsDropdown .dropdown-menu, .dropdown-menu:has(> li .icon-group-by), #types-context-menu .dropdown-menu, .dropdown-menu:has(> li [class*="__hl_inline_type"])) .menu-item { transition: none; }
+  html.blm-ios-wp .blm-i-menu:not(#blm-x) { animation: none; }
+  html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item { transition: none; }
   html.blm-ios-wp .toolbar-container .button,
   html.blm-ios-wp .toolbar-container .editable-toolbar-title--input,
   html.blm-ios-wp .work-package-table tbody td,
@@ -643,10 +646,10 @@ html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-
   html.blm-ios-wp .work-package-table .wp-inline-create-button-row .spot-link { transition: none; }
   html.blm-ios-wp .work-package-table td .inline-edit--display-field,
   html.blm-ios-wp .work-package-table td.status ng-select .ng-select-container,
-  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
-  html.blm-ios-wp:has(.work-package-table td.status ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel .ng-option { transition: none !important; }
+  html.blm-ios-wp.blm-i-open-status .ng-dropdown-panel { animation: none !important; }
   html.blm-ios-wp .work-package-table td.type ng-select .ng-select-container,
-  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel .ng-option { transition: none !important; }
-  html.blm-ios-wp:has(.work-package-table td.type ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel .ng-option { transition: none !important; }
+  html.blm-ios-wp.blm-i-open-type .ng-dropdown-panel { animation: none !important; }
   html.blm-ios-wp .work-package-table td.status ng-select.ng-select:has(.ng-value-label:empty) .ng-arrow-wrapper .ng-arrow { animation: none; border-right-color: var(--g-text3) !important; opacity: .5; }
 }

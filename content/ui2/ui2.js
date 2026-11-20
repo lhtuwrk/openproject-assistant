@@ -6,6 +6,11 @@
 (() => {
 'use strict';
 
+// Once per page: background.js also injects this file into open tabs when the skin
+// is switched on, and a tab loaded while it was on already has it.
+if (globalThis.__blmUi2Loaded) return;
+globalThis.__blmUi2Loaded = true;
+
 const CFG_UI2   = '__blm_ui2';
 const CFG_THEME = '__blm_theme';   // 'dark' | 'light', mirrored from the Settings theme picker
 const ROOT_CLASS = 'blm-ui2';
