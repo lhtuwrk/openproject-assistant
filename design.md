@@ -195,6 +195,23 @@ The Comments tab lists a story's comments newest first and posts a new one (Ctrl
 people list as the assignee picker (picture, name, search by typing on), and a chosen name is sent as an
 OpenProject mention so that person is notified.
 
+### Claude on Planning (Experimental)
+A "Claude" strip above a story's tabs, behind `__blm_claude_ai`, asks the local claude-bridge to
+summarize the requirement with rocket:story-summary's reading rules (a "Requirement summary"
+heading with a size chip and a VI | EN switch, then one goal sentence, 3–6 short bullets and up
+to 3 blocking questions; Copy and Post write both languages), suggest subtasks (they land in Suggested subtasks) or design the main test cases with
+rocket:design-test-case: a "QA notes" heading over one bullet per case (ID, one-line title,
+priority chip; no steps), open questions folded below, Copy · Post as comment (posted as
+`## QA notes` and a bullet list). It is the one
+deliberate exception to "no extra motion": only while Claude works, the strip's rim turns
+(conic gradient), an orb breathes, the phase line shimmers and the stage list advances; results
+arrive row by row. The strip's Chat opens a streamed conversation about the story (user bubbles in `--accent2`, Claude's
+on `--surface2`; the reply being written gets the gradient rim, a blinking caret and bouncing dots
+before its first word; Enter sends, ■ Stop aborts). The model picker (Settings, and the chat head)
+sets one model for every ask, Sonnet 5 by default. The extra hues are page tokens `--ai-1..3` (cobalt mixed with violet and
+teal) and `--ai-glow`. Under `prefers-reduced-motion` all of it stops; the phase text and stages
+still change. The stages are timed, not real progress.
+
 ## Injected skin on OpenProject
 `jira-skin.js` dresses OpenProject itself, not an extension page, so it follows
 Jira instead of this system: a white top bar and a light left sidebar on every

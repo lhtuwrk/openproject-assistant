@@ -5,6 +5,7 @@
 import { currentSprint, todayStr } from '../shared/me.js';
 import { getHost } from '../shared/config.js';
 import { setSkin, watchSkin } from '../shared/skins.js';
+import { BRIDGE_KEY, MODELS, bridgeConfig, bridgeHealth } from '../shared/claude-bridge.js';
 
 getHost().then(h => { if (h) document.getElementById('host-label').textContent = new URL(h).host; });
 
@@ -74,7 +75,7 @@ async function initLab() {
   lab.hidden = !(await chrome.storage.local.get(DEV_KEY))[DEV_KEY];
   document.getElementById('lab-hide').addEventListener('click', async e => {
     e.preventDefault();
-    await chrome.storage.local.set({ [DEV_KEY]: false, __blm_smart_log: false });   // hiding them also turns them off
+    await chrome.storage.local.set({ [DEV_KEY]: false, __blm_smart_log: false, __blm_claude_ai: false });   // hiding them also turns them off
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && DEV_KEY in changes) lab.hidden = !changes[DEV_KEY].newValue;
@@ -123,6 +124,28 @@ async function initFixedVersion() {
   el.related.addEventListener('change', save);
 }
 
+async function initClaudeBridge() {
+  const url = document.getElementById('cb-url'), token = document.getElementById('cb-token'), model = document.getElementById('cb-model');
+  const status = document.getElementById('cb-status');
+  model.innerHTML = MODELS.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+  const cfg = await bridgeConfig();
+  url.value = cfg.url; token.value = cfg.token; model.value = cfg.model;
+  const save = async () => {
+    await chrome.storage.local.set({ [BRIDGE_KEY]: { url: url.value.trim().replace(/\/+$/, ''), token: token.value.trim(), model: model.value } });
+    setStatus(status, 'Saved', 'ok');
+  };
+  url.addEventListener('change', save);
+  token.addEventListener('change', save);
+  model.addEventListener('change', save);
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch[BRIDGE_KEY]?.newValue?.model) model.value = ch[BRIDGE_KEY].newValue.model; });
+  document.getElementById('cb-test').addEventListener('click', async () => {
+    await save();
+    setStatus(status, 'Checking…');
+    try { await bridgeHealth(); setStatus(status, 'Bridge is up', 'ok'); }
+    catch (e) { setStatus(status, e.message, 'err'); }
+  });
+}
+
 // Style: one dropdown over three exclusive flags (shared/skins.js).
 async function initSkin() {
   const select = document.getElementById('f-skin');
@@ -138,6 +161,7 @@ async function initSkin() {
 async function init() {
   initLab();
   initFixedVersion();
+  initClaudeBridge();
   const stored = await chrome.storage.local.get(features.map(f => f.dataset.key));
   for (const f of features) {
     const input = f.querySelector('.switch');
