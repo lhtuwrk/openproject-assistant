@@ -15,6 +15,7 @@ const BL_CLASS   = 'blm-ios-bl';
 const LOGIN_CLASS = 'blm-ios-login';
 const PROJECTS_CLASS = 'blm-ios-projects';
 const NOTIF_CLASS = 'blm-ios-notif';
+const WIKI_CLASS = 'blm-ios-wiki';
 
 // The switch and theme are cached in the host page's localStorage so the first
 // paint is already right; chrome.storage is async and lands after it.
@@ -30,6 +31,7 @@ const onProjectsPage    = () => /^\/projects\/?$/.test(location.pathname);
 // The notification centre opens work packages in a split view: it also gets the
 // work-package class, so that pane and the toolbar share list.css and detail.css.
 const onNotificationsPage = () => /^\/notifications(\/|$)/.test(location.pathname);
+const onWikiPage        = () => /^\/projects\/[^/]+\/wiki(\/|$)/.test(location.pathname);
 
 // Status chips: tag the text leaf of each td.status with a tone. The tone is
 // guessed from English status names (same heuristic as the Jira skin); unknown
@@ -422,6 +424,7 @@ function apply() {
   root.classList.toggle(LOGIN_CLASS, enabled && onLoginPage());
   root.classList.toggle(PROJECTS_CLASS, enabled && onProjectsPage());
   root.classList.toggle(NOTIF_CLASS, enabled && onNotificationsPage());
+  root.classList.toggle(WIKI_CLASS, enabled && onWikiPage());
   if (enabled) schedule();
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off
