@@ -22,7 +22,7 @@
 // Every successful work-package PATCH is also announced to content.js via
 // window.postMessage, so it can refresh cached subtask stats (independent of the flags).
 // Its start and its failure are announced too ('wp-save-start' / 'wp-save-failed'),
-// so UI 2.0 (content/ui2/ui2.js) can show an edit as applied right away and put
+// so UI 2.0 (content/ui2/ui2.js) and the iOS skin (content/ios/ios.js) can show an edit as applied right away and put
 // it back if the save does not go through.
 // It also sends jira-skin.js's status/assignee edits on its behalf (see the end).
 //
@@ -635,7 +635,7 @@
   // of them within PF_TTL_MS it is answered from that copy. The shapes asked for
   // are learnt from the app's own requests (kept in localStorage), the edit form
   // only when the app sent it with no changes. Any save empties the copies.
-  // Only with UI 2.0 on (html.blm-ui2), one story at a time, never twice in a row.
+  // Only with UI 2.0 or the iOS skin on (html.blm-ui2 / html.blm-ios), one story at a time, never twice in a row.
 
   const PF_TTL_MS    = 20000;
   const PF_MAX       = 80;
@@ -644,7 +644,7 @@
   const PF_FORM_KEY   = 'blm-prefetch-form';
   const PF_DEFAULT    = ['/activities', '/relations', '/watchers', '/attachments', '/revisions', '/summarized_costs_by_type'];
   const PF_SUB_RE     = /^\/api\/v3\/work_packages\/(\d+)(\/[a-z_]+)$/;
-  const pfOn = () => document.documentElement.classList.contains('blm-ui2');
+  const pfOn = () => /\bblm-(ui2|ios)\b/.test(document.documentElement.className);
 
   const pfCache = new Map();   // "METHOD path?search [body]" -> { at, promise<{status, statusText, text} | null> }
   const pfLoad = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };

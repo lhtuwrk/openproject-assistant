@@ -1,0 +1,335 @@
+/* iOS skin: project wiki (/projects/<id>/wiki…). A large title with pill buttons,
+   the page body as a readable white card on the canvas (Notes-like type: 16px text,
+   bold headings, rounded code, tables as inset-grouped cards), and the page tree in
+   the sidebar as an iOS outline: rounded 32px rows, grey disclosure chevrons, the
+   current page an accent tint. Edit / new / history pages get the same card.
+   Scoped under html.blm-ios-wiki, set by ios.js on wiki routes.
+   OpenProject-internal selectors: .toolbar-container (title, #toolbar-items .button,
+   .drop-down .menu-drop-down-container), .wiki-content, .op-uc-* (formatted text),
+   .pages-hierarchy .tree-menu--item / --title / --hierarchy-indicator (-selected),
+   .main-menu--children-menu-header, .op-ckeditor--wrapper, .ck-content,
+   .work-package--attachments, .other-formats, table.generic-table (history). */
+
+/* ── Large title and toolbar ───────────────────────────────────────────── */
+html.blm-ios-wiki .toolbar-container { font-family: var(--g-font); margin-bottom: 16px; border: 0 !important; }
+html.blm-ios-wiki .toolbar-container :is(.title-container, .title-container *, h2) {
+  font-family: var(--g-font) !important; font-size: 30px !important; font-weight: 700 !important;
+  letter-spacing: -.02em; line-height: 1.2; color: var(--g-text) !important; border: 0 !important;
+}
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items) { gap: 8px; }
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; min-height: 34px; padding: 0 14px; margin: 0;
+  background: var(--g-btn) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 500 14px var(--g-font) !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .14s ease-out, color .14s ease-out;
+}
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button * { color: inherit !important; }
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:hover {
+  background: var(--g-btn-hover) !important; color: var(--g-text) !important;
+}
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-active, [aria-expanded="true"]) {
+  background: var(--g-selected) !important; color: var(--g-accent) !important;
+}
+/* "+ Wiki page" (OpenProject's green) and other primary actions: the accent */
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-highlight, .-alt-highlight, .-primary) {
+  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+}
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:is(.-highlight, .-alt-highlight, .-primary):hover { filter: brightness(1.08); }
+html.blm-ios-wiki :is(#toolbar-items, .toolbar-items, .toolbar-container) .button:focus-visible {
+  outline: 2px solid var(--g-focus); outline-offset: 2px;
+}
+/* "More": a frosted pull-down */
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) {
+  padding: 6px !important; min-width: 220px;
+  background: color-mix(in srgb, var(--g-raised) 90%, transparent) !important; color: var(--g-text) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: 14px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 16px 44px rgba(0, 0, 0, .16) !important;
+  font-family: var(--g-font);
+}
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li { border: 0 !important; background: transparent !important; }
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button) {
+  display: flex !important; align-items: center; gap: 8px;
+  min-height: 36px; padding: 0 10px !important; box-sizing: border-box; width: 100%;
+  background: transparent !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 8px !important; box-shadow: none !important;
+  font: 400 15px var(--g-font) !important; text-decoration: none !important;
+}
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button) * { color: inherit !important; }
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button):hover { background: var(--g-fill) !important; }
+html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button):is([class*="delete"], [data-method="delete"]) { color: var(--g-red) !important; }
+
+/* ── Page body: a readable card ────────────────────────────────────────── */
+html.blm-ios-wiki :is(#content, #content-wrapper) { background: transparent !important; }
+html.blm-ios-wiki .wiki-content {
+  max-width: 920px; box-sizing: border-box; margin: 0 0 20px !important; padding: 28px 36px !important;
+  background: var(--g-card) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+  font: 400 16px/1.6 var(--g-font) !important;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wiki .wiki-content { box-shadow: none; }
+/* A page with nothing on it yet (the parent pages of a tree often are): no empty card */
+html.blm-ios-wiki .wiki-content:empty,
+html.blm-ios-wiki .wiki-content:has(> .op-uc-container:empty):not(:has(> :not(.op-uc-container))) { display: none; }
+html.blm-ios-wiki .wiki-content :is(.op-uc-container, .op-uc-container *) { font-family: var(--g-font); }
+html.blm-ios-wiki .wiki-content .op-uc-container { color: var(--g-text) !important; }
+
+/* Headings */
+html.blm-ios-wiki .wiki-content :is(h1, h2, h3, h4, h5, h6, .op-uc-h1, .op-uc-h2, .op-uc-h3, .op-uc-h4, .op-uc-h5, .op-uc-h6) {
+  color: var(--g-text) !important; font-family: var(--g-font) !important; font-weight: 700 !important;
+  line-height: 1.25; letter-spacing: -.01em; border: 0 !important; padding: 0 !important;
+  margin: 1.6em 0 .5em !important;
+}
+html.blm-ios-wiki .wiki-content :is(h1, .op-uc-h1) { font-size: 26px !important; letter-spacing: -.02em; }
+html.blm-ios-wiki .wiki-content :is(h2, .op-uc-h2) { font-size: 21px !important; }
+html.blm-ios-wiki .wiki-content :is(h3, .op-uc-h3) { font-size: 18px !important; font-weight: 600 !important; }
+html.blm-ios-wiki .wiki-content :is(h4, h5, h6, .op-uc-h4, .op-uc-h5, .op-uc-h6) { font-size: 16px !important; font-weight: 600 !important; }
+html.blm-ios-wiki .wiki-content :is(h1, h2, h3, h4, h5, h6, .op-uc-h1, .op-uc-h2, .op-uc-h3, .op-uc-h4, .op-uc-h5, .op-uc-h6):first-child { margin-top: 0 !important; }
+/* OpenProject's "¶" anchor beside headings: only while hovered */
+html.blm-ios-wiki .wiki-content :is(.wiki-anchor, .op-uc-link_permalink) { opacity: 0; color: var(--g-text3) !important; text-decoration: none !important; transition: opacity .12s ease-out; }
+html.blm-ios-wiki .wiki-content :is(h1, h2, h3, h4, h5, h6, [class*="op-uc-h"]):hover :is(.wiki-anchor, .op-uc-link_permalink) { opacity: 1; }
+
+/* Text, links, lists */
+html.blm-ios-wiki .wiki-content :is(p, .op-uc-p) { margin: 0 0 .9em !important; color: var(--g-text) !important; }
+html.blm-ios-wiki .wiki-content :is(a, .op-uc-link) { color: var(--g-accent) !important; text-decoration: none; }
+html.blm-ios-wiki .wiki-content :is(a, .op-uc-link):hover { text-decoration: underline; text-underline-offset: 2px; }
+html.blm-ios-wiki .wiki-content :is(a, .op-uc-link):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 3px; }
+html.blm-ios-wiki .wiki-content :is(ul, ol, .op-uc-list) { margin: 0 0 .9em !important; padding-left: 1.5em !important; }
+html.blm-ios-wiki .wiki-content :is(li, .op-uc-list--item) { margin: .2em 0; }
+html.blm-ios-wiki .wiki-content :is(li, .op-uc-list--item)::marker { color: var(--g-text3); }
+html.blm-ios-wiki .wiki-content :is(.op-uc-list_task-list, .todo-list) { list-style: none; padding-left: .2em !important; }
+html.blm-ios-wiki .wiki-content input[type="checkbox"] { accent-color: var(--g-accent); width: 16px; height: 16px; vertical-align: -2px; margin-right: 6px; }
+html.blm-ios-wiki .wiki-content :is(hr, .op-uc-hr) { border: 0 !important; height: .5px; margin: 1.6em 0 !important; background: var(--g-sep); }
+html.blm-ios-wiki .wiki-content :is(strong, b) { color: var(--g-text); font-weight: 600; }
+html.blm-ios-wiki .wiki-content mark { background: color-mix(in srgb, #ffd60a 45%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+/* Quotes: a grey bar, not a box */
+html.blm-ios-wiki .wiki-content :is(blockquote, .op-uc-blockquote) {
+  margin: 0 0 1em !important; padding: 2px 0 2px 14px !important;
+  background: transparent !important; border: 0 !important; border-left: 3px solid var(--g-fill-hover) !important;
+  color: var(--g-text2) !important; font-style: normal;
+}
+html.blm-ios-wiki .wiki-content :is(blockquote, .op-uc-blockquote) * { color: inherit !important; }
+
+/* Code: SF-style mono on the fill colour; blocks as rounded wells */
+html.blm-ios-wiki .wiki-content :is(code, .op-uc-code, kbd) {
+  padding: .1em .4em; background: var(--g-fill) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 6px;
+  font: 400 .88em/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+}
+html.blm-ios-wiki .wiki-content :is(pre, .op-uc-code-block) {
+  margin: 0 0 1em !important; padding: 14px 16px !important; overflow: auto;
+  background: var(--g-grouped-solid) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 10px !important; box-shadow: none !important;
+  font: 400 13.5px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+}
+html.blm-ios-wiki .wiki-content :is(pre, .op-uc-code-block) :is(code, .op-uc-code) { padding: 0; background: transparent !important; font: inherit !important; }
+
+/* Images and figures: rounded, never wider than the card */
+html.blm-ios-wiki .wiki-content :is(img, .op-uc-image) { max-width: 100%; height: auto; border-radius: 10px; }
+html.blm-ios-wiki .wiki-content :is(figure, .op-uc-figure) { margin: 0 0 1em !important; }
+html.blm-ios-wiki .wiki-content :is(figcaption, .op-uc-figure--description) { margin-top: 6px; color: var(--g-text3) !important; font-size: 13px; text-align: center; }
+
+/* Tables: an inset-grouped card with grey header labels and hairline rows */
+html.blm-ios-wiki .wiki-content :is(figure.table, .op-uc-figure:has(> table)) { overflow-x: auto; }
+html.blm-ios-wiki .wiki-content :is(table, .op-uc-table) {
+  width: auto; max-width: 100%; margin: 0 0 1em !important;
+  border-collapse: separate !important; border-spacing: 0; overflow: hidden;
+  background: var(--g-card) !important; border: .5px solid var(--g-sep) !important; border-radius: 10px;
+  font-size: 14px; line-height: 1.45;
+}
+html.blm-ios-wiki .wiki-content :is(th, td, .op-uc-table--cell) {
+  padding: 9px 14px !important; text-align: left; vertical-align: top;
+  background: transparent !important; color: var(--g-text) !important;
+  border: 0 !important; border-bottom: .5px solid var(--g-row-sep) !important;
+}
+html.blm-ios-wiki .wiki-content :is(th, td, .op-uc-table--cell) + :is(th, td, .op-uc-table--cell) { border-left: .5px solid var(--g-row-sep) !important; }
+html.blm-ios-wiki .wiki-content :is(tr, .op-uc-table--row):last-child > :is(th, td, .op-uc-table--cell) { border-bottom: 0 !important; }
+html.blm-ios-wiki .wiki-content :is(thead th, th, .op-uc-table--cell_head) {
+  background: var(--g-sunken) !important; color: var(--g-text2) !important;
+  font-size: 12px !important; font-weight: 600 !important; letter-spacing: .03em; text-transform: uppercase;
+}
+html.blm-ios-wiki .wiki-content :is(th, td, .op-uc-table--cell) :is(p, .op-uc-p) { margin: 0 !important; }
+
+/* Table of contents macro: a small grouped card */
+html.blm-ios-wiki .wiki-content :is(.op-uc-toc, .toc) {
+  float: none; display: inline-block; min-width: 220px; margin: 0 0 1.2em !important; padding: 10px 16px !important;
+  background: var(--g-grouped-solid) !important; border: 0 !important; border-radius: 10px;
+  font-size: 14px;
+}
+html.blm-ios-wiki .wiki-content :is(.op-uc-toc, .toc) :is(.op-uc-toc--title, strong:first-child) {
+  display: block; margin-bottom: 4px; color: var(--g-text3) !important;
+  font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+html.blm-ios-wiki .wiki-content :is(.op-uc-toc, .toc) :is(ul, ol, .op-uc-toc--list) { margin: 0 !important; padding-left: 1em !important; list-style: none; }
+
+/* Child-pages macro / "Child pages" list: an iOS list card */
+html.blm-ios-wiki .wiki-content ul.pages-hierarchy {
+  padding: 4px 0 !important; list-style: none; background: var(--g-grouped-solid); border-radius: 10px;
+}
+html.blm-ios-wiki .wiki-content ul.pages-hierarchy ul { list-style: none; padding-left: 16px !important; margin: 0 !important; }
+html.blm-ios-wiki .wiki-content ul.pages-hierarchy a { display: inline-block; padding: 4px 14px; }
+
+/* Attachments and "Also available in" under the card */
+html.blm-ios-wiki :is(.work-package--attachments, op-attachments, .attachments) {
+  max-width: 920px; margin-bottom: 16px; font-family: var(--g-font);
+}
+html.blm-ios-wiki :is(.work-package--attachments--files, .op-file-list) {
+  background: var(--g-card) !important; border: 0 !important; border-radius: 12px; overflow: hidden;
+}
+html.blm-ios-wiki :is(.op-file-list--item, .work-package--attachments--files li) {
+  border: 0 !important; box-shadow: inset 0 -.5px 0 var(--g-row-sep); background: transparent !important;
+}
+html.blm-ios-wiki :is(.op-file-list--item, .work-package--attachments--files li):last-child { box-shadow: none; }
+html.blm-ios-wiki .other-formats { color: var(--g-text3) !important; font: 400 13px var(--g-font) !important; }
+html.blm-ios-wiki .other-formats a { color: var(--g-accent) !important; }
+
+/* ── Sidebar page tree: an iOS outline ─────────────────────────────────── */
+/* "← Product" header: bold, the back arrow in the accent */
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header {
+  border: 0 !important; background: transparent !important; padding-top: 6px; padding-bottom: 6px;
+}
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header :is(.main-menu--parent-node, a, span):not([class*="icon"]):not(.main-menu--arrow-left-to-project) {
+  color: var(--g-text) !important; font: 600 15px var(--g-font) !important;
+}
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header :is(.main-menu--arrow-left-to-project, .main-menu--arrow-left-to-project *, [class*="icon-arrow"]) {
+  color: var(--g-accent) !important; border-radius: 50%;
+}
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header .main-menu--arrow-left-to-project:hover { background: var(--g-fill) !important; }
+/* The arrow and the title share one centre line; the title's own box centres its text */
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header { display: flex !important; align-items: center; gap: 6px; }
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header > :is(a, span, div) {
+  display: inline-flex !important; align-items: center; min-height: 36px; box-sizing: border-box;
+  margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important;
+  line-height: 1.2 !important;
+}
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header > .main-menu--arrow-left-to-project {
+  flex: none; justify-content: center; width: 32px; min-height: 32px; height: 32px;
+}
+html.blm-ios-wiki #main-menu .main-menu--children-menu-header > :not(.main-menu--arrow-left-to-project) { flex: 1 1 auto; min-width: 0; }
+
+html.blm-ios-wiki #main-menu :is(.pages-hierarchy, .pages-hierarchy ul) { list-style: none; margin: 0 !important; }
+html.blm-ios-wiki #main-menu .pages-hierarchy { padding: 2px 8px 12px 6px !important; }
+html.blm-ios-wiki #main-menu .pages-hierarchy li { border: 0 !important; background: transparent !important; }
+html.blm-ios-wiki #main-menu .tree-menu--item {
+  display: flex !important; align-items: center; gap: 2px;
+  min-height: 32px; margin: 1px 0; padding: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 8px;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wiki #main-menu .tree-menu--item:hover { background: var(--g-hover) !important; }
+html.blm-ios-wiki #main-menu .tree-menu--item :is(a, a:hover) { background: transparent !important; }
+html.blm-ios-wiki #main-menu .tree-menu--title {
+  flex: 1 1 auto; min-width: 0; display: block; padding: 6px 8px 6px 2px !important;
+  color: var(--g-text) !important; font: 400 14px/1.35 var(--g-font) !important;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 8px;
+}
+html.blm-ios-wiki #main-menu .tree-menu--item:hover .tree-menu--title { color: var(--g-text) !important; }
+/* Current page: an accent tint, semibold accent title (not OpenProject's solid blue bar) */
+html.blm-ios-wiki #main-menu .tree-menu--item:is(.-selected, .selected, :has(> a.selected)),
+html.blm-ios-wiki #main-menu .tree-menu--item:is(.-selected, .selected, :has(> a.selected)):hover { background: var(--g-selected) !important; }
+html.blm-ios-wiki #main-menu .tree-menu--item:is(.-selected, .selected, :has(> a.selected)) :is(.tree-menu--title, .tree-menu--hierarchy-indicator, [class*="icon"]) {
+  color: var(--g-accent) !important;
+}
+html.blm-ios-wiki #main-menu .tree-menu--item:is(.-selected, .selected, :has(> a.selected)) .tree-menu--title { font-weight: 600 !important; }
+/* Disclosure: a quiet grey chevron with its own round hit area; leaves keep the indent */
+html.blm-ios-wiki #main-menu .tree-menu--hierarchy-span {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; min-width: 22px;
+}
+html.blm-ios-wiki #main-menu .tree-menu--hierarchy-indicator {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0 !important; border-radius: 50% !important;
+  color: var(--g-text3) !important; transition: background-color .12s ease-out, transform .18s ease-out;
+}
+html.blm-ios-wiki #main-menu .tree-menu--hierarchy-indicator * { color: inherit !important; }
+html.blm-ios-wiki #main-menu .tree-menu--hierarchy-indicator:hover { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wiki #main-menu .tree-menu--item :is(a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+/* Levels indent by 12px; no guide lines (OpenProject's own nesting padding put them
+   off the chevrons and stacked them into uneven bars), as in iOS Files' outline */
+html.blm-ios-wiki #main-menu .pages-hierarchy ul { padding-left: 12px !important; border: 0 !important; background: none !important; }
+html.blm-ios-wiki #main-menu .pages-hierarchy :is(ul, li, .tree-menu--item)::before,
+html.blm-ios-wiki #main-menu .pages-hierarchy :is(ul, li)::after { content: none !important; display: none !important; }
+/* Sidebar actions under the tree (Table of contents, Configure menu): quiet links */
+html.blm-ios-wiki #main-menu .wiki-menu--sub-item a,
+html.blm-ios-wiki #main-menu :is(.main-menu--children, .menu-children) > li > a:not(.tree-menu--title) { font-weight: 500; }
+
+/* ── Edit / new page: the editor as the same card ─────────────────────── */
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) { max-width: 920px; font-family: var(--g-font); }
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.form--field-container, .form--text-field-container) input:is([type="text"], :not([type])) {
+  height: 40px; padding: 0 12px !important; box-sizing: border-box;
+  background: var(--g-card) !important; color: var(--g-text) !important;
+  border: .5px solid var(--g-sep) !important; border-radius: 10px !important; box-shadow: none !important;
+  font: 400 16px var(--g-font) !important;
+}
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(input, textarea):focus {
+  border-color: var(--g-focus) !important; outline: 3px solid color-mix(in srgb, var(--g-focus) 25%, transparent) !important;
+}
+html.blm-ios-wiki .op-ckeditor--wrapper,
+html.blm-ios-wiki .document-editor__toolbar + * {
+  background: var(--g-card) !important; border-radius: 12px; overflow: hidden;
+}
+html.blm-ios-wiki .op-ckeditor--wrapper { border: .5px solid var(--g-sep) !important; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+html.blm-ios-wiki :is(.document-editor__toolbar, .ck.ck-toolbar) {
+  background: var(--g-grouped-solid) !important; border: 0 !important;
+  border-bottom: .5px solid var(--g-row-sep) !important; border-radius: 0 !important;
+}
+html.blm-ios-wiki .ck.ck-toolbar .ck-button { border-radius: 6px !important; color: var(--g-text2) !important; }
+html.blm-ios-wiki .ck.ck-toolbar .ck-button:hover { background: var(--g-fill) !important; }
+html.blm-ios-wiki .ck.ck-toolbar .ck-button.ck-on { background: var(--g-selected) !important; color: var(--g-accent) !important; }
+html.blm-ios-wiki .ck.ck-editor__editable.ck-content {
+  min-height: 320px; padding: 20px 28px !important;
+  background: var(--g-card) !important; color: var(--g-text) !important;
+  border: 0 !important; box-shadow: none !important;
+  font: 400 16px/1.6 var(--g-font) !important;
+}
+/* Save / Cancel: an accent pill and a quiet one */
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.button, button[type="submit"], input[type="submit"]) {
+  display: inline-flex !important; align-items: center; justify-content: center; gap: 6px;
+  box-sizing: border-box; height: 36px; min-height: 36px; padding: 0 18px !important; margin: 0 8px 0 0 !important;
+  background: var(--g-btn) !important; color: var(--g-text) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 500 15px/1 var(--g-font) !important; vertical-align: middle; text-decoration: none !important;
+}
+/* Icon and label on one centre line: OpenProject gives each its own margins and line-height */
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.button, button[type="submit"]) > * {
+  display: inline-flex; align-items: center; margin: 0 !important; padding: 0 !important;
+  line-height: 1 !important; vertical-align: middle; color: inherit !important;
+}
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.button, button[type="submit"]) :is(.button--icon, .icon, op-icon, svg, [class*="icon-"]) {
+  flex: none; width: 16px; height: 16px; font-size: 14px; justify-content: center;
+}
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.button, button[type="submit"]) :is(.button--icon, .icon, [class*="icon-"])::before {
+  margin: 0 !important; padding: 0 !important; line-height: 1 !important; vertical-align: 0 !important;
+}
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.button.-highlight, .button.-primary, button[type="submit"], input[type="submit"]) {
+  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+}
+
+/* ── History / diff: inset-grouped table ──────────────────────────────── */
+html.blm-ios-wiki .generic-table--container { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+html.blm-ios-wiki .generic-table--results-container { background: var(--g-card) !important; border-radius: 12px; overflow: hidden; }
+html.blm-ios-wiki .generic-table--header-background { display: none !important; }
+html.blm-ios-wiki table.generic-table { background: transparent !important; font-family: var(--g-font); color: var(--g-text); }
+html.blm-ios-wiki table.generic-table thead th { background: transparent !important; border: 0 !important; border-bottom: .5px solid var(--g-row-sep) !important; }
+html.blm-ios-wiki table.generic-table thead :is(th, th *) { color: var(--g-text3) !important; font: 500 12px var(--g-font) !important; letter-spacing: .04em; }
+html.blm-ios-wiki table.generic-table tbody td {
+  height: 44px; padding: 0 16px !important; background: transparent !important; border: 0 !important;
+  box-shadow: inset 0 -.5px 0 var(--g-row-sep); color: var(--g-text); font: 400 14px var(--g-font);
+}
+html.blm-ios-wiki table.generic-table tbody tr:last-child td { box-shadow: none; }
+html.blm-ios-wiki table.generic-table tbody tr:hover { background: var(--g-hover) !important; }
+html.blm-ios-wiki :is(.text-diff, .diff) { background: var(--g-card); border-radius: 12px; padding: 20px 24px; font-family: var(--g-font); }
+html.blm-ios-wiki :is(ins.diffins, .diff ins) { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; text-decoration: none; border-radius: 3px; }
+html.blm-ios-wiki :is(del.diffdel, .diff del) { background: color-mix(in srgb, var(--g-red) 14%, transparent) !important; color: var(--g-red) !important; border-radius: 3px; }
+
+/* Narrow windows: the card goes edge-to-edge-ish with less padding */
+@media (max-width: 760px) {
+  html.blm-ios-wiki .wiki-content { padding: 18px 18px !important; }
+  html.blm-ios-wiki .toolbar-container :is(.title-container, .title-container *, h2) { font-size: 24px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios-wiki #main-menu *, html.blm-ios-wiki .toolbar-container *, html.blm-ios-wiki .wiki-content * { transition: none !important; }
+}

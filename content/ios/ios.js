@@ -1,6 +1,7 @@
 // ios.js — iOS skin switch for OpenProject work-package and Backlogs pages.
-// Only toggles html classes; every visual rule lives in content/ios/*.css and is
-// scoped under html.blm-ios, so switch off = native OpenProject.
+// Toggles html classes and tags elements; every visual rule lives in content/ios/*.css
+// and is scoped under html.blm-ios, so switch off = native OpenProject. It also makes
+// clicks answer at once (see "Optimistic UI").
 // Registered by background.js for the configured host on work-package, Backlogs, sign-in, project-list and notification routes.
 
 (() => {
@@ -14,6 +15,7 @@ const BL_CLASS   = 'blm-ios-bl';
 const LOGIN_CLASS = 'blm-ios-login';
 const PROJECTS_CLASS = 'blm-ios-projects';
 const NOTIF_CLASS = 'blm-ios-notif';
+const WIKI_CLASS = 'blm-ios-wiki';
 
 // The switch and theme are cached in the host page's localStorage so the first
 // paint is already right; chrome.storage is async and lands after it.
@@ -29,6 +31,7 @@ const onProjectsPage    = () => /^\/projects\/?$/.test(location.pathname);
 // The notification centre opens work packages in a split view: it also gets the
 // work-package class, so that pane and the toolbar share list.css and detail.css.
 const onNotificationsPage = () => /^\/notifications(\/|$)/.test(location.pathname);
+const onWikiPage        = () => /^\/projects\/[^/]+\/wiki(\/|$)/.test(location.pathname);
 
 // Status chips: tag the text leaf of each td.status with a tone. The tone is
 // guessed from English status names (same heuristic as the Jira skin); unknown
@@ -95,6 +98,7 @@ function tagCells() {
   for (const btn of document.querySelectorAll(
     'wp-status-button button, .wp-status-button button, button[class*="__hl_background_status"]'
   )) {
+    if (btn.dataset.blmIPending) continue;   // showing the status just picked (instant apply)
     const tone = statusTone(btn.textContent.trim().toLowerCase());
     if (btn.dataset.blmITone !== tone) {
       btn.classList.add('blm-i-status');
@@ -217,6 +221,183 @@ function untagCells() {
     el.removeAttribute('data-blm-i-show-empty');
     el.removeAttribute('data-blm-i-all-empty');
   });
+  document.querySelectorAll('[data-blm-i-pending]').forEach(el => { delete el.dataset.blmIPending; });
+  document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
+    .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
+}
+
+// ── Optimistic UI ───────────────────────────────────────────────────────────
+// Every click answers at once; the server catches up behind it. Same contract as
+// UI 2.0 (content/ui2/ui2.js), drawn by content/ios/*.css. progress-hook.js (page
+// world) announces each work-package save: 'wp-save-start', 'wp-updated',
+// 'wp-save-failed'.
+//   · an option picked, Enter in a one-line field, or the check button → that
+//     editor drops its chrome and reads as the applied value (.blm-i-committing);
+//   · a status picked from the status button's menu shows on the button at once,
+//     in its tone (data-blm-i-pending);
+//   · saved  → OpenProject re-renders the field; it glows once (.blm-i-flash);
+//   · failed → the editor comes back as it was, with a short shake.
+// A list row opens its story with the row chosen and the old panel dimmed first
+// (.blm-i-opening / .blm-i-switching), and anything pressable dips on pointerdown.
+const EDIT_FIELD = '.inline-edit--active-field';
+const SAVE_MSG = 'blm-progress-hook';
+const noAnim = () => document.documentElement.classList.contains('blm-no-anim');
+let statusBtn = null;   // the status button whose menu is open
+
+// Mark an editor as applied; if no save ever answers (validation kept it open,
+// nothing changed), give it back after a while so it is never stuck read-only.
+const savedSpots = new Set();   // .inline-edit--container of editors being saved
+function markCommitting(f) {
+  if (!f || f.classList.contains('blm-i-committing')) return;
+  f.classList.add('blm-i-committing');
+  const spot = f.closest('.inline-edit--container');
+  if (spot) savedSpots.add(spot);
+  setTimeout(() => {
+    if (f.isConnected && f.classList.contains('blm-i-committing')) f.classList.remove('blm-i-committing');
+  }, 10000);
+}
+const activeFieldOf = (el) => el?.closest?.(EDIT_FIELD);
+
+document.addEventListener('click', (e) => {
+  if (!enabled) return;
+  const t = e.target;
+  // Status button → its menu → a status
+  const btn = t.closest?.('.blm-i-status');
+  if (btn) { statusBtn = btn; return; }
+  const item = t.closest?.('.dropdown-menu .menu-item[class*="__hl_inline_status_"]');
+  if (item && statusBtn?.isConnected) {
+    const label = item.textContent.trim();
+    statusBtn.dataset.blmIPending = label;
+    statusBtn.dataset.blmITone = statusTone(label.toLowerCase());
+    setTimeout(() => clearPending(statusBtn), 10000);   // never stuck if no save follows
+    return;
+  }
+  // An option picked in a single-select editor (the panel is appended to <body>)
+  if (t.closest?.('.ng-dropdown-panel .ng-option:not(.ng-option-disabled)')) {
+    const sel = document.querySelector(`${EDIT_FIELD} .ng-select-opened:not(.ng-select-multiple)`);
+    markCommitting(activeFieldOf(sel));
+    return;
+  }
+  if (t.closest?.('.inplace-edit--control--save')) markCommitting(activeFieldOf(t));
+}, true);
+
+// Enter in a one-line editor (title, numbers), or picking with the keyboard in a select
+document.addEventListener('keydown', (e) => {
+  if (!enabled || e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  const f = activeFieldOf(e.target);
+  if (!f || e.target.closest('.ck-editor__editable, .document-editor__editable, textarea, .ng-select-multiple')) return;
+  markCommitting(f);
+}, true);
+
+function clearPending(only) {
+  const btns = only ? [only] : document.querySelectorAll('.blm-i-status[data-blm-i-pending]');
+  for (const b of btns) delete b.dataset.blmIPending;
+  schedule();   // retag tones from what OpenProject now shows
+}
+function rollback() {
+  savedSpots.clear();
+  document.querySelectorAll('.blm-i-committing').forEach(f => {
+    f.classList.remove('blm-i-committing');
+    f.classList.add('blm-i-shake');
+    setTimeout(() => f.classList.remove('blm-i-shake'), 450);
+  });
+  document.querySelectorAll('.blm-i-status[data-blm-i-pending]').forEach(b => {
+    b.classList.add('blm-i-shake');
+    setTimeout(() => b.classList.remove('blm-i-shake'), 450);
+  });
+  clearPending();
+}
+
+window.addEventListener('message', (e) => {
+  if (e.source !== window || e.data?.source !== SAVE_MSG || !enabled) return;
+  const { type } = e.data;
+  if (type === 'wp-save-start') {
+    document.querySelectorAll(EDIT_FIELD).forEach(f => {
+      if (!f.contains(document.activeElement) || f.classList.contains('blm-i-committing')) markCommitting(f);
+    });
+  } else if (type === 'wp-updated') {
+    // OpenProject swaps the editors for display fields; anything it kept open stays usable
+    setTimeout(() => {
+      document.querySelectorAll('.blm-i-committing').forEach(f => f.classList.remove('blm-i-committing'));
+      clearPending();
+      for (const spot of savedSpots) {
+        const shown = spot.isConnected && spot.querySelector('.inline-edit--display-field');
+        if (shown) {
+          shown.classList.remove('blm-i-flash'); void shown.offsetWidth; shown.classList.add('blm-i-flash');
+          setTimeout(() => shown.classList.remove('blm-i-flash'), 950);
+        }
+      }
+      savedSpots.clear();
+    }, 60);
+  } else if (type === 'wp-save-failed') {
+    rollback();
+  }
+});
+
+// Press feedback: buttons, tabs, rows and menu items dip the moment the pointer
+// goes down, before the click (and whatever request it starts) even fires.
+const PRESSABLE = [
+  'button', '.button', 'a.op-tab-row--link', '.menu-item', '.ng-option',
+  '.inline-edit--display-field', '.blm-i-empty-toggle',
+  '.work-package-table tr.wp-table--row', '#rb li.story', '#rb .backlog > .header .toggler',
+].join(', ');
+let pressed = null;
+const release = () => { pressed?.classList.remove('blm-i-pressed'); pressed = null; };
+document.addEventListener('pointerdown', (e) => {
+  if (!enabled || e.button !== 0) return;
+  const el = e.target.closest?.(PRESSABLE);
+  if (!el || el.matches(':disabled, [aria-disabled="true"]')) return;
+  release();
+  pressed = el;
+  el.classList.add('blm-i-pressed');
+}, { capture: true, passive: true });
+for (const type of ['pointerup', 'pointercancel', 'dragstart']) {
+  document.addEventListener(type, () => setTimeout(release, 90), { capture: true, passive: true });
+}
+
+// Open a story without the freeze: OpenProject builds the whole story panel in one
+// go (~0.5 s with nothing painted). The click is held for one frame so the row
+// shows as chosen and the open panel dims first, then the same click goes on to
+// OpenProject. Plain clicks only: modified clicks, links, buttons, inline-editable
+// cells and the context-menu cell pass straight through.
+const replayed = new WeakSet();
+let lastStoryId = null;
+document.addEventListener('click', (e) => {
+  if (!enabled || replayed.has(e) || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const row = e.target.closest?.('.work-package-table tr.wp-table--row');
+  if (!row || e.target.closest('a, button, input, select, textarea, label, .inline-edit--display-field, .inline-edit--active-field, .wp-table--context-menu-td, .wp-table--cell-td.__internal-sorthandle')) return;
+  if (row.classList.contains('-checked')) return;   // already open
+  row.classList.add('blm-i-opening');
+  document.querySelector('.work-packages--details')?.classList.add('blm-i-switching');
+  if (noAnim()) return;   // feedback only, no held click
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const target = e.target;
+  const init = { bubbles: true, cancelable: true, composed: true, view: window, detail: e.detail,
+    screenX: e.screenX, screenY: e.screenY, clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 0 };
+  let sent = false;
+  const go = () => {
+    if (sent) return;
+    sent = true;
+    const again = new MouseEvent('click', init);
+    replayed.add(again);
+    target.dispatchEvent(again);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(go));   // after the feedback has been painted
+  setTimeout(go, 100);   // never hold the click longer, even when no frames are drawn
+  setTimeout(() => {
+    row.classList.remove('blm-i-opening');
+    document.querySelector('.work-packages--details.blm-i-switching')?.classList.remove('blm-i-switching');
+  }, 3000);   // safety net; the story change in syncOpening() clears it sooner
+}, true);
+
+// The new story is in: the dimmed panel brightens back and the row loses its flash.
+function syncOpening() {
+  const storyId = location.pathname.match(/work_packages\/(?:details\/)?(\d+)/)?.[1] ?? null;
+  if (storyId === lastStoryId) return;
+  lastStoryId = storyId;
+  document.querySelectorAll('.blm-i-opening').forEach(r => r.classList.remove('blm-i-opening'));
+  document.querySelector('.work-packages--details.blm-i-switching')?.classList.remove('blm-i-switching');
 }
 
 // Angular re-renders rows on scroll, grouping and query switch: re-tag once per frame.
@@ -225,7 +406,7 @@ function schedule() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    if (enabled && (onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) tagCells();
+    if (enabled && (onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) { tagCells(); syncOpening(); }
   });
 }
 function observe() {
@@ -243,6 +424,7 @@ function apply() {
   root.classList.toggle(LOGIN_CLASS, enabled && onLoginPage());
   root.classList.toggle(PROJECTS_CLASS, enabled && onProjectsPage());
   root.classList.toggle(NOTIF_CLASS, enabled && onNotificationsPage());
+  root.classList.toggle(WIKI_CLASS, enabled && onWikiPage());
   if (enabled) schedule();
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off

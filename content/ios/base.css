@@ -396,3 +396,37 @@ html.blm-ios :is(.op-app-header .spot-drop-modal--body, #top-menu .spot-drop-mod
   html.blm-ios .op-app-header *, html.blm-ios #main-menu *, html.blm-ios .top-menu-search--input { transition: none !important; }
   html.blm-ios .spot-drop-modal--body { animation: none !important; }
 }
+
+/* ── Optimistic UI (ios.js) ──────────────────────────────────────────────────
+   Press feedback: anything pressable dips the moment the pointer goes down, as
+   iOS controls do, before the click or its request has even started. Rows and
+   inline values tint instead of shrinking, so the table never shifts. */
+html.blm-ios :is(button, .button, a.op-tab-row--link, .blm-i-empty-toggle, #rb .backlog > .header .toggler).blm-i-pressed {
+  transform: scale(.96); opacity: .72; transition: transform 80ms ease-out, opacity 80ms ease-out !important;
+}
+html.blm-ios :is(.menu-item, .ng-option, .inline-edit--display-field).blm-i-pressed {
+  background-color: var(--g-fill-hover) !important; transition: background-color 60ms ease-out !important;
+}
+html.blm-ios .work-package-table tr.wp-table--row.blm-i-pressed { --blm-i-row: color-mix(in srgb, var(--g-text) 9%, var(--g-card)); }
+html.blm-ios #rb li.story.blm-i-pressed { background-color: var(--g-fill) !important; }
+
+/* A save that did not go through: the editor (or status button) comes back with a short shake */
+@keyframes blm-i-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+html.blm-ios .blm-i-shake { animation: blm-i-shake .4s ease-out; }
+
+/* A field that just saved glows once, then settles */
+html.blm-ios .blm-i-flash { position: relative; isolation: isolate; }
+html.blm-ios .blm-i-flash::after {
+  content: ""; position: absolute; inset: -2px -4px; z-index: -1; pointer-events: none;
+  border-radius: 8px; background: var(--g-selected);
+  animation: blm-i-glow 900ms ease-out forwards;
+}
+@keyframes blm-i-glow { from { opacity: 1; } to { opacity: 0; } }
+
+html.blm-ios.blm-no-anim :is(.blm-i-pressed, .blm-i-shake) { transform: none !important; animation: none !important; }
+html.blm-ios.blm-no-anim .blm-i-flash::after { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.blm-ios .blm-i-pressed { transform: none !important; }
+  html.blm-ios .blm-i-shake { animation: none; }
+  html.blm-ios .blm-i-flash::after { display: none; }
+}
