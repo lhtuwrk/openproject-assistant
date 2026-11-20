@@ -35,6 +35,7 @@ import {
 import { sprintInfo, sprintIndexForDate } from '../shared/sprint.js';
 import { setupReminder } from './reminder.js';
 import { getHost, HOST_KEY, SETUP_URL } from '../shared/config.js';
+import { SKIN_KEYS, currentSkin } from '../shared/skins.js';
 
 'use strict';
 
@@ -849,6 +850,7 @@ async function cleanupExpiredSprints() {
 
 const HOST_SCRIPT_PREFIX = 'blm-host-';
 
+let lastSkin = null;   // the skin the registered scripts are for
 let registering = Promise.resolve();   // calls overlap (startup, permission and storage events); run one at a time
 const registerHostScripts = () => (registering = registering.then(doRegisterHostScripts, doRegisterHostScripts));
 
@@ -861,12 +863,18 @@ async function doRegisterHostScripts() {
   if (!host) return;
   const all = `${host}/*`;
   if (!(await chrome.permissions.contains({ origins: [all] }))) return;
+  const skin = currentSkin(await chrome.storage.local.get(SKIN_KEYS));
+  lastSkin = skin;
 
   await chrome.scripting.registerContentScripts([
     { id: `${HOST_SCRIPT_PREFIX}content`, matches: [`${host}/projects/*/work_packages*`],
       js: ['content/content.js'], runAt: 'document_idle' },
-    { id: `${HOST_SCRIPT_PREFIX}ios`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`, `${host}/projects/*/backlogs*`, `${host}/login*`, `${host}/projects`, `${host}/projects?*`, `${host}/notifications*`, `${host}/projects/*/wiki*`],
-      css: ['content/ios/tokens.css', 'content/ios/base.css', 'content/ios/list.css', 'content/ios/detail.css', 'content/ios/backlogs.css', 'content/ios/login.css', 'content/ios/projects.css', 'content/ios/notifications.css', 'content/ios/wiki.css'], js: ['content/ios/ios.js'], runAt: 'document_start' },
+    // Only the chosen skin is registered: a skin's CSS costs style time on every
+    // element even while its html class is off (thousands of rules Chrome has to
+    // try), so the others aren't loaded at all. Switching skins injects the new
+    // one into open tabs (injectSkin).
+    ...(skin === 'ios' ? skinParts('ios', host) : []),
+    ...(skin === 'ui2' ? skinParts('ui2', host) : []),
     { id: `${HOST_SCRIPT_PREFIX}skin`, matches: [all],
       js: ['content/quotes.js', 'shared/wp-chips.js', 'content/jira-skin.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}pinned-backlog`, matches: [all],
@@ -875,19 +883,89 @@ async function doRegisterHostScripts() {
       js: ['content/progress-hook-relay.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}hook`, matches: [all],
       js: ['content/progress-hook.js'], runAt: 'document_start', world: 'MAIN' },
-    { id: `${HOST_SCRIPT_PREFIX}ui2`, matches: [`${host}/work_packages*`, `${host}/projects/*/work_packages*`, `${host}/projects/*/backlogs*`],
-      css: ['content/ui2/tokens.css', 'content/ui2/base.css', 'content/ui2/list.css', 'content/ui2/detail.css', 'content/ui2/backlog.css', 'content/ui2/motion.css'], js: ['content/ui2/ui2.js'], runAt: 'document_start' },
   ]);
-  console.log('[BacklogMonitor] Content scripts registered for', host);
+  console.log('[BacklogMonitor] Content scripts registered for', host, '· skin', skin);
 }
 
-const SKIN_KEYS = ['__blm_jira_skin', '__blm_ui2', '__blm_ios'];
+// A skin's scripts and styles, split by route so a page loads only the CSS it uses
+// (the iOS wiki, sign-in and project-list sheets are Rails pages, always a full
+// load; the notification centre shares the Angular app with the work-package
+// pages, so their sheets go together). The first part carries the script.
+const SKIN_PARTS = {
+  ios: [
+    { id: 'ios', routes: ['/work_packages*', '/projects/*/work_packages*', '/projects/*/backlogs*', '/login*', '/projects', '/projects?*', '/notifications*', '/projects/*/wiki*'],
+      css: ['content/ios/tokens.css', 'content/ios/base.css'], js: ['content/ios/ios.js'] },
+    { id: 'ios-wp', routes: ['/work_packages*', '/projects/*/work_packages*', '/notifications*'],
+      css: ['content/ios/list.css', 'content/ios/detail.css', 'content/ios/notifications.css'] },
+    { id: 'ios-bl', routes: ['/projects/*/backlogs*'], css: ['content/ios/backlogs.css'] },
+    { id: 'ios-login', routes: ['/login*'], css: ['content/ios/login.css'] },
+    { id: 'ios-projects', routes: ['/projects', '/projects?*'], css: ['content/ios/projects.css'] },
+    { id: 'ios-wiki', routes: ['/projects/*/wiki*'], css: ['content/ios/wiki.css'] },
+  ],
+  ui2: [
+    { id: 'ui2', routes: ['/work_packages*', '/projects/*/work_packages*', '/projects/*/backlogs*'],
+      css: ['content/ui2/tokens.css', 'content/ui2/base.css', 'content/ui2/list.css', 'content/ui2/detail.css', 'content/ui2/backlog.css', 'content/ui2/motion.css'], js: ['content/ui2/ui2.js'] },
+  ],
+};
+
+// Set by each skin script on load (content scripts share one isolated world).
+const SKIN_LOADED_FLAG = { ios: '__blmIosLoaded', ui2: '__blmUi2Loaded' };
+
+function skinParts(skin, host) {
+  return SKIN_PARTS[skin].map(p => ({
+    id: `${HOST_SCRIPT_PREFIX}${p.id}`, matches: p.routes.map(r => host + r),
+    css: p.css, ...(p.js ? { js: p.js } : {}), runAt: 'document_start',
+  }));
+}
+
+/** A match pattern's path part ("/projects/*\/wiki*") as a test on a URL path + query. */
+const routeTest = (route) => {
+  const re = new RegExp(`^${route.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '.*')}$`);
+  return (u) => re.test(u.pathname + u.search) || (!u.search && re.test(u.pathname));
+};
+
+// Registered scripts only reach pages loaded after the switch: give open tabs on
+// the backlog host the skin now, so it applies at once as it always has. Each
+// skin script skips itself if it is already in the page (a tab loaded while the
+// skin was on). A skin switched off just turns its html class off in open tabs;
+// its CSS leaves with the next load.
+async function injectSkin(skin) {
+  const host = await getHost();
+  if (!host || !SKIN_PARTS[skin]) return;
+  const tabs = await chrome.tabs.query({ url: `${host}/*` }).catch(() => []);
+  for (const tab of tabs) {
+    let u;
+    try { u = new URL(tab.url); } catch { continue; }
+    const parts = SKIN_PARTS[skin].filter(p => p.routes.some(r => routeTest(r)(u)));
+    if (!parts.length) continue;
+    const target = { tabId: tab.id };
+    try {
+      const [{ result: loaded } = {}] = await chrome.scripting.executeScript({
+        target, func: (flag) => !!globalThis[flag], args: [SKIN_LOADED_FLAG[skin]],
+      });
+      if (loaded) continue;   // its sheets are already in the page
+      await chrome.scripting.insertCSS({ target, files: parts.flatMap(p => p.css) });
+      const js = parts.flatMap(p => p.js ?? []);
+      if (js.length) await chrome.scripting.executeScript({ target, files: js });
+    } catch { /* tab closed, discarded or not ours to script */ }
+  }
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (HOST_KEY in changes) registerHostScripts();
   // Jira style, UI 2.0 and the iOS skin are mutually exclusive: the one just turned on wins.
   const on = SKIN_KEYS.find(k => changes[k]?.newValue === true);
   if (on) chrome.storage.local.set(Object.fromEntries(SKIN_KEYS.filter(k => k !== on).map(k => [k, false])));
+  if (SKIN_KEYS.some(k => k in changes)) {
+    chrome.storage.local.get(SKIN_KEYS).then((s) => {
+      const skin = currentSkin(s);
+      if (skin === lastSkin) return;
+      lastSkin = skin;
+      registerHostScripts();
+      injectSkin(skin);
+    });
+  }
 });
 chrome.permissions.onAdded.addListener(() => registerHostScripts());
 chrome.permissions.onRemoved.addListener(() => registerHostScripts());

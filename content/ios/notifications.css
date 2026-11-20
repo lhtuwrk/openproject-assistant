@@ -41,11 +41,11 @@ html.blm-ios[data-blm-ios-theme="dark"].blm-ios-notif .toolbar-container :is(.bu
 
 /* The list: one rounded card; the rows inside it carry the separators */
 html.blm-ios-notif :is(.op-ian-center, .op-ian-center--content) { background: transparent !important; font-family: var(--g-font); }
-html.blm-ios-notif :has(> op-in-app-notification-entry) {
+html.blm-ios-notif [data-blm-i-notif-list] {
   background: var(--g-card) !important; border-radius: 12px; overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
 }
-html.blm-ios[data-blm-ios-theme="dark"].blm-ios-notif :has(> op-in-app-notification-entry) { box-shadow: none; }
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-notif [data-blm-i-notif-list] { box-shadow: none; }
 
 /* A row: the blue unread dot on the left, then three lines */
 html.blm-ios-notif .op-ian-item {

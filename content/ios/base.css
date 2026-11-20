@@ -30,7 +30,7 @@ html.blm-ios {
 /* Canvas */
 html.blm-ios,
 html.blm-ios body {
-  background: var(--g-canvas) fixed !important;
+  background: var(--g-canvas) !important;
   font-family: var(--g-font);
 }
 
@@ -38,7 +38,6 @@ html.blm-ios body {
 html.blm-ios .op-app-header,
 html.blm-ios #top-menu {
   background: var(--g-surface) !important;
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
   border-bottom: 1px solid var(--g-hairline) !important;
   box-shadow: var(--g-shadow) !important;
   font-family: var(--g-font);
@@ -137,7 +136,6 @@ html.blm-ios .top-menu-search--input button:hover { background: var(--g-btn-hove
 /* Sidebar: glass, current page a rounded tint */
 html.blm-ios #main-menu {
   background: var(--g-surface) !important;
-  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
   border-right: 1px solid var(--g-hairline) !important;
   font-family: var(--g-font);
 }
@@ -407,7 +405,7 @@ html.blm-ios :is(button, .button, a.op-tab-row--link, .blm-i-empty-toggle, #rb .
 html.blm-ios :is(.menu-item, .ng-option, .inline-edit--display-field).blm-i-pressed {
   background-color: var(--g-fill-hover) !important; transition: background-color 60ms ease-out !important;
 }
-html.blm-ios .work-package-table tr.wp-table--row.blm-i-pressed { --blm-i-row: color-mix(in srgb, var(--g-text) 9%, var(--g-card)); }
+html.blm-ios .work-package-table tbody tr.wp-table--row.blm-i-pressed.blm-i-pressed > td { --blm-i-cell: color-mix(in srgb, var(--g-text) 9%, var(--g-card)); }
 html.blm-ios #rb li.story.blm-i-pressed { background-color: var(--g-fill) !important; }
 
 /* A save that did not go through: the editor (or status button) comes back with a short shake */

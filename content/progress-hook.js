@@ -639,7 +639,10 @@
 
   const PF_TTL_MS    = 20000;
   const PF_MAX       = 80;
-  const PF_HOVER_MS  = 150;
+  // Long enough that sweeping the pointer down the list starts nothing: each burst
+  // is ~8 requests, and a stream of them made the list lag and queued the app's own
+  // requests (the click that opens a story) behind them.
+  const PF_HOVER_MS  = 300;
   const PF_SHAPES_KEY = 'blm-prefetch-shapes';
   const PF_FORM_KEY   = 'blm-prefetch-form';
   const PF_DEFAULT    = ['/activities', '/relations', '/watchers', '/attachments', '/revisions', '/summarized_costs_by_type'];
@@ -682,7 +685,7 @@
   function pfFetch(method, url, body) {
     const key = pfKey(method, url, body);
     const hit = pfCache.get(key);
-    if (hit && Date.now() - hit.at < PF_TTL_MS) return;
+    if (hit && Date.now() - hit.at < PF_TTL_MS) return hit.promise;
     const promise = nativeFetch(url, {
       method, body, credentials: 'include',
       headers: { Accept: 'application/hal+json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -693,6 +696,7 @@
       .then(res => { if (!res && pfCache.get(key)?.promise === promise) pfCache.delete(key); return res; });
     pfCache.set(key, { at: Date.now(), promise });
     if (pfCache.size > PF_MAX) pfCache.delete(pfCache.keys().next().value);
+    return promise;
   }
 
   /** The prefetched answer for this request, if a fresh one exists (a promise; null = ask the server). */
@@ -703,16 +707,41 @@
   }
 
   async function prefetchWp(id) {
-    for (const shape of pfShapes) pfFetch('GET', `/api/v3/work_packages/${id}${shape}`);
-    if (!pfForm) return;
-    let wp = wpSeen.get(id);
-    if (!wp) {
-      try { wp = await getJson(`/api/v3/work_packages/${id}`); rememberWp(wp); } catch { return; }
+    const all = [...pfShapes].map(shape => pfFetch('GET', `/api/v3/work_packages/${id}${shape}`));
+    if (pfForm) {
+      let wp = wpSeen.get(id);
+      if (!wp) {
+        try { wp = await getJson(`/api/v3/work_packages/${id}`); rememberWp(wp); } catch { wp = null; }
+      }
+      if (wp?.lockVersion != null) {
+        all.push(pfFetch('POST', `/api/v3/work_packages/${id}/form`, JSON.stringify({ ...pfForm, lockVersion: wp.lockVersion })));
+      }
     }
-    if (wp?.lockVersion != null) {
-      pfFetch('POST', `/api/v3/work_packages/${id}/form`, JSON.stringify({ ...pfForm, lockVersion: wp.lockVersion }));
-    }
+    await Promise.all(all);
   }
+
+  // One burst at a time: a story hovered while one is loading waits for it (only
+  // the latest such story; the ones skimmed past in between are dropped), and the
+  // burst starts when the page is idle, not in the middle of a render.
+  let pfRunning = false;
+  let pfQueued  = null;
+  const pfIdle = (fn) => (typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 0));
+  function pfStart(id) {
+    if (pfRunning) { pfQueued = id; return; }
+    pfRunning = true;
+    pfLast = id;
+    pfIdle(() => {
+      prefetchWp(id).catch(() => {}).finally(() => {
+        pfRunning = false;
+        const next = pfQueued;
+        pfQueued = null;
+        if (next && next !== pfLast) pfStart(next);
+      });
+    });
+  }
+  // The story already open needs no copy: the app has just loaded it.
+  const openWpId = () => /work_packages\/(?:details\/)?(\d+)/.exec(location.pathname)?.[1] ?? null;
 
   function hoverWpId(el) {
     const row = el.closest?.('tr.wp-table--row');
@@ -728,9 +757,9 @@
   document.addEventListener('pointerover', (e) => {
     if (!pfOn() || e.pointerType === 'touch' || document.hidden) return;
     const id = e.target instanceof Element ? hoverWpId(e.target) : null;
-    if (!id || id === pfLast) return;
+    if (!id || id === pfLast || id === openWpId()) return;
     clearTimeout(pfTimer);
-    pfTimer = setTimeout(() => { pfLast = id; prefetchWp(id); }, PF_HOVER_MS);
+    pfTimer = setTimeout(() => pfStart(id), PF_HOVER_MS);
   }, { passive: true });
   document.addEventListener('pointerout', (e) => {
     if (e.target instanceof Element && hoverWpId(e.target) && !(e.relatedTarget instanceof Element && hoverWpId(e.relatedTarget))) {

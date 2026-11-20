@@ -7,6 +7,11 @@
 (() => {
 'use strict';
 
+// Once per page: background.js also injects this file into open tabs when the skin
+// is switched on, and a tab loaded while it was on already has it.
+if (globalThis.__blmIosLoaded) return;
+globalThis.__blmIosLoaded = true;
+
 const CFG_IOS   = '__blm_ios';
 const CFG_THEME = '__blm_theme';   // 'dark' | 'light', mirrored from the Settings theme picker
 const ROOT_CLASS = 'blm-ios';
@@ -61,81 +66,136 @@ function prioTone(text) {
   return 'normal';
 }
 
-// Idempotent: a second pass over tagged rows changes nothing.
-function tagCells() {
+// Tagging is rule based so it can run on just the part of the page that changed:
+// each rule is a selector and an idempotent function for one matching element.
+// A second pass over tagged elements changes nothing.
+function tagStatusCell(cell) {
+  const leaf = textLeaf(cell);
+  if (!leaf) return;
+  const text = leaf.textContent.trim();
+  const tone = statusTone(text.toLowerCase());
+  if (leaf.dataset.blmITone !== tone) {
+    leaf.classList.add('blm-i-chip');
+    leaf.dataset.blmITone = tone;
+  }
+  // The status it shows, kept on the cell: once clicked, the cell's editor is
+  // empty until its options load, and list.css shows this chip meanwhile.
+  if (leaf.matches('.inline-edit--display-field')) {
+    const was = JSON.stringify(text);
+    if (cell.style.getPropertyValue('--blm-i-was') !== was) cell.style.setProperty('--blm-i-was', was);
+    if (cell.dataset.blmIWasTone !== tone) cell.dataset.blmIWasTone = tone;
+  }
+}
+
+function tagChip(el) {
+  const tone = statusTone(el.textContent.trim().toLowerCase());
+  if (el.dataset.blmITone !== tone) {
+    el.classList.add('blm-i-chip');
+    el.dataset.blmITone = tone;
+  }
+}
+
+// A list row that ends its card (last row, or the one before a group header or the
+// "create" row). Tagged here so list.css needs no `tr:has(+ tr…)`, which Chrome
+// re-checks on every row whenever any row is added or removed.
+const CARD_BREAK = 'tr[class*="group-header"], tr.wp-inline-create-button-row';
+function tagLastRow(tr) {
+  const next = tr.nextElementSibling;
+  setAttr(tr, 'data-blm-i-last', !next || next.matches(CARD_BREAK));
+}
+
+// The element that holds relation rows / notification entries, for its card style
+// (was `:has(> …)` on every element of the page).
+const REL_ROW = 'wp-relation-row, .relation-row';
+const NOTIF_ROW = 'op-in-app-notification-entry';
+function tagListParent(row) {
+  const p = row.parentElement;
+  if (!p) return;
+  if (row.matches(REL_ROW)) setAttr(p, 'data-blm-i-rel-list', true);
+  else setAttr(p, 'data-blm-i-notif-list', true);
+}
+function recheckListParent(p) {
+  if (p.hasAttribute('data-blm-i-rel-list')) setAttr(p, 'data-blm-i-rel-list', [...p.children].some(c => c.matches(REL_ROW)));
+  if (p.hasAttribute('data-blm-i-notif-list')) setAttr(p, 'data-blm-i-notif-list', [...p.children].some(c => c.matches(NOTIF_ROW)));
+}
+
+const DETAIL_VIEWS = '.work-packages--details, .work-packages--show-view';
+
+const RULES = [
   // List: priority gets a tone for its dot, lone "-" cells go quiet, and a
   // group's "(6)" count becomes a bare number for its capsule.
-  for (const f of document.querySelectorAll('.work-package-table td.priority .inline-edit--display-field')) {
+  ['.work-package-table td.priority .inline-edit--display-field', (f) => {
     const tone = prioTone(f.textContent.trim().toLowerCase());
     if (f.dataset.blmIPrio !== tone) f.dataset.blmIPrio = tone;
-  }
-  for (const td of document.querySelectorAll('.work-package-table tr.wp-table--row > td')) {
+  }],
+  ['.work-package-table tr.wp-table--row > td', (td) => {
     const dash = /^[-–—]$/.test(td.textContent.trim());
     if (td.classList.contains('blm-i-dash') !== dash) td.classList.toggle('blm-i-dash', dash);
-  }
-  for (const c of document.querySelectorAll('.work-package-table tr[class*="group-header"] .count')) {
+  }],
+  ['.work-package-table tr[class*="group-header"] .count', (c) => {
     const n = c.textContent.replace(/[()\s]/g, '');
     if (c.dataset.blmICount !== n) c.dataset.blmICount = n;
-  }
-  for (const cell of document.querySelectorAll('td.status')) {
-    const leaf = textLeaf(cell);
-    if (!leaf) continue;
-    const text = leaf.textContent.trim();
-    const tone = statusTone(text.toLowerCase());
-    if (leaf.dataset.blmITone !== tone) {
-      leaf.classList.add('blm-i-chip');
-      leaf.dataset.blmITone = tone;
-    }
-    // The status it shows, kept on the cell: once clicked, the cell's editor is
-    // empty until its options load, and list.css shows this chip meanwhile.
-    if (leaf.matches('.inline-edit--display-field')) {
-      const was = JSON.stringify(text);
-      if (cell.style.getPropertyValue('--blm-i-was') !== was) cell.style.setProperty('--blm-i-was', was);
-      if (cell.dataset.blmIWasTone !== tone) cell.dataset.blmIWasTone = tone;
-    }
-  }
+  }],
+  ['.work-package-table tbody > tr', tagLastRow],
+  ['td.status', tagStatusCell],
   // Status button in the split view / full page (wp-status-button is an Angular element, not a class).
-  for (const btn of document.querySelectorAll(
-    'wp-status-button button, .wp-status-button button, button[class*="__hl_background_status"]'
-  )) {
-    if (btn.dataset.blmIPending) continue;   // showing the status just picked (instant apply)
+  ['wp-status-button button, .wp-status-button button, button[class*="__hl_background_status"]', (btn) => {
+    if (btn.dataset.blmIPending) return;   // showing the status just picked (instant apply)
     const tone = statusTone(btn.textContent.trim().toLowerCase());
     if (btn.dataset.blmITone !== tone) {
       btn.classList.add('blm-i-status');
       btn.dataset.blmITone = tone;
     }
-  }
+  }],
   // Notification rows: the status badge is a solid OpenProject colour; give it a tone
   // so notifications.css can draw the same soft chip as the list.
-  for (const b of document.querySelectorAll('.op-ian-item [class*="__hl_background_status"], .relation-row .inline-edit--display-field.status')) {
-    const tone = statusTone(b.textContent.trim().toLowerCase());
-    if (b.dataset.blmITone !== tone) {
-      b.classList.add('blm-i-chip');
-      b.dataset.blmITone = tone;
-    }
-  }
-  tagEmptyFields();
-  tagBacklogs();
-}
-
-// Backlogs: a story's status text sits in .t (its stored id in a hidden .v), and
-// a sprint's blank dates hold whitespace, so :empty never matches them.
-function tagBacklogs() {
-  for (const t of document.querySelectorAll('#rb li.story > .status_id > .t')) {
-    const tone = statusTone(t.textContent.trim().toLowerCase());
-    if (t.dataset.blmITone !== tone) {
-      t.classList.add('blm-i-chip');
-      t.dataset.blmITone = tone;
-    }
-  }
+  ['.op-ian-item [class*="__hl_background_status"], .relation-row .inline-edit--display-field.status', tagChip],
+  [`${REL_ROW}, ${NOTIF_ROW}`, tagListParent],
+  ['[data-blm-i-rel-list], [data-blm-i-notif-list]', recheckListParent],
+  // Backlogs: a story's status text sits in .t (its stored id in a hidden .v), and
+  // a sprint's blank dates hold whitespace, so :empty never matches them.
+  ['#rb li.story > .status_id > .t', tagChip],
   // "User story: " → "User story", shown by backlogs.css in place of the text
-  for (const t of document.querySelectorAll('#rb li.story > .type_id > .t')) {
+  ['#rb li.story > .type_id > .t', (t) => {
     const name = t.textContent.trim().replace(/:$/, '').trim();
     if (t.dataset.blmIType !== name) t.dataset.blmIType = name;
-  }
-  for (const d of document.querySelectorAll('#rb .backlog > .header .date')) {
+  }],
+  ['#rb .backlog > .header .date', (d) => {
     const blank = !d.textContent.trim();
     if (d.classList.contains('blm-i-blank') !== blank) d.classList.toggle('blm-i-blank', blank);
+  }],
+  [`:is(${DETAIL_VIEWS}) .attributes-group:not(.description-group)`, (g) => tagGroup(g)],
+];
+
+// Run every rule on `root`: its own matching ancestor (closest() includes root)
+// and everything matching inside it.
+function tagIn(root) {
+  for (const [sel, fn] of RULES) {
+    const up = root.closest(sel);
+    if (up) fn(up);
+    for (const el of root.querySelectorAll(sel)) fn(el);
+  }
+}
+
+// Page-wide states the CSS used to find with `html:has(…)`. Such a selector is
+// re-matched against the whole document after every DOM change, which was the
+// main cost while OpenProject renders; a few querySelector calls per frame are not.
+const OPEN_SELECT_IN = {
+  'blm-i-open-status': '.work-package-table td.status',
+  'blm-i-open-type':   '.work-package-table td.type',
+  'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers',
+};
+const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SELECT_IN)];
+function tagPage() {
+  const root = document.documentElement;
+  const want = new Set();
+  if (document.querySelector('.work-package-table')) want.add('blm-i-has-table');
+  if (document.querySelector('.work-packages--show-view')) want.add('blm-i-show-view');
+  for (const sel of document.querySelectorAll('ng-select.ng-select-opened')) {
+    for (const [flag, inside] of Object.entries(OPEN_SELECT_IN)) if (sel.closest(inside)) want.add(flag);
+  }
+  for (const flag of PAGE_FLAGS) {
+    if (root.classList.contains(flag) !== want.has(flag)) root.classList.toggle(flag, want.has(flag));
   }
 }
 
@@ -143,7 +203,6 @@ function tagBacklogs() {
 // "Show N empty fields" footer after their group's card. Required fields and a
 // row being edited always stay visible. Which groups are open is kept by group
 // title for this tab, so it survives Angular re-rendering the group.
-const DETAIL_VIEWS = '.work-packages--details, .work-packages--show-view';
 const openEmptyGroups = new Set();
 
 function isEmptyRow(row) {
@@ -161,42 +220,38 @@ function setAttr(el, name, on) {
   else if (el.hasAttribute(name)) el.removeAttribute(name);
 }
 
-function tagEmptyFields() {
-  for (const group of document.querySelectorAll(
-    `:is(${DETAIL_VIEWS}) .attributes-group:not(.description-group)`
-  )) {
-    const card = group.querySelector('.wp-attribute-group');
-    if (!card) continue;
-    const rows = [...card.querySelectorAll(':scope > .wp-attribute-group--attribute')];
-    let empty = 0;
-    for (const row of rows) {
-      const isEmpty = isEmptyRow(row);
-      setAttr(row, 'data-blm-i-empty', isEmpty);
-      if (isEmpty) empty++;
-    }
-    const title = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
-    const open = openEmptyGroups.has(title);
-    setAttr(group, 'data-blm-i-show-empty', open);
-    setAttr(group, 'data-blm-i-all-empty', rows.length > 0 && empty === rows.length);
-
-    let toggle = group.querySelector(':scope > .blm-i-empty-toggle');
-    if (!empty) { toggle?.remove(); continue; }
-    if (!toggle) {
-      toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'blm-i-empty-toggle';
-      toggle.addEventListener('click', () => {
-        const t = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
-        if (openEmptyGroups.has(t)) openEmptyGroups.delete(t); else openEmptyGroups.add(t);
-        tagEmptyFields();
-      });
-    }
-    if (toggle.previousElementSibling !== card) card.after(toggle);
-    const label = open ? 'Hide empty fields'
-      : `Show ${empty} empty field${empty === 1 ? '' : 's'}`;
-    if (toggle.textContent !== label) toggle.textContent = label;
-    toggle.setAttribute('aria-expanded', String(open));
+function tagGroup(group) {
+  const card = group.querySelector('.wp-attribute-group');
+  if (!card) return;
+  const rows = [...card.querySelectorAll(':scope > .wp-attribute-group--attribute')];
+  let empty = 0;
+  for (const row of rows) {
+    const isEmpty = isEmptyRow(row);
+    setAttr(row, 'data-blm-i-empty', isEmpty);
+    if (isEmpty) empty++;
   }
+  const title = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
+  const open = openEmptyGroups.has(title);
+  setAttr(group, 'data-blm-i-show-empty', open);
+  setAttr(group, 'data-blm-i-all-empty', rows.length > 0 && empty === rows.length);
+
+  let toggle = group.querySelector(':scope > .blm-i-empty-toggle');
+  if (!empty) { toggle?.remove(); return; }
+  if (!toggle) {
+    toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'blm-i-empty-toggle';
+    toggle.addEventListener('click', () => {
+      const t = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
+      if (openEmptyGroups.has(t)) openEmptyGroups.delete(t); else openEmptyGroups.add(t);
+      tagGroup(group);
+    });
+  }
+  if (toggle.previousElementSibling !== card) card.after(toggle);
+  const label = open ? 'Hide empty fields'
+    : `Show ${empty} empty field${empty === 1 ? '' : 's'}`;
+  if (toggle.textContent !== label) toggle.textContent = label;
+  toggle.setAttribute('aria-expanded', String(open));
 }
 
 function untagCells() {
@@ -216,11 +271,12 @@ function untagCells() {
     delete el.dataset.blmICount;
     delete el.dataset.blmIType;
   });
-  document.querySelectorAll('[data-blm-i-empty], [data-blm-i-show-empty], [data-blm-i-all-empty]').forEach(el => {
-    el.removeAttribute('data-blm-i-empty');
-    el.removeAttribute('data-blm-i-show-empty');
-    el.removeAttribute('data-blm-i-all-empty');
+  const ATTRS = ['data-blm-i-empty', 'data-blm-i-show-empty', 'data-blm-i-all-empty',
+    'data-blm-i-last', 'data-blm-i-rel-list', 'data-blm-i-notif-list'];
+  document.querySelectorAll(ATTRS.map(a => `[${a}]`).join(', ')).forEach(el => {
+    for (const a of ATTRS) el.removeAttribute(a);
   });
+  document.documentElement.classList.remove(...PAGE_FLAGS);
   document.querySelectorAll('[data-blm-i-pending]').forEach(el => { delete el.dataset.blmIPending; });
   document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
     .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
@@ -291,7 +347,7 @@ document.addEventListener('keydown', (e) => {
 
 function clearPending(only) {
   const btns = only ? [only] : document.querySelectorAll('.blm-i-status[data-blm-i-pending]');
-  for (const b of btns) delete b.dataset.blmIPending;
+  for (const b of btns) { delete b.dataset.blmIPending; dirty.add(b); }
   schedule();   // retag tones from what OpenProject now shows
 }
 function rollback() {
@@ -400,18 +456,70 @@ function syncOpening() {
   document.querySelector('.work-packages--details.blm-i-switching')?.classList.remove('blm-i-switching');
 }
 
-// Angular re-renders rows on scroll, grouping and query switch: re-tag once per frame.
+// Angular re-renders rows on scroll, grouping and query switch: re-tag once per
+// frame, and only where the page changed. The observer notes each added element
+// (and the one before it, whose "last row" may have changed), the node in front
+// of anything removed, and the parent of any text that changed. Too many changes
+// in one frame, or a route switch, fall back to one pass over the whole page.
 let frame = 0;
+let fullPass = true;
+const dirty = new Set();
+const MAX_DIRTY = 400;
+
+function noteMutations(records) {
+  if (fullPass) return;
+  for (const r of records) {
+    if (r.type === 'characterData') {   // Angular updates bound text in place
+      if (r.target.parentElement) dirty.add(r.target.parentElement);
+      continue;
+    }
+    let text = false;
+    for (const n of r.addedNodes) {
+      if (n.nodeType !== 1) { text = true; continue; }
+      dirty.add(n);
+      if (n.previousElementSibling) dirty.add(n.previousElementSibling);
+    }
+    if (r.removedNodes.length) {
+      const before = r.previousSibling;
+      dirty.add(before?.nodeType === 1 ? before : r.target);
+    }
+    if (text) dirty.add(r.target);
+    if (dirty.size > MAX_DIRTY) { fullPass = true; dirty.clear(); return; }
+  }
+}
+
+// Keep only the outermost of nested roots: tagging a root covers what is inside it.
+function outermost(nodes) {
+  const out = [];
+  for (const n of nodes) {
+    if (!n.isConnected || n.nodeType !== 1) continue;
+    let p = n.parentElement, covered = false;
+    while (p) { if (nodes.has(p)) { covered = true; break; } p = p.parentElement; }
+    if (!covered) out.push(n);
+  }
+  return out;
+}
+
 function schedule() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    if (enabled && (onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) { tagCells(); syncOpening(); }
+    const full = fullPass;
+    const roots = full ? [document.documentElement] : outermost(dirty);
+    fullPass = false;
+    dirty.clear();
+    if (!enabled || !(onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) return;
+    tagPage();
+    for (const root of roots) tagIn(root);
+    syncOpening();
   });
 }
 function observe() {
-  new MutationObserver(() => { if (enabled) schedule(); })
-    .observe(document.body, { childList: true, subtree: true });
+  new MutationObserver((records) => {
+    if (!enabled) return;
+    noteMutations(records);
+    schedule();
+  }).observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 if (document.body) observe();
 else document.addEventListener('DOMContentLoaded', observe, { once: true });
@@ -425,7 +533,7 @@ function apply() {
   root.classList.toggle(PROJECTS_CLASS, enabled && onProjectsPage());
   root.classList.toggle(NOTIF_CLASS, enabled && onNotificationsPage());
   root.classList.toggle(WIKI_CLASS, enabled && onWikiPage());
-  if (enabled) schedule();
+  if (enabled) { fullPass = true; schedule(); }
   else untagCells();
   // own attribute: jira-skin.js deletes data-blm-theme when it switches off
   if (enabled) root.dataset.blmIosTheme = theme;
