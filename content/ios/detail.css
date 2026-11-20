@@ -1217,11 +1217,22 @@ html.blm-ios {
 }
 /* Format bar. Keep a (transparent) 1 px border: CKEditor's "do the buttons fit"
    check relies on it, and with none, sub-pixel rounding at browser zoom groups
-   every button under the overflow button. */
+   every button under the overflow button.
+   It sticks over the text while scrolling, so it is frosted glass: the grey
+   fill over a mostly opaque card, blurred behind. Where blur is off (reduced
+   transparency, no backdrop-filter) --g-blur is none and the card goes solid. */
 html.blm-ios-wp :is(.document-editor__toolbar, .document-editor) .ck.ck-toolbar {
   border: 1px solid transparent !important; border-radius: 12px !important;
   padding: 3px 6px !important; margin-bottom: 8px;
-  background: var(--g-fill) !important; box-shadow: none !important;
+  background: linear-gradient(var(--g-fill), var(--g-fill)), color-mix(in srgb, var(--g-card) 80%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  box-shadow: 0 0 0 .5px var(--g-hairline), 0 4px 14px rgba(0, 0, 0, .06) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp :is(.document-editor__toolbar, .document-editor) .ck.ck-toolbar { background: linear-gradient(var(--g-fill), var(--g-fill)), var(--g-card) !important; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.blm-ios-wp :is(.document-editor__toolbar, .document-editor) .ck.ck-toolbar { background: linear-gradient(var(--g-fill), var(--g-fill)), var(--g-card) !important; }
 }
 html.blm-ios-wp .document-editor__toolbar { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 html.blm-ios-wp .document-editor .ck.ck-toolbar .ck-button {
