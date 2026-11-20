@@ -103,7 +103,7 @@ function tagCells() {
   }
   // Notification rows: the status badge is a solid OpenProject colour; give it a tone
   // so notifications.css can draw the same soft chip as the list.
-  for (const b of document.querySelectorAll('.op-ian-item [class*="__hl_background_status"]')) {
+  for (const b of document.querySelectorAll('.op-ian-item [class*="__hl_background_status"], .relation-row .inline-edit--display-field.status')) {
     const tone = statusTone(b.textContent.trim().toLowerCase());
     if (b.dataset.blmITone !== tone) {
       b.classList.add('blm-i-chip');

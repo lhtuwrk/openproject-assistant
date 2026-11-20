@@ -533,6 +533,126 @@ html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .n
 }
 html.blm-ios.blm-ios-wp .work-packages--subject-type-row > .ng-dropdown-panel .ng-option.ng-option-disabled { color: var(--g-text3) !important; background: transparent !important; cursor: default; }
 
+/* ── Attribute pickers (Assignee, Accountable, Version, Priority…): the field
+   being edited is an iOS search field (filled, rounded, a round clear button,
+   a chevron) and its list the same frosted pull-down as the type picker: people
+   with a round avatar, the typed letters in bold, a checkmark on the current
+   value. The list may be appended to <body>, so it is found through the open
+   field (one ng-select is open at a time). ─────────────────────────────────── */
+html.blm-ios-wp .attributes-key-value--value-container .inline-edit--container.-active :is(.inline-edit--field, .inline-edit--active-field):has(ng-select) {
+  border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select {
+  width: 100%; padding: 0 !important; margin: 0 !important; border: 0 !important;
+  background: transparent !important; box-shadow: none !important; font-family: var(--g-font);
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-select-container {
+  min-height: 34px !important; height: 34px !important; padding: 0 !important; overflow: visible;
+  background: var(--g-fill) !important; border: 0 !important; border-radius: 10px !important;
+  box-shadow: none !important; color: var(--g-text) !important;
+  transition: background-color .1s ease-out, box-shadow .1s ease-out;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select:not(.ng-select-opened) .ng-select-container:hover { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select:is(.ng-select-focused, :focus-within) .ng-select-container { box-shadow: 0 0 0 2px var(--g-focus) !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value-container {
+  height: 34px !important; padding: 0 0 0 10px !important; align-items: center !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value { margin: 0 !important; padding: 0 !important; background: transparent !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-value-container .ng-input {
+  top: 0 !important; bottom: 0; display: flex; align-items: center; padding: 0 4px 0 10px !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select :is(.ng-value-label, .ng-placeholder, .ng-input input) {
+  font: 400 15px/20px var(--g-font) !important; color: var(--g-text) !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-input input { height: 34px !important; padding: 0 !important; caret-color: var(--g-accent); }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-placeholder { color: var(--g-text3) !important; }
+/* Clear: a small grey disc with a white × */
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper {
+  position: relative; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 24px !important; height: 34px; padding: 0 !important; margin: 0 !important; color: transparent !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper .ng-clear { display: none !important; }
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper::before {
+  content: ""; width: 16px; height: 16px; border-radius: 50%; background: var(--g-text3);
+  /* a disc with the × cut out of it */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='white'/%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E") center / 16px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='white'/%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Ccircle cx='8' cy='8' r='8' mask='url(%23m)'/%3E%3C/svg%3E") center / 16px no-repeat;
+  transition: background-color .1s ease-out;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-clear-wrapper:hover::before { background: var(--g-text2); }
+/* Chevron, turned up while the list is open */
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-arrow-wrapper {
+  position: static !important; flex: none; display: flex !important; align-items: center; justify-content: center;
+  width: 30px !important; height: 34px; padding: 0 !important; margin: 0 !important;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select .ng-arrow-wrapper .ng-arrow {
+  position: static !important; top: 0 !important; width: 12px !important; height: 12px !important;
+  border: 0 !important; background: var(--g-text3); transition: transform .16s ease-out;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5l3-3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5l3-3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select-opened .ng-arrow-wrapper .ng-arrow { transform: rotate(180deg); }
+
+/* The list */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+  min-width: 220px !important; box-sizing: border-box; margin: 6px 0 !important; padding: 6px !important;
+  background: color-mix(in srgb, var(--g-raised) 97%, transparent) !important;
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: .5px solid var(--g-hairline) !important; border-radius: var(--g-radius) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 14px 40px rgba(0, 0, 0, .16) !important;
+  color: var(--g-text) !important; font-family: var(--g-font); overflow: hidden;
+  transform-origin: top center; animation: blm-i-menu-in .16s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3), 0 14px 40px rgba(0, 0, 0, .5) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { background: var(--g-raised) !important; }
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel :is(.ng-dropdown-panel-items, .ng-dropdown-header, .ng-dropdown-footer) {
+  border: 0 !important; background: transparent !important;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-dropdown-panel-items { max-height: min(50vh, 320px) !important; scrollbar-width: thin; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option {
+  position: relative; display: flex !important; align-items: center; gap: 10px;
+  min-height: 40px; box-sizing: border-box; padding: 0 34px 0 10px !important;
+  border: 0 !important; border-radius: 8px !important; background: transparent !important;
+  font: 400 15px/1.2 var(--g-font) !important; color: var(--g-text) !important;
+  white-space: nowrap; cursor: pointer; transition: background-color .1s ease-out;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option * {
+  font-family: var(--g-font) !important; font-size: inherit !important; color: inherit !important; background-color: transparent;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.ng-option-label, .op-principal, op-principal) {
+  display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-principal--name, .op-principal--name *) {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400 !important; text-decoration: none !important;
+}
+/* Avatars: 26px discs */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.op-avatar, .op-principal--avatar, img.avatar) {
+  flex: none; width: 26px !important; height: 26px !important; min-width: 26px; margin: 0 !important;
+  border-radius: 50% !important; font-size: 11px !important; line-height: 26px !important;
+}
+/* The typed letters: bold, in body colour (OpenProject paints them blue) */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option :is(.highlighted, mark, b, strong) {
+  font-weight: 700 !important; color: var(--g-text) !important; background: none !important; padding: 0 !important;
+}
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:is(.ng-option-marked, :hover) { background: var(--g-fill) !important; color: var(--g-text) !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel:hover .ng-option.ng-option-marked:not(:hover) { background: transparent !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option:active { background: var(--g-fill-hover) !important; }
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-selected::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  background: var(--g-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.4 5.6 10.5 11.5 3.8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+/* "No items found", "Loading…": quiet centred grey text */
+html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel .ng-option.ng-option-disabled:not(:has(:is(.op-avatar, op-principal))) {
+  justify-content: center; padding: 0 10px !important; color: var(--g-text3) !important; font-size: 14px !important; background: transparent !important; cursor: default;
+}
+
 /* ── Jira layout, iOS look ────────────────────────────────────────────────────
    jira-skin.js runs its work-package layout while html.blm-ios-wp is set:
    arrangeFullView() moves .wp-info-wrapper and the attribute groups into
@@ -745,6 +865,109 @@ html.blm-ios.blm-ios-wp .blm-jx-create-error { flex-basis: 100%; margin: 0; font
 html.blm-ios-wp wp-relations-hierarchy .wp-relations--children > .attributes-group--header,
 html.blm-ios-wp wp-relations-hierarchy .wp-relations--children .work-package-table { display: none !important; }
 
+/* Relations: each group (RELATED TO, BLOCKS…) an inset-grouped card under its
+   section header; a row is #id, type, title and a status chip (tone from ios.js)
+   with round quiet info / remove buttons; "Create new relation" an accent add
+   row; "Group by" a small pill. OpenProject-internal: .relation-row(--grid,
+   --type, --grid-id, --grid-subject), .wp-relations-create-button. */
+html.blm-ios-wp :is(:has(> wp-relation-row), :has(> .relation-row)) {
+  margin: 0 0 18px; background: var(--g-card) !important; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wp :is(:has(> wp-relation-row), :has(> .relation-row)) { box-shadow: none; }
+html.blm-ios-wp .relation-row {
+  position: relative; margin: 0 !important; padding: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 0 !important;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .relation-row:hover { background: var(--g-hover) !important; }
+/* hairline between rows, inset 16px as in an iOS list */
+html.blm-ios-wp :is(.relation-row + .relation-row, wp-relation-row + wp-relation-row .relation-row)::before {
+  content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--g-row-sep); pointer-events: none;
+}
+html.blm-ios-wp wp-relation-row { display: block; }
+html.blm-ios-wp .relation-row--grid {
+  display: flex !important; align-items: center; gap: 10px; min-height: 48px; box-sizing: border-box;
+  margin: 0 !important; padding: 6px 8px 6px 16px !important;
+  font: 400 15px/1.3 var(--g-font) !important; color: var(--g-text);
+}
+html.blm-ios-wp .relation-row--grid > * { flex: none; width: auto !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
+html.blm-ios-wp .relation-row--grid > :has(a.relation-row--grid-subject),
+html.blm-ios-wp .relation-row--grid > a.relation-row--grid-subject { flex: 1 1 auto; min-width: 0; }
+html.blm-ios-wp a.relation-row--grid-id {
+  color: var(--g-text3) !important; font: 500 13px var(--g-font) !important; font-variant-numeric: tabular-nums; text-decoration: none !important;
+}
+/* Type: small semibold in its own colour, no shouting caps */
+html.blm-ios-wp .relation-row--type,
+html.blm-ios-wp .relation-row--type > span:not(.hidden-for-sighted) {
+  font: 600 12px var(--g-font) !important; letter-spacing: .02em !important; text-transform: none !important; white-space: nowrap;
+}
+html.blm-ios-wp a.relation-row--grid-subject {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text) !important; font: 400 15px var(--g-font) !important; text-decoration: none !important;
+}
+html.blm-ios-wp :is(a.relation-row--grid-id, a.relation-row--grid-subject):hover { color: var(--g-accent) !important; }
+html.blm-ios-wp :is(a.relation-row--grid-id, a.relation-row--grid-subject):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; border-radius: 4px; }
+/* Status: the list's soft chip with a dot */
+html.blm-ios-wp .relation-row .inline-edit--display-field.status {
+  display: inline-flex !important; align-items: center; gap: 5px; width: auto !important;
+  height: 22px; padding: 0 10px 0 8px !important; margin: 0 !important;
+  background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 600 12px/1 var(--g-font) !important; white-space: nowrap;
+}
+html.blm-ios-wp .relation-row .inline-edit--display-field.status[data-blm-i-tone="progress"] { background: var(--g-chip-progress-bg) !important; color: var(--g-chip-progress-fg) !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status[data-blm-i-tone="done"] { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status * { color: inherit !important; font: inherit !important; background: transparent !important; }
+/* OpenProject's own grey status dot gives way to the chip's */
+html.blm-ios-wp .relation-row .inline-edit--display-field.status :is([class*="status-icon"], [class*="__hl_dot"], .op-status-dot) { display: none !important; }
+html.blm-ios-wp .relation-row .inline-edit--display-field.status::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+html.blm-ios-wp .relation-row .inline-edit--display-field.status:hover { filter: brightness(.97); }
+/* Info / remove: round, quiet until hovered; remove goes red */
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject) {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; color: var(--g-text3) !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: none !important; text-decoration: none !important;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject) :is(.icon, [class*="icon-"], svg) {
+  color: inherit !important; font-size: 15px !important; line-height: 1 !important;
+}
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-info1, .icon-info, .icon-remove, .icon-close, .icon-delete, svg)):not(.relation-row--grid-id, .relation-row--grid-subject):hover { background: var(--g-fill) !important; color: var(--g-accent) !important; }
+html.blm-ios-wp .relation-row :is(a, button):has(> :is(.icon-remove, .icon-close, .icon-delete)):hover { color: var(--g-red) !important; }
+html.blm-ios-wp .relation-row :is(a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+/* The description / info panel a row opens */
+html.blm-ios-wp .relation-row :is(.relation-row--description, .wp-relation--description-wrapper, .wp-relation--description-read-value) {
+  padding: 0 16px 10px !important; color: var(--g-text2) !important; font: 400 13px/1.4 var(--g-font) !important;
+  background: transparent !important; border: 0 !important;
+}
+/* "+ Create new relation": an accent add row */
+html.blm-ios-wp .wp-relations-create-button { margin: 4px 0 0; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button) {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 10px !important;
+  background: transparent !important; color: var(--g-accent) !important;
+  border: 0 !important; border-radius: 10px !important; box-shadow: none !important;
+  font: 500 15px var(--g-font) !important; text-decoration: none !important; cursor: pointer;
+  transition: background-color .12s ease-out;
+}
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button) * { color: inherit !important; font: inherit !important; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):hover { background: var(--g-fill) !important; }
+html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+/* "Group by work package type": a small grey pill */
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; min-height: 30px; padding: 0 12px !important; margin: 0 !important;
+  background: var(--g-btn) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
+  font: 500 13px var(--g-font) !important; white-space: nowrap; cursor: pointer;
+  transition: background-color .12s ease-out, color .12s ease-out;
+}
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) * { color: inherit !important; font: inherit !important; }
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):hover { background: var(--g-btn-hover) !important; color: var(--g-text) !important; }
+html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+
 /* "↓ Child work items": a floating capsule while the section is below the fold */
 html.blm-ios.blm-ios-wp .blm-jx-jump {
   position: fixed; right: 24px; bottom: 72px; z-index: 50;
@@ -823,6 +1046,8 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-principal--avatar { background-color
 html.blm-ios[data-blm-ios-theme="dark"] .op-tab-row--link_selected { box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
 
 @media (prefers-reduced-motion: reduce) {
+  html.blm-ios-wp:has(.attributes-key-value--value-container ng-select.ng-select-opened) .ng-dropdown-panel { animation: none !important; }
+  html.blm-ios-wp .attributes-key-value--value-container ng-select.ng-select :is(.ng-select-container, .ng-arrow, .ng-clear-wrapper::before) { transition: none !important; }
   html.blm-ios-wp .op-tab-row--link,
   html.blm-ios-wp .blm-i-status,
   html.blm-ios-wp .op-back-button,
