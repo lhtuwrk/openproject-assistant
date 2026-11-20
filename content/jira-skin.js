@@ -539,11 +539,12 @@ const svg = body =>
   )}")`;
 
 const GLYPH = {
-  story:   svg(`<path d='M5 3.5h6v9l-3-2.2-3 2.2z' fill='black'/>`),
-  bug:     svg(`<circle cx='8' cy='8' r='3' fill='black' stroke='none'/>`),
-  task:    svg(`<path d='M4.5 8.2 7 10.5l4.5-5'/>`),
-  epic:    svg(`<path d='M9 2.5 4.5 9H8l-1 4.5L11.5 7H8z' fill='black' stroke-width='1'/>`),
-  feature: svg(`<path d='M8 3.5v9M3.5 8h9'/>`),
+  // Type glyphs are our own (person, beetle, to-do list, layers, sparkle), not Jira's.
+  story:   svg(`<circle cx='8' cy='5.2' r='2.6' fill='black' stroke='none'/><path d='M3.4 13.6c0-2.7 2.1-4.4 4.6-4.4s4.6 1.7 4.6 4.4z' fill='black' stroke='none'/>`),
+  bug:     svg(`<rect x='5.2' y='5.6' width='5.6' height='7.6' rx='2.8' fill='black' stroke='none'/><path d='M6.6 5.2 5.4 3.4M9.4 5.2l1.2-1.8M5 8.6H3M11 8.6h2M5.2 11.4l-1.8 1.4M10.8 11.4l1.8 1.4' stroke-width='1.5'/>`),
+  task:    svg(`<circle cx='4.6' cy='5.4' r='1.5' fill='black' stroke='none'/><circle cx='4.6' cy='10.6' r='1.5' fill='black' stroke='none'/><path d='M8 5.4h4.6M8 10.6h4.6'/>`),
+  epic:    svg(`<path d='M8 3 13.5 6 8 9 2.5 6z' fill='black' stroke-width='1.2'/><path d='M3 10 8 12.8 13 10'/>`),
+  feature: svg(`<path d='M8 2.5 9.5 6.5 13.5 8 9.5 9.5 8 13.5 6.5 9.5 2.5 8 6.5 6.5z' fill='black' stroke='none'/>`),
   other:   svg(`<rect x='5' y='5' width='6' height='6' rx='1' fill='black' stroke='none'/>`),
   highest: svg(`<path d='M4 8.5 8 4.5l4 4M4 12.5l4-4 4 4'/>`),
   high:    svg(`<path d='M4 10.5l4-4 4 4'/>`),

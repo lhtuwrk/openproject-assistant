@@ -128,6 +128,12 @@ const RULES = [
     const tone = prioTone(f.textContent.trim().toLowerCase());
     if (f.dataset.blmIPrio !== tone) f.dataset.blmIPrio = tone;
   }],
+  // Priority picker of a row being edited: the same dot on its value and on each
+  // option (list.css only shows the option dots while that picker is open).
+  ['.work-package-table td.priority ng-select .ng-value, .ng-dropdown-panel .ng-option', (o) => {
+    const tone = prioTone(o.textContent.trim().toLowerCase());
+    if (o.dataset.blmIPrio !== tone) o.dataset.blmIPrio = tone;
+  }],
   ['.work-package-table tr.wp-table--row > td', (td) => {
     const dash = /^[-–—]$/.test(td.textContent.trim());
     if (td.classList.contains('blm-i-dash') !== dash) td.classList.toggle('blm-i-dash', dash);
@@ -183,6 +189,7 @@ function tagIn(root) {
 const OPEN_SELECT_IN = {
   'blm-i-open-status': '.work-package-table td.status',
   'blm-i-open-type':   '.work-package-table td.type',
+  'blm-i-open-priority': '.work-package-table td.priority',
   'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers',
 };
 const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SELECT_IN)];
@@ -193,7 +200,18 @@ const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SE
 //   .blm-i-projsel   the header's "Select a project" pull-down (base.css, every route)
 //   .blm-i-menu      the list's view-settings and Create-type menus (list.css)
 //   .blm-i-type-menu the Create-type menu alone
+//   .blm-i-logtime   the Log time dialog (base.css), found the way jira-skin.js
+//                    finds it: a small dialog titled "Log time" that asks for hours;
+//   .blm-i-logtime-overlay its dimmed backdrop, when it is the dialog's parent
 function tagPopups() {
+  for (const m of document.querySelectorAll('.spot-modal, .op-modal--modal-container, .op-modal')) {
+    const text = m.textContent.replace(/\s+/g, ' ').trim();
+    const on = text.length < 600 && /log\s*time/i.test(text.slice(0, 120)) && /hours/i.test(text)
+      && !m.querySelector('.spot-modal, .op-modal--modal-container, .op-modal');   // innermost only
+    if (m.classList.contains('blm-i-logtime') !== on) m.classList.toggle('blm-i-logtime', on);
+    const ov = m.parentElement;
+    if (ov && /overlay/.test(ov.className) && ov.classList.contains('blm-i-logtime-overlay') !== on) ov.classList.toggle('blm-i-logtime-overlay', on);
+  }
   for (const b of document.querySelectorAll('.spot-drop-modal--body')) {
     const on = !!(b.closest('.op-app-header, #top-menu') || b.querySelector('[class*="header-project-select"]'));
     if (b.classList.contains('blm-i-projsel') !== on) b.classList.toggle('blm-i-projsel', on);
@@ -296,9 +314,10 @@ function untagCells() {
     for (const a of ATTRS) el.removeAttribute(a);
   });
   document.documentElement.classList.remove(...PAGE_FLAGS);
-  document.querySelectorAll('.blm-i-projsel, .blm-i-menu, .blm-i-type-menu')
-    .forEach(el => el.classList.remove('blm-i-projsel', 'blm-i-menu', 'blm-i-type-menu'));
+  document.querySelectorAll('.blm-i-projsel, .blm-i-menu, .blm-i-type-menu, .blm-i-logtime, .blm-i-logtime-overlay')
+    .forEach(el => el.classList.remove('blm-i-projsel', 'blm-i-menu', 'blm-i-type-menu', 'blm-i-logtime', 'blm-i-logtime-overlay'));
   document.querySelectorAll('[data-blm-i-pending]').forEach(el => { delete el.dataset.blmIPending; });
+  clearRing();
   document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
     .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
 }
@@ -562,6 +581,57 @@ function apply() {
   if (enabled) root.dataset.blmIosTheme = theme;
   else delete root.dataset.blmIosTheme;
 }
+
+// ── Focus rings that can't be covered ─────────────────────────────────────────
+// The skin draws focus rings outside an element (outline, or a 2 px box-shadow on
+// an ng-select). Inside anything that clips — table cells, scrolling panels,
+// rounded cards with overflow hidden — or at the window edge, part of that ring
+// is cut off. On every focus, check whether a ring 2 px outside the element would
+// fit inside each clipping ancestor and the window; if not, tag the element
+// .blm-i-ring-in and base.css draws the ring on its inside edge instead.
+// An inside ring still needs the element's own box in view: a value pulled past
+// its wrapper (list cells use a negative margin) is cut by an overflow:hidden
+// wrapper, so such wrappers get .blm-i-unclip (overflow visible) while it has
+// focus. Scroll containers (auto/scroll) are never touched, only hidden/clip.
+const RING = 3;   // ring width plus a pixel of anti-aliasing
+function clipCheck(box) {
+  const out = { ring: false, unclip: [] };
+  const r = box.getBoundingClientRect();
+  if (!r.width && !r.height) return out;
+  if (r.left - RING < 0 || r.top - RING < 0 || r.right + RING > innerWidth || r.bottom + RING > innerHeight) out.ring = true;
+  for (let a = box.parentElement; a && a !== document.body; a = a.parentElement) {
+    const cs = getComputedStyle(a);
+    const clipX = cs.overflowX !== 'visible', clipY = cs.overflowY !== 'visible';
+    if (!clipX && !clipY) continue;
+    const b = a.getBoundingClientRect();   // clipping is at the padding edge
+    const l = b.left + parseFloat(cs.borderLeftWidth), t = b.top + parseFloat(cs.borderTopWidth);
+    const rr = b.right - parseFloat(cs.borderRightWidth), bb = b.bottom - parseFloat(cs.borderBottomWidth);
+    const over = (m) => (clipX && (r.left - m < l || r.right + m > rr)) || (clipY && (r.top - m < t || r.bottom + m > bb));
+    if (over(RING)) out.ring = true;
+    if (over(0) && /^(hidden|clip)$/.test(cs.overflowX) && /^(hidden|clip)$/.test(cs.overflowY)) out.unclip.push(a);
+  }
+  return out;
+}
+let ringEl = null, unclipped = [];
+function clearRing() {
+  ringEl?.classList.remove('blm-i-ring-in'); ringEl = null;
+  for (const a of unclipped) a.classList.remove('blm-i-unclip');
+  unclipped = [];
+}
+document.addEventListener('focusin', (e) => {
+  clearRing();
+  if (!enabled || !(e.target instanceof Element)) return;
+  // An ng-select draws its ring on .ng-select-container while its <input> has focus.
+  const el = e.target.closest('.ng-select') ?? e.target;
+  const box = el.matches('.ng-select') ? (el.querySelector('.ng-select-container') ?? el) : el;
+  const { ring, unclip } = clipCheck(box);
+  if (ring) { el.classList.add('blm-i-ring-in'); ringEl = el; }
+  for (const a of unclip) a.classList.add('blm-i-unclip');
+  unclipped = unclip;
+}, true);
+document.addEventListener('focusout', (e) => {
+  if (ringEl && !ringEl.contains(e.relatedTarget)) clearRing();
+}, true);
 
 apply();   // document_start: right theme before first paint
 chrome.storage.local.get([CFG_IOS, CFG_THEME]).then(s => {
