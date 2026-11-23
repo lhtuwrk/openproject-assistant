@@ -43,7 +43,7 @@ though OpenProject itself doesn't retain it.
 | `manifest.json` | Extension manifest (MV3) |
 | `background/background.js` | Service worker: hourly sync + midnight reconstruction alarms |
 | `content/content.js` | Injected into backlog work-package pages to read live data |
-| `content/jira-skin.js` | Jira-style look for OpenProject: white top bar and light sidebar on every page, work-package lists, the work-package page (Details sidebar, Child work items with assignee and status pickers) and Backlogs (sprint containers); toggled in Settings |
+| `content/jira-skin.js` | Jira-style look for OpenProject: white top bar and light sidebar on every page, work-package lists, the work-package page (Details sidebar, Child work items with assignee and status pickers and a loading skeleton) and Backlogs (sprint containers); toggled in Settings |
 | `shared/api.js` | OpenProject API client helpers used by the background worker |
 | `pages/popup.html` / `pages/popup.js` | Toolbar popup UI |
 | `pages/sidepanel.html` / `pages/sidepanel.js` | Quick settings, opened from the popup's settings button |

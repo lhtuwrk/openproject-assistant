@@ -1655,6 +1655,23 @@ html.${WP_CLASS} .blm-jx-create-cancel:focus-visible { outline: 2px solid var(--
 html.${WP_CLASS} .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--jx-error); }
 html.${WP_CLASS} .blm-jx-children-empty { margin: 0; font-family: var(--jx-font); font-size: 14px; color: var(--jx-text-subtlest); }
 html.${WP_CLASS} .blm-jx-children.empty .blm-jx-children-head { margin-bottom: var(--jx-space-1); }
+/* Loading skeleton: grey blocks in the rows' own columns, pulsing gently */
+html.${WP_CLASS} .blm-jx-sr {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+html.${WP_CLASS} .blm-jx-children.loading li:hover { background: var(--jx-surface); }
+html.${WP_CLASS} .blm-jx-sk {
+  display: block; height: 10px; border-radius: 999px; background: var(--jx-todo-bg);
+  animation: blm-jx-sk-pulse 1.1s ease-in-out infinite alternate;
+}
+html.${WP_CLASS} .blm-jx-sk.icon { width: 16px; height: 16px; border-radius: 4px; }
+html.${WP_CLASS} .blm-jx-sk.key { width: 44px; }
+html.${WP_CLASS} .blm-jx-sk.assignee { width: 70%; height: 12px; }
+html.${WP_CLASS} .blm-jx-sk.status { width: 72px; height: 16px; border-radius: 3px; }
+html.${WP_CLASS} .blm-jx-children.loading li:nth-child(2) .blm-jx-sk { animation-delay: .15s; }
+html.${WP_CLASS} .blm-jx-children.loading li:nth-child(3) .blm-jx-sk { animation-delay: .3s; }
+@keyframes blm-jx-sk-pulse { from { opacity: 1; } to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { html.${WP_CLASS} .blm-jx-sk { animation: none; } }
 html.${WP_CLASS} .blm-jx-children-bar {
   display: flex; height: 6px; margin-bottom: var(--jx-space-3);
   border-radius: 3px; overflow: hidden; background: var(--jx-todo-bg);
@@ -2338,6 +2355,7 @@ function childrenFor(wpId) {
   const cached = childCache.get(wpId);
   if (cached === undefined || (cached?.failedAt && Date.now() - cached.failedAt > RETRY_AFTER_MS)) {
     childCache.set(wpId, null);
+    childLoadAt.set(wpId, Date.now());
     fetchChildren(wpId)
       .then(kids => {
         // A refetch during a save must not show the old value.
@@ -2357,7 +2375,67 @@ function childrenFor(wpId) {
   return Array.isArray(cached) ? cached : null;        // in flight, or failed recently
 }
 
-/** Shows the children after the description. Nothing while loading, on error,
+// ─── Loading skeleton ───────────────────────────────────────────────────────────
+//  While the children load, a placeholder section of the same shape (heading, bar,
+//  three rows of grey blocks) holds their place so the page doesn't jump when they
+//  arrive. Only on a first load: a refetch keeps the old rows up, a failure shows
+//  nothing, and a quick answer (under SKELETON_DELAY_MS) shows no flash of it.
+
+const SKELETON_DELAY_MS = 150;
+const SKELETON_WIDTHS = ['62%', '44%', '76%'];   // subject lengths, one per row
+/** wpId -> when its children fetch started. */
+const childLoadAt = new Map();
+let skeletonTimer = 0;
+
+function skeletonBlock(kind, width) {
+  const b = el('span', `blm-jx-sk ${kind}`);
+  if (width) b.style.width = width;
+  return b;
+}
+
+function buildChildSkeleton(wpId) {
+  const section = el('section', 'blm-jx-children loading');
+  section.dataset.wp = wpId;
+  section.setAttribute('aria-labelledby', 'blm-jx-children-title');
+  section.setAttribute('aria-busy', 'true');
+  const head = el('div', 'blm-jx-children-head');
+  const title = el('h3', 'blm-jx-children-title', 'Child work items');
+  title.id = 'blm-jx-children-title';
+  head.append(title, el('span', 'blm-jx-sr', 'Loading'));
+  const bar = el('div', 'blm-jx-children-bar');
+  bar.setAttribute('aria-hidden', 'true');
+  const list = el('ul');
+  list.setAttribute('aria-hidden', 'true');
+  for (const width of SKELETON_WIDTHS) {
+    const li = el('li');
+    li.append(skeletonBlock('icon'), skeletonBlock('key'), skeletonBlock('subject', width),
+      skeletonBlock('assignee'), skeletonBlock('status'));
+    list.append(li);
+  }
+  section.append(head, bar, list);
+  return section;
+}
+
+function renderChildSkeleton(wpId, anchor) {
+  const current = document.querySelector('.blm-jx-children');
+  const isSkeleton = !!current?.classList.contains('loading');
+  if (childCache.get(wpId) !== null) {                  // failed: no placeholder
+    if (isSkeleton) current.remove();
+    return;
+  }
+  if (current && !isSkeleton) return;                   // refetch: the old rows stay
+  if (isSkeleton && current.dataset.wp === wpId && current.previousElementSibling === anchor) return;
+  const wait = (childLoadAt.get(wpId) ?? 0) + SKELETON_DELAY_MS - Date.now();
+  if (wait > 0) {
+    clearTimeout(skeletonTimer);
+    skeletonTimer = setTimeout(schedule, wait + 10);
+    return;
+  }
+  current?.remove();
+  anchor.after(buildChildSkeleton(wpId));
+}
+
+/** Shows the children after the description. A skeleton while loading, nothing on error,
  *  Without children it still shows the heading and its actions, so the first
  *  child can be created here. */
 function renderChildren() {
@@ -2371,7 +2449,7 @@ function renderChildren() {
   if (shown && shown.dataset.wp !== wpId) shown.remove();
 
   const kids = childrenFor(wpId);
-  if (!kids) return;
+  if (!kids) { renderChildSkeleton(wpId, anchor); return; }
   prefetchPeople(kids);
   const current = document.querySelector('.blm-jx-children');
   if (createState.wpId && createState.wpId !== wpId) createState.wpId = null;   // another work package
