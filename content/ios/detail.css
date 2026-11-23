@@ -362,7 +362,7 @@ html.blm-ios-wp .detail-activity .comments-number { top: 14px !important; right:
 html.blm-ios-wp .detail-activity .comments-number,
 html.blm-ios-wp .detail-activity .comments-number * { font-size: 12px; color: var(--g-text3) !important; }
 /* A change-only entry has an empty comment block that still adds its top margin */
-html.blm-ios-wp .detail-activity .user-comment:not(:has(*)) { display: none; }
+html.blm-ios-wp .detail-activity .user-comment:not(:has(> *)) { display: none; }
 html.blm-ios-wp .detail-activity .work-package-details-activities-messages { margin-bottom: 0 !important; }
 html.blm-ios-wp .op-user-activity--user-name,
 html.blm-ios-wp .user-comment--user { font-weight: 600; color: var(--g-text); }
@@ -1007,7 +1007,7 @@ html.blm-ios-wp .relation-row--grid {
   font: 400 15px/1.3 var(--g-font) !important; color: var(--g-text);
 }
 html.blm-ios-wp .relation-row--grid > * { flex: none; width: auto !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
-html.blm-ios-wp .relation-row--grid > :has(a.relation-row--grid-subject),
+html.blm-ios-wp .relation-row--grid > [data-blm-i-grow],
 html.blm-ios-wp .relation-row--grid > a.relation-row--grid-subject { flex: 1 1 auto; min-width: 0; }
 html.blm-ios-wp a.relation-row--grid-id {
   color: var(--g-text3) !important; font: 500 13px var(--g-font) !important; font-variant-numeric: tabular-nums; text-decoration: none !important;
@@ -1072,16 +1072,24 @@ html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, 
 html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):hover { background: var(--g-fill) !important; }
 html.blm-ios-wp .wp-relations-create-button :is(.wp-inline-create--add-link, a, button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
 /* "Group by work package type": a small grey pill */
-html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) {
+html.blm-ios-wp #wp-relation-group-by-toggle,
+html.blm-ios-wp .wp-relations-controls-section .button:not(#blm-x),
+html.blm-ios-wp .button.blm-i-groupby:not(#blm-x) {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; min-height: 30px; padding: 0 12px !important; margin: 0 !important;
   background: var(--g-btn) !important; color: var(--g-text2) !important;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   font: 500 13px var(--g-font) !important; white-space: nowrap; cursor: pointer;
   transition: background-color .12s ease-out, color .12s ease-out;
 }
-html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button) * { color: inherit !important; font: inherit !important; }
-html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):hover { background: var(--g-btn-hover) !important; color: var(--g-text) !important; }
-html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section .button, [class*="relations"] [class*="group-by"] .button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios-wp #wp-relation-group-by-toggle *,
+html.blm-ios-wp .wp-relations-controls-section .button:not(#blm-x) *,
+html.blm-ios-wp .button.blm-i-groupby:not(#blm-x) * { color: inherit !important; font: inherit !important; }
+html.blm-ios-wp #wp-relation-group-by-toggle:hover,
+html.blm-ios-wp .wp-relations-controls-section .button:not(#blm-x):hover,
+html.blm-ios-wp .button.blm-i-groupby:not(#blm-x):hover { background: var(--g-btn-hover) !important; color: var(--g-text) !important; }
+html.blm-ios-wp #wp-relation-group-by-toggle:focus-visible,
+html.blm-ios-wp .wp-relations-controls-section .button:not(#blm-x):focus-visible,
+html.blm-ios-wp .button.blm-i-groupby:not(#blm-x):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
 /* Watchers tab: the watchers an inset-grouped card of 48 px rows (a 28 px round
    avatar, the name, a round quiet × that goes red), split by inset hairlines,
@@ -1093,12 +1101,12 @@ html.blm-ios-wp :is(#wp-relation-group-by-toggle, .wp-relations-controls-section
    op-principal / .op-principal--name, .op-avatar. */
 html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) { display: block; font-family: var(--g-font); }
 html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) .work-package--details--long-field { margin: 0 !important; padding: 0 !important; border: 0 !important; }
-html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) :has(> wp-watcher-entry) {
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) [data-blm-i-watch-list] {
   display: block !important; margin: 4px 0 18px !important; padding: 0 !important;
   background: transparent !important; border: 0 !important;
 }
 /* section header over the card, as iOS Settings does */
-html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) :has(> wp-watcher-entry)::before {
+html.blm-ios-wp :is(wp-watchers-tab, .detail-panel-watchers) [data-blm-i-watch-list]::before {
   content: "Watching"; display: block; padding: 0 16px 6px;
   color: var(--g-text3); font: 400 13px/1.3 var(--g-font); text-transform: uppercase; letter-spacing: .02em;
 }
@@ -1256,9 +1264,8 @@ html.blm-ios[data-blm-ios-theme="dark"] .op-uc-container pre { background: var(-
 html.blm-ios[data-blm-ios-theme="dark"] .op-uc-container table td,
 html.blm-ios[data-blm-ios-theme="dark"] .op-uc-container table th { border-color: var(--g-hairline) !important; }
 html.blm-ios[data-blm-ios-theme="dark"] [class*="activities"] li,
-html.blm-ios[data-blm-ios-theme="dark"] [class*="activities"] li :not(a):not(a *):not(.op-avatar),
+html.blm-ios[data-blm-ios-theme="dark"] [data-blm-i-act] :not(a):not(a *):not(.op-avatar),
 html.blm-ios[data-blm-ios-theme="dark"] [class*="activity-contents"] li,
-html.blm-ios[data-blm-ios-theme="dark"] [class*="activity-contents"] li :not(a):not(a *):not(.op-avatar),
 html.blm-ios[data-blm-ios-theme="dark"] .journal-details li,
 html.blm-ios[data-blm-ios-theme="dark"] .journal-details li :not(a):not(a *) { color: var(--g-text) !important; }
 html.blm-ios[data-blm-ios-theme="dark"] .op-avatar,
@@ -1478,15 +1485,13 @@ html.blm-ios-wp .blm-i-status[data-blm-i-pending] > .op-wp-status-button--text {
 html.blm-ios-wp .blm-i-status[data-blm-i-pending]::before { content: attr(data-blm-i-pending); }
 
 /* Opening a story: the clicked row shows as chosen and the open panel dims for
-   the moment OpenProject spends building the new one */
+   the moment OpenProject spends building the new one. The dim is the panel's own
+   opacity: a rule on the panel alone restyles one element when .blm-i-switching
+   comes and goes, where a rule on its children (`> :not(…)`) made Chrome restyle
+   the whole panel subtree twice per click, on the frame meant to show feedback. */
 html.blm-ios-wp .work-package-table tbody tr.wp-table--row.blm-i-opening.blm-i-opening > td { --blm-i-cell: color-mix(in srgb, var(--g-accent) 14%, var(--g-card)); }
-html.blm-ios-wp .work-packages--details .work-packages--details-content,
-html.blm-ios-wp .work-packages--details > :not(.op-work-package-tabs, op-wp-tabs) { transition: opacity 200ms ease-out; }
-html.blm-ios-wp .work-packages--details.blm-i-switching .work-packages--details-content,
-html.blm-ios-wp .work-packages--details.blm-i-switching > :not(.op-work-package-tabs, op-wp-tabs) {
-  opacity: .45; transition-duration: 120ms;
-}
+html.blm-ios-wp .work-packages--details { transition: opacity 200ms ease-out; }
+html.blm-ios-wp .work-packages--details.blm-i-switching { opacity: .55; transition-duration: 120ms; }
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wp .work-packages--details .work-packages--details-content,
-  html.blm-ios-wp .work-packages--details > :not(.op-work-package-tabs, op-wp-tabs) { transition: none !important; }
+  html.blm-ios-wp .work-packages--details { transition: none !important; }
 }

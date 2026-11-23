@@ -145,26 +145,61 @@ html.blm-ios #main-menu {
    reset since Chrome ignores the pseudo-elements while it is set (and it is
    inherited from the dark theme's html rule). The resize grip and its line
    only show while hovered. */
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *) {
+html.blm-ios #main-menu *,
+html.blm-ios #content-wrapper,
+html.blm-ios #content-wrapper *,
+html.blm-ios .work-packages--show-view,
+html.blm-ios .work-packages--show-view *,
+html.blm-ios .work-packages--details,
+html.blm-ios .work-packages--details * {
   scrollbar-color: auto; scrollbar-width: auto;
 }
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar {
+html.blm-ios #main-menu *::-webkit-scrollbar,
+html.blm-ios #content-wrapper::-webkit-scrollbar,
+html.blm-ios #content-wrapper *::-webkit-scrollbar,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar,
+html.blm-ios .work-packages--details::-webkit-scrollbar,
+html.blm-ios .work-packages--details *::-webkit-scrollbar {
   width: 6px; height: 6px; background: transparent;
 }
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-track,
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-corner { background: transparent; }
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-thumb {
+html.blm-ios #main-menu *::-webkit-scrollbar-track,
+html.blm-ios #content-wrapper::-webkit-scrollbar-track,
+html.blm-ios #content-wrapper *::-webkit-scrollbar-track,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar-track,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar-track,
+html.blm-ios .work-packages--details::-webkit-scrollbar-track,
+html.blm-ios .work-packages--details *::-webkit-scrollbar-track,
+html.blm-ios #main-menu *::-webkit-scrollbar-corner,
+html.blm-ios #content-wrapper::-webkit-scrollbar-corner,
+html.blm-ios #content-wrapper *::-webkit-scrollbar-corner,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar-corner,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar-corner,
+html.blm-ios .work-packages--details::-webkit-scrollbar-corner,
+html.blm-ios .work-packages--details *::-webkit-scrollbar-corner { background: transparent; }
+html.blm-ios #main-menu *::-webkit-scrollbar-button,
+html.blm-ios #content-wrapper::-webkit-scrollbar-button,
+html.blm-ios #content-wrapper *::-webkit-scrollbar-button,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar-button,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar-button,
+html.blm-ios .work-packages--details::-webkit-scrollbar-button,
+html.blm-ios .work-packages--details *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+html.blm-ios #main-menu *::-webkit-scrollbar-thumb,
+html.blm-ios #content-wrapper::-webkit-scrollbar-thumb,
+html.blm-ios #content-wrapper *::-webkit-scrollbar-thumb,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar-thumb,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar-thumb,
+html.blm-ios .work-packages--details::-webkit-scrollbar-thumb,
+html.blm-ios .work-packages--details *::-webkit-scrollbar-thumb {
   background: var(--g-scroll-thumb); border-radius: 999px;
 }
-html.blm-ios :is(#main-menu *, .work-packages--show-view, .work-packages--show-view *,
-  .work-packages--details, .work-packages--details *, #content-wrapper, #content, #content *)::-webkit-scrollbar-thumb:hover {
+html.blm-ios #main-menu *::-webkit-scrollbar-thumb:hover,
+html.blm-ios #content-wrapper::-webkit-scrollbar-thumb:hover,
+html.blm-ios #content-wrapper *::-webkit-scrollbar-thumb:hover,
+html.blm-ios .work-packages--show-view::-webkit-scrollbar-thumb:hover,
+html.blm-ios .work-packages--show-view *::-webkit-scrollbar-thumb:hover,
+html.blm-ios .work-packages--details::-webkit-scrollbar-thumb:hover,
+html.blm-ios .work-packages--details *::-webkit-scrollbar-thumb:hover {
   background: var(--g-scroll-thumb-hover);
 }
 /* The sidebar itself shows no bar: the list inside it is what scrolls, and
@@ -310,7 +345,7 @@ html.blm-ios .blm-i-projsel:not(#blm-x) input:is([type="text"], [type="search"],
   color: var(--g-text) !important; font: 400 15px var(--g-font) !important; caret-color: var(--g-accent);
 }
 html.blm-ios .blm-i-projsel:not(#blm-x) input::placeholder { color: var(--g-text3) !important; opacity: 1; }
-html.blm-ios .blm-i-projsel:not(#blm-x) :is(.spot-text-field, [class*="--search"]) :is(.spot-icon, svg, [class*="icon"]) {
+html.blm-ios .blm-i-projsel:not(#blm-x) :is(.spot-text-field, .blm-i-search) :is(.spot-icon, svg, [class*="icon"]) {
   flex: none; color: var(--g-text3) !important;
 }
 /* Rows: rounded, inset from the panel edge; subprojects keep their indent */
@@ -345,15 +380,15 @@ html.blm-ios .blm-i-projsel:not(#blm-x) :is(footer, [class*="footer"], .spot-act
   display: flex; justify-content: flex-end; margin: 0 !important; padding: 10px 12px !important;
   border: 0 !important; border-top: .5px solid var(--g-row-sep) !important;
 }
-html.blm-ios .blm-i-projsel:not(#blm-x) :is(footer, [class*="footer"], .spot-action-bar) :is(.button, a, button) {
+html.blm-ios .blm-i-projsel:not(#blm-x) .blm-i-foot :is(.button, a, button) {
   display: inline-flex; align-items: center; gap: 6px;
   height: 32px; min-height: 32px; margin: 0 !important; padding: 0 14px !important;
   background: var(--g-btn) !important; color: var(--g-accent) !important;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   font: 500 14px var(--g-font) !important; text-decoration: none !important; cursor: pointer;
 }
-html.blm-ios .blm-i-projsel:not(#blm-x) :is(footer, [class*="footer"], .spot-action-bar) :is(.button, a, button) * { color: inherit !important; }
-html.blm-ios .blm-i-projsel:not(#blm-x) :is(footer, [class*="footer"], .spot-action-bar) :is(.button, a, button):hover { background: var(--g-btn-hover) !important; }
+html.blm-ios .blm-i-projsel:not(#blm-x) .blm-i-foot :is(.button, a, button) * { color: inherit !important; }
+html.blm-ios .blm-i-projsel:not(#blm-x) .blm-i-foot :is(.button, a, button):hover { background: var(--g-btn-hover) !important; }
 html.blm-ios .blm-i-projsel:not(#blm-x) :is(a, button, .button):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 /* Loading: OpenProject's five bouncing bars (or its skeleton loader) become an iOS
    activity indicator, 12 grey spokes ticking round, centred where the list will be.
@@ -394,8 +429,9 @@ html.blm-ios .blm-i-projsel:not(#blm-x) *::-webkit-scrollbar-thumb { background:
    grey sheet with large corners, a plain bold title, the fields on one white
    inset card (label left, filled control right), and capsule buttons on a bare
    footer: Cancel grey, Save accent. The backdrop dims and blurs. OpenProject has
-   used both spot-modal--* and op-modal--* parts here, so parts are matched by
-   class fragment ([class*="header"] …), as jira-skin.js does for this dialog. */
+   used both spot-modal--* and op-modal--* parts here, so ios.js finds the outermost
+   header / body / footer by class fragment and marks it [data-blm-i-lt~=…]; the
+   CSS never matches a class fragment in an ancestor position (see tagPopups). */
 html.blm-ios .blm-i-logtime-overlay:not(#blm-x) {
   background: rgba(0, 0, 0, .28) !important;
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
@@ -408,22 +444,22 @@ html.blm-ios .blm-i-logtime:not(#blm-x) {
   font-family: var(--g-font); animation: blm-i-pp-in .18s ease-out;
 }
 html.blm-ios[data-blm-ios-theme="dark"] .blm-i-logtime:not(#blm-x) { background: var(--g-grouped-solid) !important; box-shadow: 0 2px 8px rgba(0, 0, 0, .4), 0 24px 64px rgba(0, 0, 0, .6) !important; }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="header"], [class*="body"], [class*="footer"], [class*="action-bar"]):not([class*="header"] *, [class*="body"] *, [class*="footer"] *, [class*="action-bar"] *) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="part"] {
   background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--g-text);
 }
 html.blm-ios .blm-i-logtime:not(#blm-x) :is(.spot-divider, hr) { display: none !important; }
 /* Title */
-html.blm-ios .blm-i-logtime:not(#blm-x) [class*="header"]:not([class*="header"] *) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="header"] {
   display: flex; align-items: center; gap: 8px; min-height: 0 !important;
   padding: 18px 20px 10px !important; font: 600 17px/1.3 var(--g-font) !important; letter-spacing: -.01em;
 }
-html.blm-ios .blm-i-logtime:not(#blm-x) [class*="header"]:not([class*="header"] *) :is([class*="icon"], svg) { color: var(--g-accent) !important; fill: currentColor; }
-html.blm-ios .blm-i-logtime:not(#blm-x) [class*="header"]:not([class*="header"] *) :is(button, [class*="close"]) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="header"] :is([class*="icon"], svg) { color: var(--g-accent) !important; fill: currentColor; }
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="header"] :is(button, [class*="close"]) {
   margin-left: auto; width: 28px; height: 28px; display: inline-grid; place-items: center; padding: 0 !important;
   border: 0 !important; border-radius: 50% !important; background: var(--g-fill) !important; color: var(--g-text3) !important; cursor: pointer;
 }
 /* Fields: one white inset card */
-html.blm-ios .blm-i-logtime:not(#blm-x) [class*="body"]:not([class*="body"] *) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="body"] {
   margin: 6px 16px 0 !important; padding: 8px 16px !important;
   background: var(--g-card) !important; border-radius: var(--g-radius-card) !important;
 }
@@ -456,23 +492,23 @@ html.blm-ios .blm-i-logtime:not(#blm-x) .ng-select.ng-select-focused .ng-select-
 }
 html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="error"], .-error) :is(input, .ng-select-container) { box-shadow: 0 0 0 2px var(--g-red) !important; }
 /* Buttons: capsules on a bare footer */
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]):not([class*="footer"] *, [class*="action-bar"] *) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] {
   display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px !important; margin: 0 !important;
 }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button, button) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button, button) {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 34px; min-width: 84px; margin: 0 !important; padding: 0 18px !important;
   background: var(--g-btn) !important; color: var(--g-text) !important;
   border: 0 !important; border-radius: 999px !important; box-shadow: none !important;
   font: 500 15px var(--g-font) !important; cursor: pointer; transition: background-color .12s ease-out, transform .08s ease-out;
 }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button, button):hover { background: var(--g-btn-hover) !important; }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button.-highlight, .button.-primary, .button.-alt-highlight, button[type="submit"]) {
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button, button):hover { background: var(--g-btn-hover) !important; }
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button.-highlight, .button.-primary, .button.-alt-highlight, button[type="submit"]) {
   background: var(--g-accent) !important; color: var(--g-on-accent) !important; font-weight: 600 !important;
 }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button.-highlight, .button.-primary, .button.-alt-highlight, button[type="submit"]):hover { background: var(--g-accent) !important; filter: brightness(1.08); }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button, button):active { transform: scale(.97); }
-html.blm-ios .blm-i-logtime:not(#blm-x) :is([class*="footer"], [class*="action-bar"]) :is(.button, button) * { color: inherit !important; }
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button.-highlight, .button.-primary, .button.-alt-highlight, button[type="submit"]):hover { background: var(--g-accent) !important; filter: brightness(1.08); }
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button, button):active { transform: scale(.97); }
+html.blm-ios .blm-i-logtime:not(#blm-x) [data-blm-i-lt~="footer"] :is(.button, button) * { color: inherit !important; }
 html.blm-ios .blm-i-logtime:not(#blm-x) :is(.button, button, a):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 html.blm-ios .blm-i-logtime:not(#blm-x) :is(.button, button):disabled { opacity: .45; cursor: default; }
 

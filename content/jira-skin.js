@@ -2496,7 +2496,16 @@ function updateJump() {
   const rect = target.getBoundingClientRect();
   // Section: its top is below the fold. Description (children still loading): its end is.
   const edge = target.classList.contains('blm-jx-children') ? rect.top : rect.bottom;
-  jumpBtn.hidden = edge < window.innerHeight - 80;
+  const hide = edge < window.innerHeight - 80;
+  if (jumpBtn.hidden !== hide) jumpBtn.hidden = hide;   // an unchanged write still restyles
+}
+// Scroll fires many times per frame, and schedule() runs right after OpenProject
+// changed the DOM: measuring there forced a whole style + layout pass each time.
+// Measure once, just after the next frame is painted, when layout is clean.
+let jumpFrame = 0;
+function queueJump() {
+  if (!jumpBtn || jumpFrame) return;
+  jumpFrame = requestAnimationFrame(() => setTimeout(() => { jumpFrame = 0; updateJump(); }, 0));
 }
 
 function syncJump() {
@@ -2509,6 +2518,7 @@ function syncJump() {
   if (!jumpBtn) {
     jumpBtn = el('button', 'blm-jx-jump', '↓ Child work items');
     jumpBtn.type = 'button';
+    jumpBtn.hidden = true;   // until the first measure (queueJump) says otherwise
     jumpBtn.addEventListener('click', () => {
       const section = document.querySelector('.blm-jx-children');
       if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2516,10 +2526,10 @@ function syncJump() {
     });
   }
   if (!jumpBtn.isConnected) document.body.append(jumpBtn);
-  updateJump();
+  queueJump();
 }
-document.addEventListener('scroll', updateJump, { capture: true, passive: true });
-window.addEventListener('resize', updateJump);
+document.addEventListener('scroll', queueJump, { capture: true, passive: true });
+window.addEventListener('resize', queueJump);
 
 /** Replaces one child in the cache with a new object, so the next pass rebuilds. */
 function updateKid(wpId, kidId, patch) {

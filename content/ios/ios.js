@@ -102,21 +102,36 @@ const CARD_BREAK = 'tr[class*="group-header"], tr.wp-inline-create-button-row';
 function tagLastRow(tr) {
   const next = tr.nextElementSibling;
   setAttr(tr, 'data-blm-i-last', !next || next.matches(CARD_BREAK));
+  // group title rows, for list.css rules that reach every element inside them
+  // (`tr[class*="group-header"] *` would restyle whole subtrees on any class change)
+  setAttr(tr, 'data-blm-i-group', tr.className.includes('group-header'));
 }
 
 // The element that holds relation rows / notification entries, for its card style
 // (was `:has(> …)` on every element of the page).
 const REL_ROW = 'wp-relation-row, .relation-row';
 const NOTIF_ROW = 'op-in-app-notification-entry';
+const WATCH_ROW = 'wp-watcher-entry';   // watchers tab (detail.css)
+const LIST_KINDS = [['data-blm-i-rel-list', REL_ROW], ['data-blm-i-notif-list', NOTIF_ROW], ['data-blm-i-watch-list', WATCH_ROW]];
 function tagListParent(row) {
   const p = row.parentElement;
   if (!p) return;
-  if (row.matches(REL_ROW)) setAttr(p, 'data-blm-i-rel-list', true);
-  else setAttr(p, 'data-blm-i-notif-list', true);
+  for (const [attr, sel] of LIST_KINDS) if (row.matches(sel)) setAttr(p, attr, true);
 }
 function recheckListParent(p) {
-  if (p.hasAttribute('data-blm-i-rel-list')) setAttr(p, 'data-blm-i-rel-list', [...p.children].some(c => c.matches(REL_ROW)));
-  if (p.hasAttribute('data-blm-i-notif-list')) setAttr(p, 'data-blm-i-notif-list', [...p.children].some(c => c.matches(NOTIF_ROW)));
+  for (const [attr, sel] of LIST_KINDS) {
+    if (p.hasAttribute(attr)) setAttr(p, attr, [...p.children].some(c => c.matches(sel)));
+  }
+}
+
+// A relation row's cell that holds the subject link takes the row's free width
+// (was `.relation-row--grid > :has(a.relation-row--grid-subject)`, a descendant
+// search Chrome ran from every element of the page on each style pass).
+function tagGrowCell(a) {
+  const grid = a.closest('.relation-row--grid');
+  let cell = a;
+  while (cell && cell.parentElement !== grid) cell = cell.parentElement;
+  if (cell && cell !== a) setAttr(cell, 'data-blm-i-grow', true);
 }
 
 const DETAIL_VIEWS = '.work-packages--details, .work-packages--show-view';
@@ -137,6 +152,7 @@ const RULES = [
   ['.work-package-table tr.wp-table--row > td', (td) => {
     const dash = /^[-–—]$/.test(td.textContent.trim());
     if (td.classList.contains('blm-i-dash') !== dash) td.classList.toggle('blm-i-dash', dash);
+    setAttr(td, 'data-blm-i-cf', td.className.includes('customField'));
   }],
   ['.work-package-table tr[class*="group-header"] .count', (c) => {
     const n = c.textContent.replace(/[()\s]/g, '');
@@ -156,8 +172,9 @@ const RULES = [
   // Notification rows: the status badge is a solid OpenProject colour; give it a tone
   // so notifications.css can draw the same soft chip as the list.
   ['.op-ian-item [class*="__hl_background_status"], .relation-row .inline-edit--display-field.status', tagChip],
-  [`${REL_ROW}, ${NOTIF_ROW}`, tagListParent],
-  ['[data-blm-i-rel-list], [data-blm-i-notif-list]', recheckListParent],
+  [`${REL_ROW}, ${NOTIF_ROW}, ${WATCH_ROW}`, tagListParent],
+  ['[data-blm-i-rel-list], [data-blm-i-notif-list], [data-blm-i-watch-list]', recheckListParent],
+  ['.relation-row--grid a.relation-row--grid-subject', tagGrowCell],
   // Backlogs: a story's status text sits in .t (its stored id in a hidden .v), and
   // a sprint's blank dates hold whitespace, so :empty never matches them.
   ['#rb li.story > .status_id > .t', tagChip],
@@ -171,6 +188,12 @@ const RULES = [
     if (d.classList.contains('blm-i-blank') !== blank) d.classList.toggle('blm-i-blank', blank);
   }],
   [`:is(${DETAIL_VIEWS}) .attributes-group:not(.description-group)`, (g) => tagGroup(g)],
+  // Parts OpenProject names inconsistently, matched here by class fragment so the
+  // CSS can use a stable marker (see tagPopups for why not `[class*="…"]` in CSS).
+  ['[class*="relations"] [class*="group-by"] .button', (b) => setClass(b, 'blm-i-groupby', true)],
+  ['[class*="activities"] li, [class*="activity-contents"] li', (li) => setAttr(li, 'data-blm-i-act', true)],
+  ['#main-menu [class*="sidemenu--title"]', (t) => setClass(t, 'blm-i-side-title', true)],
+  ['[class*="ian-center"] [class*="empty"]', (e) => setClass(e, 'blm-i-empty-state', true)],
 ];
 
 // Run every rule on `root`: its own matching ancestor (closest() includes root)
@@ -190,7 +213,8 @@ const OPEN_SELECT_IN = {
   'blm-i-open-status': '.work-package-table td.status',
   'blm-i-open-type':   '.work-package-table td.type',
   'blm-i-open-priority': '.work-package-table td.priority',
-  'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers',
+  // a row's person cells share the details view's people pull-down (list.css styles the cell's field)
+  'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers, .work-package-table :is(td.assignee, td.responsible)',
 };
 const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SELECT_IN)];
 
@@ -203,23 +227,58 @@ const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SE
 //   .blm-i-logtime   the Log time dialog (base.css), found the way jira-skin.js
 //                    finds it: a small dialog titled "Log time" that asks for hours;
 //   .blm-i-logtime-overlay its dimmed backdrop, when it is the dialog's parent
+//
+// Parts inside them that OpenProject names inconsistently are tagged here too,
+// because the CSS must not find them by class fragment. A `[class*="…"]` selector
+// in an ancestor position (`[class*="footer"] .x *`, `:not([class*="header"] *)`)
+// keys an invalidation set on the class attribute itself, so Chrome then restyles
+// the whole subtree of ANY element whose class changes — a hover class on a row, a
+// flag on <html> — which made plain mouse moves over the list restyle the page.
+//   [data-blm-i-lt~=…] the Log time dialog's outermost header / body / footer
+//   .blm-i-search, .blm-i-foot the project picker's search field and footer
+//   .blm-i-hl          a type name in the Create-type menu
+const LT_PARTS = [['header', /header/], ['body', /body/], ['footer', /footer|action-bar/]];
+function tagLogTimeParts(m) {
+  const all = m.querySelectorAll('[class*="header"], [class*="body"], [class*="footer"], [class*="action-bar"]');
+  for (const el of all) {
+    const cls = typeof el.className === 'string' ? el.className : '';
+    const up = [];   // class strings of its ancestors inside the dialog
+    for (let a = el.parentElement; a && a !== m; a = a.parentElement) up.push(typeof a.className === 'string' ? a.className : '');
+    // outermost of its kind: no ancestor inside the dialog has the same fragment
+    const tokens = LT_PARTS.filter(([, re]) => re.test(cls) && !up.some(c => re.test(c))).map(([part]) => part);
+    if (!up.some(c => LT_PARTS.some(([, re]) => re.test(c)))) tokens.push('part');
+    const v = tokens.join(' ');
+    if ((el.dataset.blmILt ?? '') !== v) { if (v) el.dataset.blmILt = v; else delete el.dataset.blmILt; }
+  }
+}
+function setClass(el, cls, on) {
+  if (el.classList.contains(cls) !== on) el.classList.toggle(cls, on);
+}
 function tagPopups() {
   for (const m of document.querySelectorAll('.spot-modal, .op-modal--modal-container, .op-modal')) {
     const text = m.textContent.replace(/\s+/g, ' ').trim();
     const on = text.length < 600 && /log\s*time/i.test(text.slice(0, 120)) && /hours/i.test(text)
       && !m.querySelector('.spot-modal, .op-modal--modal-container, .op-modal');   // innermost only
     if (m.classList.contains('blm-i-logtime') !== on) m.classList.toggle('blm-i-logtime', on);
+    if (on) tagLogTimeParts(m);
     const ov = m.parentElement;
     if (ov && /overlay/.test(ov.className) && ov.classList.contains('blm-i-logtime-overlay') !== on) ov.classList.toggle('blm-i-logtime-overlay', on);
   }
   for (const b of document.querySelectorAll('.spot-drop-modal--body')) {
     const on = !!(b.closest('.op-app-header, #top-menu') || b.querySelector('[class*="header-project-select"]'));
     if (b.classList.contains('blm-i-projsel') !== on) b.classList.toggle('blm-i-projsel', on);
+    if (!on) continue;
+    for (const s of b.querySelectorAll('[class*="--search"]')) setClass(s, 'blm-i-search', true);
+    for (const f of b.querySelectorAll('footer, [class*="footer"], .spot-action-bar')) setClass(f, 'blm-i-foot', true);
   }
   for (const m of document.querySelectorAll('.dropdown-menu')) {
     const type = !!(m.closest('#types-context-menu') || m.querySelector(':scope > li [class*="__hl_inline_type"]'));
-    const menu = type || !!(m.closest('#settingsDropdown') || m.querySelector(':scope > li .icon-group-by'));
+    if (type) for (const h of m.querySelectorAll('[class*="__hl_inline_type"]')) setClass(h, 'blm-i-hl', true);
+    // a work package's ⋮ menu (detail page toolbar, or a table row's context menu)
+    const wp = !type && !!(m.closest('#work-package-context-menu') || m.querySelector(':scope > li :is(.icon-log_time, .icon-move, [class*="icon-export-atom"])'));
+    const menu = type || wp || !!(m.closest('#settingsDropdown') || m.querySelector(':scope > li .icon-group-by'));
     if (m.classList.contains('blm-i-menu') !== menu) m.classList.toggle('blm-i-menu', menu);
+    if (m.classList.contains('blm-i-wp-menu') !== wp) m.classList.toggle('blm-i-wp-menu', wp);
     if (m.classList.contains('blm-i-type-menu') !== type) m.classList.toggle('blm-i-type-menu', type);
   }
 }
@@ -309,18 +368,21 @@ function untagCells() {
     delete el.dataset.blmIType;
   });
   const ATTRS = ['data-blm-i-empty', 'data-blm-i-show-empty', 'data-blm-i-all-empty',
-    'data-blm-i-last', 'data-blm-i-rel-list', 'data-blm-i-notif-list'];
+    'data-blm-i-last', 'data-blm-i-rel-list', 'data-blm-i-notif-list', 'data-blm-i-watch-list', 'data-blm-i-grow',
+    'data-blm-i-group', 'data-blm-i-cf', 'data-blm-i-act', 'data-blm-i-lt'];
   document.querySelectorAll(ATTRS.map(a => `[${a}]`).join(', ')).forEach(el => {
     for (const a of ATTRS) el.removeAttribute(a);
   });
   document.documentElement.classList.remove(...PAGE_FLAGS);
-  document.querySelectorAll('.blm-i-projsel, .blm-i-menu, .blm-i-type-menu, .blm-i-logtime, .blm-i-logtime-overlay')
-    .forEach(el => el.classList.remove('blm-i-projsel', 'blm-i-menu', 'blm-i-type-menu', 'blm-i-logtime', 'blm-i-logtime-overlay'));
+  const MARKS = ['blm-i-projsel', 'blm-i-menu', 'blm-i-wp-menu', 'blm-i-type-menu', 'blm-i-logtime', 'blm-i-logtime-overlay',
+    'blm-i-search', 'blm-i-foot', 'blm-i-hl', 'blm-i-groupby', 'blm-i-side-title', 'blm-i-empty-state'];
+  document.querySelectorAll(MARKS.map(c => `.${c}`).join(', ')).forEach(el => el.classList.remove(...MARKS));
   document.querySelectorAll('[data-blm-i-pending]').forEach(el => { delete el.dataset.blmIPending; });
   clearRing();
   document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
     .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
   untagThumbs();
+  untagWikiActions();
 }
 
 // ── Wiki attachments: image previews ──────────────────────────────────────────
@@ -373,6 +435,37 @@ function untagThumbs() {
   document.querySelectorAll('.blm-i-thumb, .blm-i-att-toggle').forEach(el => el.remove());
   document.querySelectorAll('[data-blm-i-thumb]').forEach(el => { delete el.dataset.blmIThumb; });
   document.querySelectorAll('[data-blm-i-collapsed]').forEach(el => { delete el.dataset.blmICollapsed; });
+}
+
+// Wiki edit / new page: the Save / Cancel row sits under a long editor, so it is
+// pinned to the bottom of the viewport (CSS: .blm-i-wiki-actions, position: sticky)
+// and stays in reach while typing. The row is the submit button's parent; when
+// the buttons sit straight in the form, they are wrapped in a div we own
+// (data-blm-i-wrap) that untagWikiActions unwraps again.
+const WIKI_FORM_SEL = ':is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"])';
+function tagWikiActions() {
+  for (const form of document.querySelectorAll(WIKI_FORM_SEL)) {
+    if (form.querySelector('.blm-i-wiki-actions')) continue;
+    const submits = form.querySelectorAll(':is(button, input)[type="submit"]');
+    const save = submits[submits.length - 1];
+    if (!save) continue;
+    let row = save.parentElement;
+    if (row === form) {
+      row = document.createElement('div');
+      row.dataset.blmIWrap = '1';
+      save.before(row);
+      const group = [save];
+      for (let n = save.nextElementSibling; n?.matches('a.button, .button, button'); n = n.nextElementSibling) group.push(n);
+      row.append(...group);
+    }
+    row.classList.add('blm-i-wiki-actions');
+  }
+}
+function untagWikiActions() {
+  for (const row of document.querySelectorAll('.blm-i-wiki-actions')) {
+    if (row.dataset.blmIWrap) row.replaceWith(...row.childNodes);
+    else row.classList.remove('blm-i-wiki-actions');
+  }
 }
 
 // A disclosure row above each wiki attachment list ("› Attachments  24"), the list
@@ -689,7 +782,9 @@ document.addEventListener('click', (e) => {
     replayed.add(again);
     target.dispatchEvent(again);
   };
-  requestAnimationFrame(() => requestAnimationFrame(go));   // after the feedback has been painted
+  // Right after the frame that paints the feedback: a task queued from inside
+  // rAF runs once that frame is out, a frame sooner than a second rAF would.
+  requestAnimationFrame(() => setTimeout(go, 0));
   setTimeout(go, 100);   // never hold the click longer, even when no frames are drawn
   setTimeout(() => {
     row.classList.remove('blm-i-opening');
@@ -734,7 +829,15 @@ function noteMutations(records) {
       dirty.add(before?.nodeType === 1 ? before : r.target);
     }
     if (text) dirty.add(r.target);
-    if (dirty.size > MAX_DIRTY) { fullPass = true; dirty.clear(); return; }
+    if (dirty.size > MAX_DIRTY) {
+      // Opening a story inserts thousands of nodes, nearly all inside the new
+      // panel: fold them into their outermost roots before giving up and
+      // re-tagging the whole page (table included) every frame of the build.
+      const kept = outermost(dirty);
+      dirty.clear();
+      if (kept.length > MAX_DIRTY / 2) { fullPass = true; return; }
+      for (const n of kept) dirty.add(n);
+    }
   }
 }
 
@@ -760,7 +863,7 @@ function schedule() {
     dirty.clear();
     if (!enabled) return;
     tagPopups();
-    if (onWikiPage()) { tagAttachmentToggles(); tagThumbs(); }
+    if (onWikiPage()) { tagAttachmentToggles(); tagThumbs(); tagWikiActions(); }
     if (!(onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) return;
     tagPage();
     for (const root of roots) tagIn(root);
@@ -777,20 +880,35 @@ function observe() {
 if (document.body) observe();
 else document.addEventListener('DOMContentLoaded', observe, { once: true });
 
+// Runs on load, on a settings change and after every in-app navigation — which
+// includes each click on a list row (the URL becomes …/details/<id>). Only a real
+// change of skin, theme or route class may touch <html> or re-tag the whole page:
+// a class or attribute written on <html>, even with the same value, can restyle
+// every element, and a full pass walks the whole table while OpenProject is busy
+// building the story panel. The panel itself is tagged from its mutations.
+let appliedKey = null;
 function apply() {
   const root = document.documentElement;
-  root.classList.toggle(ROOT_CLASS, enabled);
-  root.classList.toggle(WP_CLASS, enabled && (onWorkPackagePage() || onNotificationsPage()));
-  root.classList.toggle(BL_CLASS, enabled && onBacklogsPage());
-  root.classList.toggle(LOGIN_CLASS, enabled && onLoginPage());
-  root.classList.toggle(PROJECTS_CLASS, enabled && onProjectsPage());
-  root.classList.toggle(NOTIF_CLASS, enabled && onNotificationsPage());
-  root.classList.toggle(WIKI_CLASS, enabled && onWikiPage());
+  const want = {
+    [ROOT_CLASS]: enabled,
+    [WP_CLASS]: enabled && (onWorkPackagePage() || onNotificationsPage()),
+    [BL_CLASS]: enabled && onBacklogsPage(),
+    [LOGIN_CLASS]: enabled && onLoginPage(),
+    [PROJECTS_CLASS]: enabled && onProjectsPage(),
+    [NOTIF_CLASS]: enabled && onNotificationsPage(),
+    [WIKI_CLASS]: enabled && onWikiPage(),
+  };
+  for (const [cls, on] of Object.entries(want)) {
+    if (root.classList.contains(cls) !== on) root.classList.toggle(cls, on);
+  }
+  // own attribute: jira-skin.js deletes data-blm-theme when it switches off
+  if (enabled) { if (root.dataset.blmIosTheme !== theme) root.dataset.blmIosTheme = theme; }
+  else if ('blmIosTheme' in root.dataset) delete root.dataset.blmIosTheme;
+  const key = JSON.stringify(want);
+  if (key === appliedKey) return;
+  appliedKey = key;
   if (enabled) { fullPass = true; schedule(); }
   else untagCells();
-  // own attribute: jira-skin.js deletes data-blm-theme when it switches off
-  if (enabled) root.dataset.blmIosTheme = theme;
-  else delete root.dataset.blmIosTheme;
 }
 
 // ── Focus rings that can't be covered ─────────────────────────────────────────
@@ -842,6 +960,21 @@ document.addEventListener('focusin', (e) => {
 }, true);
 document.addEventListener('focusout', (e) => {
   if (ringEl && !ringEl.contains(e.relatedTarget)) clearRing();
+}, true);
+
+// OpenProject's inline editors (assignee, status, type, priority...) close their
+// list on an outside click but stay in edit mode until Escape. Escape cancels an
+// unchanged edit, so send it on any outside press. jira-skin.js does the same for
+// its own skin; the skins are exclusive, so only one of them sends it.
+document.addEventListener('mousedown', (e) => {
+  if (!enabled || !(e.target instanceof Element)) return;
+  const field = document.querySelector('.inline-edit--active-field');
+  if (!field || field.closest('.inline-edit--container')?.contains(e.target)) return;
+  if (e.target.closest('.ng-dropdown-panel, .op-modal, .spot-modal, [role="dialog"], .flatpickr-calendar, .op-datepicker-modal')) return;
+  if (document.querySelector('.op-modal, .spot-modal, .op-modal--modal-container')) return;   // a dialog is open: its popups live outside it
+  const input = field.querySelector('input, select, textarea') ?? field;
+  input.dispatchEvent(new KeyboardEvent('keydown',
+    { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
 }, true);
 
 apply();   // document_start: right theme before first paint
