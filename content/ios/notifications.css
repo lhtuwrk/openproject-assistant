@@ -83,8 +83,7 @@ html.blm-ios-notif .op-ian-item [class*="__hl_background_status"] {
   font: 600 12px/1 var(--g-font) !important; letter-spacing: 0; text-transform: none;
   white-space: nowrap;
 }
-html.blm-ios-notif .op-ian-item [class*="__hl_background_status"]:not(.blm-i-chip),
-html.blm-ios-notif .op-ian-item [class*="__hl_background_status"]:not(.blm-i-chip) * { color: #fff !important; }
+html.blm-ios-notif .op-ian-item [class*="__hl_background_status"]:not(.blm-i-chip) { color: #fff !important; }
 html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"] {
   background: var(--g-chip-todo-bg) !important; color: var(--g-chip-todo-fg) !important;
 }
@@ -94,7 +93,7 @@ html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"][dat
 html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"][data-blm-i-tone="done"] {
   background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important;
 }
-html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"] * {
+html.blm-ios-notif .op-ian-item .blm-i-chip.blm-i-chip * {
   color: inherit !important; background: transparent !important; font: inherit !important;
 }
 html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"]::before {
@@ -146,14 +145,14 @@ html.blm-ios-notif #main-menu :is(.selected, [aria-current]) .op-bubble {
 html.blm-ios-notif #main-menu :is(.op-sidemenu--title, [class*="sidemenu--title"]) {
   color: var(--g-text3) !important; font: 600 11px var(--g-font) !important; letter-spacing: .05em; text-transform: uppercase;
 }
-html.blm-ios-notif #main-menu :is(.op-sidemenu--title, [class*="sidemenu--title"]) * { color: inherit !important; }
+html.blm-ios-notif #main-menu :is(.op-sidemenu--title, .blm-i-side-title) * { color: inherit !important; }
 
 /* Empty inbox: a quiet centred message */
-html.blm-ios-notif :is(.op-ian-center--empty-state, [class*="ian-center"] [class*="empty"], op-no-results, .generic-table--no-results-container) {
+html.blm-ios-notif :is(.op-ian-center--empty-state, .blm-i-empty-state, op-no-results, .generic-table--no-results-container) {
   background: transparent !important; border: 0 !important; color: var(--g-text3) !important;
   font: 400 15px var(--g-font) !important; text-align: center;
 }
-html.blm-ios-notif :is(.op-ian-center--empty-state, [class*="ian-center"] [class*="empty"]) :is(h1, h2, h3, h4, strong) {
+html.blm-ios-notif :is(.op-ian-center--empty-state, .blm-i-empty-state) :is(h1, h2, h3, h4, strong) {
   color: var(--g-text) !important; font: 600 17px var(--g-font) !important;
 }
 

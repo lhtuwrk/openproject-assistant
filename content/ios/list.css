@@ -161,7 +161,7 @@ html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"] {
   text-transform: none !important; font-weight: 400 !important; letter-spacing: 0 !important;
   -webkit-text-fill-color: var(--g-text);
 }
-html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"] * {
+html.blm-ios-wp .blm-i-type-menu:not(#blm-x) .blm-i-hl * {
   text-transform: none !important; -webkit-text-fill-color: var(--g-text);
 }
 html.blm-ios-wp .blm-i-type-menu:not(#blm-x) [class*="__hl_inline_type"]::before {
@@ -254,7 +254,7 @@ html.blm-ios-wp .work-package-table td.subject * { color: var(--g-text); font-we
 /* Quieter columns; type keeps OpenProject's own icon */
 html.blm-ios-wp .work-package-table td.type *,
 html.blm-ios-wp .work-package-table td.version *,
-html.blm-ios-wp .work-package-table td[class*="customField"] * { color: var(--g-text2); }
+html.blm-ios-wp .work-package-table td[data-blm-i-cf] * { color: var(--g-text2); }
 html.blm-ios-wp .work-package-table td.type * { text-transform: none; font-weight: 400; letter-spacing: 0; }
 html.blm-ios-wp .work-package-table td.storyPoints,
 html.blm-ios-wp .work-package-table td.spentTime,
@@ -356,11 +356,11 @@ html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] > td {
 /* OpenProject also paints the row and the wrappers inside the cell, which left a
    lighter band behind the title; everything in the title row shows the page grey */
 html.blm-ios-wp .work-package-table tbody tr[class*="group-header"],
-html.blm-ios-wp .work-package-table tbody tr[class*="group-header"] * {
+html.blm-ios-wp .work-package-table tbody tr[data-blm-i-group] * {
   background-color: transparent !important; background-image: none !important; box-shadow: none !important;
 }
 html.blm-ios-wp .work-package-table tbody tr[class*="group-header"]:first-child > td { padding-top: 10px; }
-html.blm-ios-wp .work-package-table tr[class*="group-header"] > td > * { vertical-align: middle; }
+html.blm-ios-wp .work-package-table tr[data-blm-i-group] > td > * { vertical-align: middle; }
 html.blm-ios-wp .work-package-table tr[class*="group-header"] .expander {
   display: inline-flex !important; align-items: center; justify-content: center;
   width: 22px; height: 22px; margin-right: 4px; border-radius: 50%; cursor: pointer;
