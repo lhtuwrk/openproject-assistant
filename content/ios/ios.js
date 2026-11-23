@@ -218,8 +218,11 @@ function tagPopups() {
   }
   for (const m of document.querySelectorAll('.dropdown-menu')) {
     const type = !!(m.closest('#types-context-menu') || m.querySelector(':scope > li [class*="__hl_inline_type"]'));
-    const menu = type || !!(m.closest('#settingsDropdown') || m.querySelector(':scope > li .icon-group-by'));
+    // a work package's ⋮ menu (detail page toolbar, or a table row's context menu)
+    const wp = !type && !!(m.closest('#work-package-context-menu') || m.querySelector(':scope > li :is(.icon-log_time, .icon-move, [class*="icon-export-atom"])'));
+    const menu = type || wp || !!(m.closest('#settingsDropdown') || m.querySelector(':scope > li .icon-group-by'));
     if (m.classList.contains('blm-i-menu') !== menu) m.classList.toggle('blm-i-menu', menu);
+    if (m.classList.contains('blm-i-wp-menu') !== wp) m.classList.toggle('blm-i-wp-menu', wp);
     if (m.classList.contains('blm-i-type-menu') !== type) m.classList.toggle('blm-i-type-menu', type);
   }
 }

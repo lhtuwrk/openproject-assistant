@@ -136,6 +136,18 @@ html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:has(.icon-delete):is(:hover, 
 html.blm-ios-wp .blm-i-menu:not(#blm-x) .menu-item:is(.inactive, [aria-disabled="true"], [disabled]) {
   opacity: .38; cursor: default; background: transparent !important;
 }
+/* A work package's ⋮ menu (detail toolbar, table row context menu): the same
+   panel, banded into groups — time & costs | project & copies | Delete |
+   downloads — and opening from the button's right edge. */
+html.blm-ios-wp .blm-i-wp-menu:not(#blm-x) { min-width: 232px; }
+html.blm-ios-wp .blm-i-wp-menu:not(#blm-x) > li + li:has(.icon-move),
+html.blm-ios-wp .blm-i-wp-menu:not(#blm-x) > li + li:has(.icon-delete),
+html.blm-ios-wp .blm-i-wp-menu:not(#blm-x) > li:not(:has([class*="icon-export"])) + li:has([class*="icon-export"]) {
+  border-top: 8px solid var(--blm-i-menu-gap);
+}
+/* labels on one line, without OpenProject's own padding */
+html.blm-ios-wp .blm-i-wp-menu:not(#blm-x) .menu-item > span { padding: 0 !important; white-space: nowrap; }
+
 /* Create menu: opens from the left, type names in sentence case with the
    type's colour as a leading dot instead of coloured capitals */
 html.blm-ios-wp .blm-i-type-menu:not(#blm-x) {
