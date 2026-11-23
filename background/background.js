@@ -876,7 +876,7 @@ async function doRegisterHostScripts() {
     ...(skin === 'ios' ? skinParts('ios', host) : []),
     ...(skin === 'ui2' ? skinParts('ui2', host) : []),
     { id: `${HOST_SCRIPT_PREFIX}skin`, matches: [all],
-      js: ['content/quotes.js', 'shared/wp-chips.js', 'content/jira-skin.js'], runAt: 'document_start' },
+      js: ['content/quotes.js', 'shared/wp-chips.js', 'shared/child-rows.js', 'content/jira-skin.js'], runAt: 'document_start' },
     { id: `${HOST_SCRIPT_PREFIX}pinned-backlog`, matches: [all],
       js: ['content/pinned-backlog.js'], runAt: 'document_idle' },
     { id: `${HOST_SCRIPT_PREFIX}relay`, matches: [all],
