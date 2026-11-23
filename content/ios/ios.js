@@ -190,7 +190,8 @@ const OPEN_SELECT_IN = {
   'blm-i-open-status': '.work-package-table td.status',
   'blm-i-open-type':   '.work-package-table td.type',
   'blm-i-open-priority': '.work-package-table td.priority',
-  'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers',
+  // a row's person cells share the details view's people pull-down (list.css styles the cell's field)
+  'blm-i-open-field':  '.attributes-key-value--value-container, wp-watchers-tab, .detail-panel-watchers, .work-package-table :is(td.assignee, td.responsible)',
 };
 const PAGE_FLAGS = ['blm-i-has-table', 'blm-i-show-view', ...Object.keys(OPEN_SELECT_IN)];
 
@@ -845,6 +846,21 @@ document.addEventListener('focusin', (e) => {
 }, true);
 document.addEventListener('focusout', (e) => {
   if (ringEl && !ringEl.contains(e.relatedTarget)) clearRing();
+}, true);
+
+// OpenProject's inline editors (assignee, status, type, priority...) close their
+// list on an outside click but stay in edit mode until Escape. Escape cancels an
+// unchanged edit, so send it on any outside press. jira-skin.js does the same for
+// its own skin; the skins are exclusive, so only one of them sends it.
+document.addEventListener('mousedown', (e) => {
+  if (!enabled || !(e.target instanceof Element)) return;
+  const field = document.querySelector('.inline-edit--active-field');
+  if (!field || field.closest('.inline-edit--container')?.contains(e.target)) return;
+  if (e.target.closest('.ng-dropdown-panel, .op-modal, .spot-modal, [role="dialog"], .flatpickr-calendar, .op-datepicker-modal')) return;
+  if (document.querySelector('.op-modal, .spot-modal, .op-modal--modal-container')) return;   // a dialog is open: its popups live outside it
+  const input = field.querySelector('input, select, textarea') ?? field;
+  input.dispatchEvent(new KeyboardEvent('keydown',
+    { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
 }, true);
 
 apply();   // document_start: right theme before first paint
