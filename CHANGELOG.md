@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.3]
 
 ### Added
+- iOS style: each row of Child work items ends in a small trash button that deletes the child after an iOS-style confirmation; a child that isn't a Task asks a second time, since deleting it also deletes the work packages under it. Shown only for children you are allowed to delete.
 - A new Package tab (off by default in Settings) tracks the team's manual release pipeline on a free-form, drag-and-drop canvas you can reshape under Manage templates — add steps and decisions, connect and label them — and turns a QA-flagged repackage into tasks with an assignee, whose status only that person can change.
 - Package tab: Dependencies reads the team's dependency workbook from SharePoint (or a downloaded copy) and lists the services marked as changed for the next package.
 - Package tab: Dependencies now lets you pick which tab of the workbook to read — a sheet picker on the full page, and the chosen tab's name shown in the summary and beside the flow — since a workbook like this usually has several same-shaped tabs (last sprint's, this sprint's, a patch build's) and the one actually in use isn't always the first.

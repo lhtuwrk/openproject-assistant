@@ -8,7 +8,8 @@
 // Adds a stylesheet and tags status, type and priority values so they render as
 // Jira lozenges and icons. Its only writes to OpenProject are a work package's
 // status, assignee or accountable picked in its picker (Child work items section,
-// or OpenProject's own fields, see pageTarget), and a child's title (see writeWp).
+// or OpenProject's own fields, see pageTarget), a child's title (see writeWp), and,
+// with the iOS skin, deleting a child after confirming (see deleteChild).
 // Toggled from Settings ("Jira style"); the Children-table Assignee column has
 // its own switch ("Assign from the Children table"), and so does the Activity
 // filter ("Activity filter"); both work without the skin.
@@ -2098,6 +2099,7 @@ async function fetchChildren(wpId) {
     assigneeHref: kid._links?.assignee?.href ?? null,
     projectHref:  kid._links?.project?.href ?? null,
     editable:     !!(kid._links?.update || kid._links?.updateImmediately),
+    deletable:    !!kid._links?.delete,
   }));
 }
 
@@ -2239,6 +2241,7 @@ function fieldButton(k, field, cls, text, content) {
 function buildChildren(wpId, kids) {
   const section = el('section', 'blm-jx-children');
   section.dataset.wp = wpId;
+  if (iosLayout()) section.classList.add('has-delete');
   section.setAttribute('aria-labelledby', 'blm-jx-children-title');
 
   const tones = kids.map(k => statusTone(k.status.toLowerCase()));
@@ -2256,6 +2259,11 @@ function buildChildren(wpId, kids) {
     actions.append(b);
   }
   head.append(title, el('span', 'blm-jx-children-sum', kids.length ? `${done} of ${kids.length} done` : ''), actions);
+  if (deleteError) {
+    const note = el('span', 'blm-jx-children-note', deleteError);
+    note.setAttribute('role', 'alert');
+    head.append(note);
+  }
 
   const bar = el('div', 'blm-jx-children-bar');
   bar.setAttribute('role', 'img');
@@ -2296,6 +2304,7 @@ function buildChildren(wpId, kids) {
     const status = fieldButton(k, 'status', 'blm-jx-lozenge', k.status);
     status.dataset.blmTone = tones[i];
     li.append(icon, key, subject, who, status);
+    if (iosLayout()) li.append(deleteButton(k));
     list.append(li);
   });
 
@@ -2359,7 +2368,8 @@ function renderChildren() {
   const current = document.querySelector('.blm-jx-children');
   if (createState.wpId && createState.wpId !== wpId) createState.wpId = null;   // another work package
   if (current?.dataset.wp === wpId && current.previousElementSibling === anchor && current._kids === kids
-      && current._createSig === createSig(wpId)) return;
+      && current._createSig === createSig(wpId) && current._deleteSig === deleteSig()
+      && current.classList.contains('has-delete') === iosLayout()) return;
 
   const focused  = document.activeElement?.closest?.('.blm-jx-children [data-focus]');
   const focusSel = focused && `[data-kid="${focused.dataset.kid}"][data-focus="${focused.dataset.focus}"]`;
@@ -2367,6 +2377,7 @@ function renderChildren() {
   const section = buildChildren(wpId, kids);
   section._kids = kids;
   section._createSig = createSig(wpId);
+  section._deleteSig = deleteSig();
   anchor.after(section);
   if (focusSel) section.querySelector(focusSel)?.focus();
   else if (createState.wpId === wpId && !current?.querySelector('.blm-jx-create-row')) section.querySelector('.blm-jx-create-input')?.focus();
@@ -3762,6 +3773,103 @@ function openAddExisting(button) {
       closePicker({ refocus: true });
     }
   });
+}
+
+// ─── Delete a child (iOS skin) ───────────────────────────────────────────────────
+//  A quiet trash button at the end of each row. It asks first; a child that isn't
+//  a Task asks a second time, because deleting a story or a bug also deletes the
+//  work packages under it. Shown only for children OpenProject lets this user
+//  delete (the `delete` link); others get an empty cell so the columns line up.
+
+const deletingKids = new Set();
+let deleteError = '';       // shown under the section's buttons after a failed delete
+const deleteSig = () => `${[...deletingKids].join(',')}|${deleteError}`;
+
+function deleteButton(k) {
+  if (!k.deletable) {
+    const gap = el('span', 'blm-jx-delete-gap');
+    gap.setAttribute('aria-hidden', 'true');
+    return gap;
+  }
+  const b = el('button', 'blm-jx-delete');
+  b.type = 'button';
+  b.dataset.kid = k.id;
+  b.dataset.focus = 'delete';
+  b.title = `Delete #${k.id}`;
+  b.setAttribute('aria-label', `Delete #${k.id}: ${k.subject}`);
+  if (deletingKids.has(k.id)) { b.classList.add('saving'); b.setAttribute('aria-disabled', 'true'); b.setAttribute('aria-busy', 'true'); }
+  b.addEventListener('click', e => { e.stopPropagation(); deleteChild(k); });
+  return b;
+}
+
+/** A modal iOS alert; resolves true when the confirm button is chosen. */
+function confirmDialog({ title, message, confirmLabel }) {
+  return new Promise(resolve => {
+    const dlg = el('dialog', 'blm-ios-alert');
+    dlg.setAttribute('role', 'alertdialog');
+    const t = el('h2', 'blm-ios-alert-title', title);
+    t.id = 'blm-ios-alert-title';
+    const m = el('p', 'blm-ios-alert-msg', message);
+    m.id = 'blm-ios-alert-msg';
+    dlg.setAttribute('aria-labelledby', t.id);
+    dlg.setAttribute('aria-describedby', m.id);
+    const row = el('div', 'blm-ios-alert-actions');
+    const cancel = el('button', 'blm-ios-alert-btn', 'Cancel');
+    cancel.type = 'button';
+    const ok = el('button', 'blm-ios-alert-btn destructive', confirmLabel);
+    ok.type = 'button';
+    cancel.addEventListener('click', () => dlg.close('cancel'));
+    ok.addEventListener('click', () => dlg.close('ok'));
+    dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close('cancel'); });   // backdrop
+    dlg.addEventListener('close', () => { dlg.remove(); resolve(dlg.returnValue === 'ok'); }, { once: true });
+    row.append(cancel, ok);
+    dlg.append(t, m, row);
+    document.body.append(dlg);
+    dlg.showModal();
+    cancel.focus();             // the safe choice has focus, so Enter doesn't delete
+  });
+}
+
+async function deleteChild(k) {
+  const wpId = viewWpId();
+  if (!wpId || deletingKids.has(k.id)) return;
+  closePicker();
+  const ok = await confirmDialog({
+    title: `Delete #${k.id}?`,
+    message: `"${k.subject}" will be deleted from OpenProject. This can't be undone.`,
+    confirmLabel: 'Delete',
+  });
+  if (!ok) return;
+  if (!/^task$/i.test(k.type.trim())) {
+    const type = k.type || 'work package';
+    const sure = await confirmDialog({
+      title: `#${k.id} is a ${type}, not a Task`,
+      message: `Deleting a ${type} also deletes every work package under it. Delete it anyway?`,
+      confirmLabel: `Delete ${type}`,
+    });
+    if (!sure) return;
+  }
+  deletingKids.add(k.id);
+  deleteError = '';
+  schedule();
+  try {
+    const res = await fetch(`${API_BASE}/api/v3/work_packages/${k.id}`, {
+      method: 'DELETE', credentials: 'include', headers: writeHeaders(),
+    });
+    if (!res.ok) {
+      let msg = '';
+      try { msg = (await res.json()).message ?? ''; } catch { /* not JSON */ }
+      throw new Error(msg || `HTTP ${res.status}`);
+    }
+    childCache.delete(wpId);                           // the list refetches without it
+  } catch (err) {
+    deleteError = `Couldn't delete #${k.id}: ${err.message || 'request failed'}`;
+    const shown = deleteError;
+    setTimeout(() => { if (deleteError === shown) { deleteError = ''; schedule(); } }, 6000);
+  } finally {
+    deletingKids.delete(k.id);
+    schedule();
+  }
 }
 
 document.addEventListener('click', e => {

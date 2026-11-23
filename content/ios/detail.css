@@ -851,9 +851,71 @@ html.blm-ios.blm-ios-wp .blm-jx-create-cancel { background: transparent; color: 
 html.blm-ios.blm-ios-wp .blm-jx-create-cancel:hover { background: var(--g-fill); }
 html.blm-ios.blm-ios-wp :is(.blm-jx-create-go, .blm-jx-create-cancel):focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 html.blm-ios.blm-ios-wp .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--g-red); }
+/* Delete: a quiet round trash button closing each row, red on hover. Rows the
+   user can't delete keep an empty cell so the columns line up. */
+html.blm-ios.blm-ios-wp .blm-jx-children.has-delete li:not(.blm-jx-create-row) {
+  grid-template-columns: 20px 64px minmax(0, 1fr) minmax(0, 190px) 118px 28px;
+  padding-right: 8px;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete {
+  justify-self: end; display: inline-grid; place-items: center;
+  width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: var(--g-text3); cursor: pointer;
+  opacity: .55; transition: opacity .14s ease-out, background-color .14s ease-out, color .14s ease-out;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete::before {
+  content: ""; width: 15px; height: 15px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4M6.8 6.8v4.4M9.2 6.8v4.4'/%3E%3C/svg%3E") center / 15px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4M6.8 6.8v4.4M9.2 6.8v4.4'/%3E%3C/svg%3E") center / 15px no-repeat;
+}
+html.blm-ios.blm-ios-wp .blm-jx-children li:hover .blm-jx-delete,
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete:focus-visible { opacity: 1; }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete:hover {
+  background: color-mix(in srgb, var(--g-red) 12%, transparent); color: var(--g-red);
+}
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 1px; }
+html.blm-ios.blm-ios-wp .blm-jx-children .blm-jx-delete.saving { opacity: .4; cursor: progress; pointer-events: none; }
+
+/* Delete confirmation: an iOS alert — a centred frosted card, bold title, short
+   message, then Cancel and the red destructive action side by side under a hairline. */
+html.blm-ios dialog.blm-ios-alert {
+  width: min(300px, calc(100vw - 32px)); box-sizing: border-box;
+  margin: auto; padding: 0; border: 0; border-radius: 16px; overflow: hidden;
+  background: color-mix(in srgb, var(--g-card) 88%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: var(--g-shadow); color: var(--g-text);
+  font-family: var(--g-font); text-align: center;
+}
+html.blm-ios dialog.blm-ios-alert::backdrop { background: rgba(0, 0, 0, .28); }
+html.blm-ios dialog.blm-ios-alert[open] { animation: blm-ios-alert-in .18s ease-out; }
+@keyframes blm-ios-alert-in { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { html.blm-ios dialog.blm-ios-alert[open] { animation: none; } }
+html.blm-ios .blm-ios-alert-title {
+  margin: 0; padding: 20px 16px 4px; border: 0;
+  font: 600 17px/1.3 var(--g-font); color: var(--g-text); overflow-wrap: anywhere;
+}
+html.blm-ios .blm-ios-alert-msg {
+  margin: 0; padding: 0 16px 18px;
+  font: 400 13px/1.4 var(--g-font); color: var(--g-text2); overflow-wrap: anywhere;
+}
+html.blm-ios .blm-ios-alert-actions {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--g-row-sep);
+}
+html.blm-ios .blm-ios-alert-btn {
+  min-height: 44px; margin: 0; padding: 0 8px; border: 0; border-radius: 0; cursor: pointer;
+  background: transparent; color: var(--g-accent);
+  font: 400 17px var(--g-font); transition: background-color .14s ease-out;
+}
+html.blm-ios .blm-ios-alert-btn + .blm-ios-alert-btn { border-left: 1px solid var(--g-row-sep); }
+html.blm-ios .blm-ios-alert-btn:hover { background: var(--g-fill); }
+html.blm-ios .blm-ios-alert-btn:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+html.blm-ios .blm-ios-alert-btn.destructive { color: var(--g-red); font-weight: 600; }
+
 /* A narrow section (small window, slim split view): the assignee shrinks to its avatar */
 @container (max-width: 560px) {
   html.blm-ios.blm-ios-wp .blm-jx-children li { grid-template-columns: 20px 56px minmax(0, 1fr) 32px 104px; gap: 8px; }
+  html.blm-ios.blm-ios-wp .blm-jx-children.has-delete li:not(.blm-jx-create-row) { grid-template-columns: 20px 56px minmax(0, 1fr) 32px 104px 28px; }
   html.blm-ios.blm-ios-wp .blm-jx-children li + li::before { left: 44px; }
   html.blm-ios.blm-ios-wp .blm-jx-children .assignee { margin: 0; padding: 0 4px; }
   html.blm-ios.blm-ios-wp .blm-jx-children .assignee .name { display: none; }
