@@ -1,5 +1,5 @@
 /* iOS skin: project wiki (/projects/<id>/wiki…). A large title with pill buttons,
-   the page body as a readable white card on the canvas (Notes-like type: 16px text,
+   the page body as a full-width white card on the canvas (Notes-like type: 16px text,
    bold headings, rounded code, tables as inset-grouped cards), and the page tree in
    the sidebar as an iOS outline: rounded 32px rows, grey disclosure chevrons, the
    current page an accent tint. Edit / new / history pages get the same card.
@@ -61,10 +61,10 @@ html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-me
 html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button):hover { background: var(--g-fill) !important; }
 html.blm-ios-wiki .toolbar-container :is(.menu-drop-down-container, .dropdown-menu, .op-app-menu--dropdown) li > :is(a, button):is([class*="delete"], [data-method="delete"]) { color: var(--g-red) !important; }
 
-/* ── Page body: a readable card ────────────────────────────────────────── */
+/* ── Page body: a full-width card ────────────────────────────────────────── */
 html.blm-ios-wiki :is(#content, #content-wrapper) { background: transparent !important; }
 html.blm-ios-wiki .wiki-content {
-  max-width: 920px; box-sizing: border-box; margin: 0 0 20px !important; padding: 28px 36px !important;
+  max-width: none; box-sizing: border-box; margin: 0 0 20px !important; padding: 28px 36px !important;
   background: var(--g-card) !important; color: var(--g-text) !important;
   border: 0 !important; border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
   font: 400 16px/1.6 var(--g-font) !important;
@@ -174,15 +174,98 @@ html.blm-ios-wiki .wiki-content ul.pages-hierarchy a { display: inline-block; pa
 
 /* Attachments and "Also available in" under the card */
 html.blm-ios-wiki :is(.work-package--attachments, op-attachments, .attachments) {
-  max-width: 920px; margin-bottom: 16px; font-family: var(--g-font);
+  max-width: none; margin-bottom: 16px; font-family: var(--g-font);
 }
-html.blm-ios-wiki :is(.work-package--attachments--files, .op-file-list) {
-  background: var(--g-card) !important; border: 0 !important; border-radius: 12px; overflow: hidden;
+/* The file list: a white card holding a grid of tiles (iOS Files' grid, not one
+   full-width row per file, so a page with two dozen screenshots stays a few rows
+   tall). Each tile: an image preview on top (images only, added by ios.js), the
+   name over its age, the uploader's avatar at the end; download/delete float at the
+   tile's end while hovered (over the preview's corner on image tiles).
+   OpenProject markup: ul.op-file-list > li.op-file-list--item > .op-file-list--item-floating-wrapper
+   > .op-file-list--item-action (icon, -title, -text, op-principal) + .op-file-list--item-floating-actions. */
+html.blm-ios-wiki :is(.work-package--attachments--files:not(:has(.op-file-list)), .op-file-list) {
+  display: grid !important; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
+  margin: 0 !important; padding: 10px !important; list-style: none;
+  background: var(--g-card) !important; border: 0 !important; border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
 }
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wiki :is(.work-package--attachments--files, .op-file-list) { box-shadow: none; }
 html.blm-ios-wiki :is(.op-file-list--item, .work-package--attachments--files li) {
-  border: 0 !important; box-shadow: inset 0 -.5px 0 var(--g-row-sep); background: transparent !important;
+  position: relative; min-width: 0; margin: 0 !important; padding: 0 !important;
+  background: var(--g-grouped-solid) !important; border: 0 !important; border-radius: 10px;
+  box-shadow: none !important; transition: background-color .12s ease-out;
 }
-html.blm-ios-wiki :is(.op-file-list--item, .work-package--attachments--files li):last-child { box-shadow: none; }
+html.blm-ios-wiki :is(.op-file-list--item, .work-package--attachments--files li):hover { background: var(--g-selected) !important; }
+html.blm-ios-wiki .op-file-list--item-action {
+  display: grid !important; align-items: center; column-gap: 10px; row-gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title avatar" "meta avatar";
+  min-height: 52px; padding: 8px 10px 8px 12px !important; box-sizing: border-box;
+  background: transparent !important; border: 0 !important; border-radius: 10px;
+  color: var(--g-text) !important; text-decoration: none !important; cursor: pointer;
+}
+html.blm-ios-wiki .op-file-list--item-action:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+/* The file-type icon OpenProject puts beside the name: accent, a little gap */
+html.blm-ios-wiki .op-file-list--item-title :is(op-icon, svg, .spot-icon, [class*="icon-"]) {
+  margin: 0 6px 0 0 !important; color: var(--g-accent) !important; vertical-align: -2px;
+}
+
+/* Image preview (ios.js adds a.blm-i-thumb as the tile's first child): a 16:10
+   picture across the top of the tile; the name row sits under it, the type icon
+   goes since the picture says it. */
+html.blm-ios-wiki .op-file-list--item .blm-i-thumb {
+  display: block; aspect-ratio: 16 / 10; overflow: hidden;
+  border-radius: 10px 10px 0 0; background: var(--g-fill);
+  border-bottom: .5px solid var(--g-row-sep);
+}
+html.blm-ios-wiki .op-file-list--item .blm-i-thumb img {
+  display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center;
+  border: 0; transition: transform .25s ease-out;
+}
+html.blm-ios-wiki .op-file-list--item:hover .blm-i-thumb img { transform: scale(1.03); }
+html.blm-ios-wiki .op-file-list--item[data-blm-i-thumb="image"] .op-file-list--item-title :is(op-icon, svg, .spot-icon, [class*="icon-"]) { display: none !important; }
+html.blm-ios-wiki .op-file-list--item[data-blm-i-thumb="image"] .op-file-list--item-floating-actions { top: 8px; transform: none; }
+html.blm-ios-wiki .op-file-list--item-title {
+  grid-area: title; align-self: end; min-width: 0; margin: 0 !important; padding: 0 !important;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text) !important; font: 500 14px/1.3 var(--g-font) !important;
+}
+html.blm-ios-wiki .op-file-list--item-text {
+  grid-area: meta; align-self: start; min-width: 0; margin: 0 !important; padding: 0 !important;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g-text3) !important; font: 400 12px/1.3 var(--g-font) !important;
+}
+html.blm-ios-wiki .op-file-list--item-action > :is(op-principal, .op-principal, [class*="avatar"]) {
+  grid-area: avatar; margin: 0 !important; transition: opacity .12s ease-out;
+}
+html.blm-ios-wiki .op-file-list--item-action :is(.op-avatar, [class*="avatar"]) { width: 22px !important; height: 22px !important; border-radius: 50%; }
+/* The floating wrapper usually wraps the whole row (action + floating actions), so it
+   must stay in flow: taking it out of flow collapsed every tile to zero height and
+   stacked them. It is a plain block; the action fills it. */
+html.blm-ios-wiki .op-file-list--item-floating-wrapper {
+  position: static !important; display: block !important; width: 100%;
+  margin: 0 !important; padding: 0 !important; background: transparent !important; border: 0 !important;
+}
+html.blm-ios-wiki .op-file-list--item-floating-wrapper > .op-file-list--item-action { width: 100%; }
+/* Download / delete: round buttons over the tile's end (anchored to the li), only while hovered or focused */
+html.blm-ios-wiki .op-file-list--item-floating-actions {
+  position: absolute !important; top: 50%; right: 8px; left: auto !important; bottom: auto !important;
+  transform: translateY(-50%); z-index: 1;
+  display: flex !important; gap: 4px; margin: 0 !important; padding: 0 !important;
+  opacity: 0; pointer-events: none; transition: opacity .12s ease-out;
+  background: transparent !important; box-shadow: none !important; border: 0 !important;
+}
+html.blm-ios-wiki .op-file-list--item:is(:hover, :focus-within) .op-file-list--item-floating-actions { opacity: 1; pointer-events: auto; }
+html.blm-ios-wiki .op-file-list--item:is(:hover, :focus-within) .op-file-list--item-action > :is(op-principal, .op-principal, [class*="avatar"]) { opacity: 0; }
+html.blm-ios-wiki .op-file-list--item-floating-actions :is(a, button) {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0 !important; margin: 0 !important;
+  background: var(--g-raised) !important; color: var(--g-text2) !important;
+  border: 0 !important; border-radius: 50% !important; box-shadow: 0 1px 3px rgba(0, 0, 0, .12) !important;
+}
+html.blm-ios-wiki .op-file-list--item-floating-actions :is(a, button) * { color: inherit !important; }
+html.blm-ios-wiki .op-file-list--item-floating-actions :is(a, button):hover { color: var(--g-accent) !important; }
+html.blm-ios-wiki .op-file-list--item-floating-actions :is(a, button):is([class*="delete"], [class*="remove"], [data-test-selector*="delete"]):hover { color: var(--g-red) !important; }
 html.blm-ios-wiki .other-formats { color: var(--g-text3) !important; font: 400 13px var(--g-font) !important; }
 html.blm-ios-wiki .other-formats a { color: var(--g-accent) !important; }
 
@@ -256,7 +339,7 @@ html.blm-ios-wiki #main-menu .wiki-menu--sub-item a,
 html.blm-ios-wiki #main-menu :is(.main-menu--children, .menu-children) > li > a:not(.tree-menu--title) { font-weight: 500; }
 
 /* ── Edit / new page: the editor as the same card ─────────────────────── */
-html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) { max-width: 920px; font-family: var(--g-font); }
+html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) { max-width: none; font-family: var(--g-font); }
 html.blm-ios-wiki :is(#wiki_form, .wiki-page--form, form.edit_content, form.new_page, form[id^="wiki"]) :is(.form--field-container, .form--text-field-container) input:is([type="text"], :not([type])) {
   height: 40px; padding: 0 12px !important; box-sizing: border-box;
   background: var(--g-card) !important; color: var(--g-text) !important;
@@ -324,6 +407,88 @@ html.blm-ios-wiki :is(.text-diff, .diff) { background: var(--g-card); border-rad
 html.blm-ios-wiki :is(ins.diffins, .diff ins) { background: var(--g-chip-done-bg) !important; color: var(--g-chip-done-fg) !important; text-decoration: none; border-radius: 3px; }
 html.blm-ios-wiki :is(del.diffdel, .diff del) { background: color-mix(in srgb, var(--g-red) 14%, transparent) !important; color: var(--g-red) !important; border-radius: 3px; }
 
+/* ── Attachment disclosure row (ios.js tagAttachmentToggles) ──────────── */
+/* "› Attachments  24" above the list; collapsed by default, the chevron turns
+   down when open. Collapsed, the list is display:none so its previews never load. */
+html.blm-ios-wiki .blm-i-att-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 14px 0 10px; margin: 0 0 10px;
+  background: var(--g-card); color: var(--g-text);
+  border: 0; border-radius: 999px; box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+  font: 600 15px var(--g-font); cursor: pointer;
+  transition: background-color .14s ease-out;
+}
+html.blm-ios[data-blm-ios-theme="dark"].blm-ios-wiki .blm-i-att-toggle { box-shadow: none; }
+html.blm-ios-wiki .blm-i-att-toggle:hover { background: var(--g-selected); }
+html.blm-ios-wiki .blm-i-att-toggle:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
+html.blm-ios-wiki .blm-i-att-chev { width: 14px; height: 14px; color: var(--g-accent); transition: transform .18s ease-out; }
+html.blm-ios-wiki .blm-i-att-toggle[aria-expanded="true"] .blm-i-att-chev { transform: rotate(90deg); }
+html.blm-ios-wiki .blm-i-att-count {
+  min-width: 22px; height: 20px; padding: 0 7px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--g-fill); color: var(--g-text2); border-radius: 999px;
+  font: 500 12px var(--g-font); font-variant-numeric: tabular-nums;
+}
+html.blm-ios-wiki .blm-i-att-count:empty { display: none; }
+html.blm-ios-wiki .op-file-list[data-blm-i-collapsed="1"] { display: none !important; }
+
+/* ── Attachment lightbox (ios.js openLightbox) ────────────────────────── */
+/* Photos-style: the image on a near-black blurred backdrop in both themes, a top
+   bar with the name and "3 of 24", frosted round buttons. */
+html.blm-ios-wiki .blm-i-lightbox {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; flex-direction: column;
+  background: rgba(0, 0, 0, .86);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  color: #fff; font-family: var(--g-font);
+  animation: blm-i-lb-in .18s ease-out;
+}
+@keyframes blm-i-lb-in { from { opacity: 0; } }
+html.blm-ios-wiki .blm-i-lb-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  height: 56px; padding: 0 12px 0 20px; box-sizing: border-box;
+}
+html.blm-ios-wiki .blm-i-lb-title { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+html.blm-ios-wiki .blm-i-lb-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 15px var(--g-font); color: #fff;
+}
+html.blm-ios-wiki .blm-i-lb-count { flex: none; font: 400 13px var(--g-font); color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
+html.blm-ios-wiki .blm-i-lb-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; margin: 0;
+  background: rgba(255, 255, 255, .14); color: #fff !important;
+  border: 0; border-radius: 50%; cursor: pointer; text-decoration: none !important;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  transition: background-color .14s ease-out;
+}
+html.blm-ios-wiki .blm-i-lb-btn svg { width: 16px; height: 16px; }
+html.blm-ios-wiki .blm-i-lb-btn:hover { background: rgba(255, 255, 255, .26); }
+html.blm-ios-wiki .blm-i-lb-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+html.blm-ios-wiki .blm-i-lb-nav { position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px; z-index: 1; }
+html.blm-ios-wiki .blm-i-lb-nav svg { width: 18px; height: 18px; }
+html.blm-ios-wiki .blm-i-lb-nav.prev { left: 16px; }
+html.blm-ios-wiki .blm-i-lb-nav.next { right: 16px; }
+html.blm-ios-wiki .blm-i-lb-stage {
+  flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center;
+  padding: 0 72px 24px; box-sizing: border-box; overflow: hidden;
+}
+html.blm-ios-wiki .blm-i-lb-stage img {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  border-radius: 6px; box-shadow: 0 12px 48px rgba(0, 0, 0, .5);
+  transform-origin: center; touch-action: none; user-select: none;
+  transition: opacity .15s ease-out;
+}
+html.blm-ios-wiki .blm-i-lightbox.loading .blm-i-lb-stage img { opacity: .35; }
+html.blm-ios-wiki .blm-i-lightbox.zoomed .blm-i-lb-stage img { cursor: grab; border-radius: 0; }
+html.blm-ios-wiki .blm-i-lightbox.dragging .blm-i-lb-stage img { cursor: grabbing; }
+html.blm-ios-wiki .op-file-list--item .blm-i-thumb { cursor: zoom-in; }
+html.blm-ios-wiki .op-file-list--item .blm-i-thumb:focus-visible { outline: 2px solid var(--g-focus); outline-offset: -2px; }
+@media (max-width: 760px) {
+  html.blm-ios-wiki .blm-i-lb-stage { padding: 0 8px 16px; }
+  html.blm-ios-wiki .blm-i-lb-nav { top: auto; bottom: 20px; margin-top: 0; }
+}
+
 /* Narrow windows: the card goes edge-to-edge-ish with less padding */
 @media (max-width: 760px) {
   html.blm-ios-wiki .wiki-content { padding: 18px 18px !important; }
@@ -331,5 +496,9 @@ html.blm-ios-wiki :is(del.diffdel, .diff del) { background: color-mix(in srgb, v
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.blm-ios-wiki #main-menu *, html.blm-ios-wiki .toolbar-container *, html.blm-ios-wiki .wiki-content * { transition: none !important; }
+  html.blm-ios-wiki #main-menu *, html.blm-ios-wiki .toolbar-container *, html.blm-ios-wiki .wiki-content *, html.blm-ios-wiki .op-file-list * { transition: none !important; }
+  html.blm-ios-wiki .op-file-list--item:hover .blm-i-thumb img { transform: none; }
+  html.blm-ios-wiki .blm-i-lightbox { animation: none; }
+  html.blm-ios-wiki .blm-i-att-chev, html.blm-ios-wiki .blm-i-att-toggle { transition: none; }
+  html.blm-ios-wiki .blm-i-lightbox * { transition: none !important; }
 }

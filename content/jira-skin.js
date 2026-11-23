@@ -9,7 +9,8 @@
 // Jira lozenges and icons. Its only writes to OpenProject are a work package's
 // status, assignee or accountable picked in its picker (Child work items section,
 // or OpenProject's own fields, see pageTarget), a child's title (see writeWp), and,
-// with the iOS skin, deleting a child after confirming (see deleteChild).
+// with the iOS skin, deleting a child after confirming (see deleteChild). The iOS
+// skin's drag-to-reorder of children is saved in this browser only (see saveOrder).
 // Toggled from Settings ("Jira style"); the Children-table Assignee column has
 // its own switch ("Assign from the Children table"), and so does the Activity
 // filter ("Activity filter"); both work without the skin.
@@ -2241,7 +2242,10 @@ function fieldButton(k, field, cls, text, content) {
 function buildChildren(wpId, kids) {
   const section = el('section', 'blm-jx-children');
   section.dataset.wp = wpId;
-  if (iosLayout()) section.classList.add('has-delete');
+  if (iosLayout()) {
+    section.classList.add('has-delete', 'has-reorder');
+    kids = orderedKids(wpId, kids);
+  }
   section.setAttribute('aria-labelledby', 'blm-jx-children-title');
 
   const tones = kids.map(k => statusTone(k.status.toLowerCase()));
@@ -2304,7 +2308,10 @@ function buildChildren(wpId, kids) {
     const status = fieldButton(k, 'status', 'blm-jx-lozenge', k.status);
     status.dataset.blmTone = tones[i];
     li.append(icon, key, subject, who, status);
-    if (iosLayout()) li.append(deleteButton(k));
+    if (iosLayout()) {
+      li.dataset.row = k.id;
+      li.append(deleteButton(k), reorderHandle(k, i, kids.length));
+    }
     list.append(li);
   });
 
@@ -2354,6 +2361,7 @@ function childrenFor(wpId) {
  *  Without children it still shows the heading and its actions, so the first
  *  child can be created here. */
 function renderChildren() {
+  if (reorderDrag) return;     // a rebuild mid-drag would drop the row under the pointer
   const wpId   = viewWpId();
   const anchor = childAnchor();
   const shown  = document.querySelector('.blm-jx-children');
@@ -2369,6 +2377,7 @@ function renderChildren() {
   if (createState.wpId && createState.wpId !== wpId) createState.wpId = null;   // another work package
   if (current?.dataset.wp === wpId && current.previousElementSibling === anchor && current._kids === kids
       && current._createSig === createSig(wpId) && current._deleteSig === deleteSig()
+      && current._orderSig === orderSig(wpId)
       && current.classList.contains('has-delete') === iosLayout()) return;
 
   const focused  = document.activeElement?.closest?.('.blm-jx-children [data-focus]');
@@ -2378,6 +2387,7 @@ function renderChildren() {
   section._kids = kids;
   section._createSig = createSig(wpId);
   section._deleteSig = deleteSig();
+  section._orderSig = orderSig(wpId);
   anchor.after(section);
   if (focusSel) section.querySelector(focusSel)?.focus();
   else if (createState.wpId === wpId && !current?.querySelector('.blm-jx-create-row')) section.querySelector('.blm-jx-create-input')?.focus();
@@ -3872,6 +3882,153 @@ async function deleteChild(k) {
   }
 }
 
+// ─── Reorder children (iOS skin) ─────────────────────────────────────────────────
+//  A grip at the very end of each row drags the child up or down; with the grip
+//  focused, ↑ and ↓ move it one place. OpenProject keeps no order among a work
+//  package's children, so the order is saved in this browser only
+//  (`__blm_child_order`: parent id -> { ids, at }). Children missing from it (new
+//  ones) follow in id order; deleted ones simply drop out.
+
+const CFG_CHILD_ORDER = '__blm_child_order';
+const ORDER_KEEP = 300;     // parents remembered; the least recently reordered go first
+let childOrder = {};
+let reorderDrag = null;     // { pointerId, handle, li, list, rows, tops, height, from, to, startY, wpId }
+chrome.storage.local.get(CFG_CHILD_ORDER).then(s => { childOrder = s[CFG_CHILD_ORDER] ?? {}; schedule(); }).catch(() => {});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !(CFG_CHILD_ORDER in changes)) return;
+  childOrder = changes[CFG_CHILD_ORDER].newValue ?? {};
+  schedule();
+});
+
+const orderSig = wpId => (iosLayout() ? (childOrder[wpId]?.ids ?? []).join(',') : '');
+
+/** The kids in the saved order; unsaved ones after them, by id. */
+function orderedKids(wpId, kids) {
+  const ids = childOrder[wpId]?.ids;
+  if (!Array.isArray(ids) || !ids.length) return kids;
+  const rank = new Map(ids.map((id, i) => [String(id), i]));
+  return [...kids].sort((a, b) =>
+    (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || Number(a.id) - Number(b.id));
+}
+
+function saveOrder(wpId, ids) {
+  childOrder = { ...childOrder, [wpId]: { ids, at: Date.now() } };
+  const keys = Object.keys(childOrder);
+  if (keys.length > ORDER_KEEP) {
+    keys.sort((a, b) => (childOrder[a]?.at ?? 0) - (childOrder[b]?.at ?? 0))
+      .slice(0, keys.length - ORDER_KEEP).forEach(k => delete childOrder[k]);
+  }
+  try { chrome.storage.local.set({ [CFG_CHILD_ORDER]: childOrder }).catch(() => {}); } catch { /* context gone */ }
+  schedule();
+}
+
+function reorderHandle(k, index, count) {
+  if (count < 2) {
+    const gap = el('span', 'blm-jx-reorder-gap');
+    gap.setAttribute('aria-hidden', 'true');
+    return gap;
+  }
+  const b = el('button', 'blm-jx-reorder');
+  b.type = 'button';
+  b.dataset.kid = k.id;
+  b.dataset.focus = 'reorder';
+  b.title = 'Drag to reorder';
+  b.setAttribute('aria-label', `Move #${k.id}: ${k.subject}, ${index + 1} of ${count}. Up and down arrows move it`);
+  b.addEventListener('pointerdown', startReorder);
+  b.addEventListener('keydown', reorderKey);
+  return b;
+}
+
+/** Row ids of a list in their current order. */
+const rowIds = list => [...list.querySelectorAll(':scope > li[data-row]')].map(r => r.dataset.row);
+
+function reorderKey(e) {
+  if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.altKey || e.ctrlKey || e.metaKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const li = e.currentTarget.closest('li');
+  const wpId = li?.closest('.blm-jx-children')?.dataset.wp;
+  if (!wpId) return;
+  const ids = rowIds(li.parentElement);
+  const from = ids.indexOf(li.dataset.row);
+  const to = from + (e.key === 'ArrowUp' ? -1 : 1);
+  if (from < 0 || to < 0 || to >= ids.length) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  saveOrder(wpId, ids);      // the rebuild puts focus back on this grip
+}
+
+function startReorder(e) {
+  if (e.button !== 0 || reorderDrag) return;
+  const handle = e.currentTarget;
+  const li = handle.closest('li');
+  const list = li?.parentElement;
+  const wpId = list?.closest('.blm-jx-children')?.dataset.wp;
+  if (!wpId) return;
+  e.preventDefault();        // no text selection while dragging
+  closePicker();
+  const rows = [...list.querySelectorAll(':scope > li[data-row]')];
+  const listTop = list.getBoundingClientRect().top;
+  // Row tops relative to the list, so a scroll mid-drag doesn't throw the maths off.
+  const tops = rows.map(r => r.getBoundingClientRect().top - listTop);
+  const from = rows.indexOf(li);
+  reorderDrag = {
+    pointerId: e.pointerId, handle, li, list, rows, tops, wpId, from, to: from,
+    height: li.getBoundingClientRect().height, startY: e.clientY - listTop,
+  };
+  try { handle.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+  list.classList.add('reordering');
+  li.classList.add('dragging');
+  document.documentElement.classList.add('blm-reordering');
+  handle.addEventListener('pointermove', moveReorder);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(type, endReorder);
+}
+
+function moveReorder(e) {
+  const d = reorderDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  const y = e.clientY - d.list.getBoundingClientRect().top;
+  const last = d.rows.length - 1;
+  // The row stays inside the card.
+  const dy = Math.max(d.tops[0] - d.tops[d.from], Math.min(d.tops[last] - d.tops[d.from], y - d.startY));
+  d.li.style.transform = `translateY(${dy}px)`;
+  // Its new index: how many other rows its middle has passed.
+  const mid = d.tops[d.from] + dy + d.height / 2;
+  let to = 0;
+  d.rows.forEach((r, i) => {
+    if (i !== d.from && d.tops[i] + r.offsetHeight / 2 < mid) to++;
+  });
+  if (to === d.to) return;
+  d.to = to;
+  d.rows.forEach((r, i) => {
+    if (i === d.from) return;
+    const shift = d.from < to && i > d.from && i <= to ? -d.height
+                : to < d.from && i >= to && i < d.from ? d.height : 0;
+    r.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+
+function endReorder(e) {
+  const d = reorderDrag;
+  if (!d || (e.pointerId != null && e.pointerId !== d.pointerId)) return;
+  reorderDrag = null;
+  d.handle.removeEventListener('pointermove', moveReorder);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) d.handle.removeEventListener(type, endReorder);
+  try { d.handle.releasePointerCapture(d.pointerId); } catch { /* already released */ }
+  document.documentElement.classList.remove('blm-reordering');
+  // Settle without animating: transitions go with .reordering, then the row moves
+  // in the DOM so nothing jumps before the rebuild.
+  d.list.classList.remove('reordering');
+  d.li.classList.remove('dragging');
+  for (const r of d.rows) r.style.transform = '';
+  if (e.type === 'pointerup' && d.to !== d.from) {
+    const ids = d.rows.map(r => r.dataset.row);
+    ids.splice(d.to, 0, ids.splice(d.from, 1)[0]);
+    const after = d.rows.filter(r => r !== d.li)[d.to];
+    d.list.insertBefore(d.li, after ?? d.rows[d.rows.length - 1].nextSibling);
+    saveOrder(d.wpId, ids);
+  } else schedule();
+}
+
 document.addEventListener('click', e => {
   const b = e.target.closest?.('.blm-jx-children [data-child-action]');
   if (!b || !layoutOn()) return;
@@ -4872,7 +5029,8 @@ function startDrag(e) {
   document.documentElement.classList.add('blm-dragging');
 }
 document.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;
+  // The children's reorder grip runs its own drag and wants its row transitions.
+  if (e.button !== 0 || e.target.closest?.('.blm-jx-reorder')) return;
   downX = e.clientX; downY = e.clientY;
   document.addEventListener('mousemove', startDrag, { capture: true, passive: true });
 }, true);

@@ -2,7 +2,7 @@
 // Toggles html classes and tags elements; every visual rule lives in content/ios/*.css
 // and is scoped under html.blm-ios, so switch off = native OpenProject. It also makes
 // clicks answer at once (see "Optimistic UI").
-// Registered by background.js for the configured host on work-package, Backlogs, sign-in, project-list and notification routes.
+// Registered by background.js for the configured host on work-package, Backlogs, sign-in, project-list, notification and wiki routes.
 
 (() => {
 'use strict';
@@ -320,6 +320,216 @@ function untagCells() {
   clearRing();
   document.querySelectorAll('.blm-i-committing, .blm-i-shake, .blm-i-flash, .blm-i-opening, .blm-i-switching, .blm-i-pressed')
     .forEach(el => el.classList.remove('blm-i-committing', 'blm-i-shake', 'blm-i-flash', 'blm-i-opening', 'blm-i-switching', 'blm-i-pressed'));
+  untagThumbs();
+}
+
+// ── Wiki attachments: image previews ──────────────────────────────────────────
+// Each image tile in a wiki page's attachment list (li.op-file-list--item) gets a
+// preview above its name: an <a class="blm-i-thumb"> to the file (a click opens the
+// lightbox below; a modified click still opens a tab), holding an <img>
+// of its download URL (OpenProject has no thumbnail endpoint). The URL comes from
+// the tile's own /api/v3/attachments/<id>/content link, so nothing is fetched up
+// front. The image loads lazily (only near the viewport), decodes off the main
+// thread at low priority, and a failed load drops the preview back to the icon.
+// Non-images and tiles whose link hasn't rendered yet are left as they are and
+// re-checked on the next change (data-blm-i-thumb marks the done ones).
+const ATTACHMENT_HREF_RE = /\/api\/v3\/attachments\/\d+\/content/;
+const IMAGE_NAME_RE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+function tagThumbs() {
+  for (const li of document.querySelectorAll('.op-file-list--item:not([data-blm-i-thumb])')) {
+    const name = (li.querySelector('.op-file-list--item-title')?.textContent ?? '').trim();
+    if (!name) continue;
+    if (!IMAGE_NAME_RE.test(name)) { li.dataset.blmIThumb = 'none'; continue; }
+    const href = [...li.querySelectorAll('[href]')].map(a => a.getAttribute('href')).find(h => ATTACHMENT_HREF_RE.test(h));
+    if (!href) continue;
+    li.dataset.blmIThumb = 'image';
+    const link = document.createElement('a');
+    link.className = 'blm-i-thumb';
+    link.href = href;
+    link.target = '_blank';   // a modified click (Ctrl/⌘/Shift/middle) still opens a tab
+    link.rel = 'noopener';
+    link.setAttribute('aria-label', `Preview ${name}`);
+    link.addEventListener('click', (e) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button) return;
+      e.preventDefault();
+      const all = [...document.querySelectorAll('.op-file-list--item .blm-i-thumb')];
+      openLightbox(all.map(a => ({ src: a.getAttribute('href'), name: a.getAttribute('aria-label').replace(/^Preview /, '') })),
+        Math.max(0, all.indexOf(link)), link);
+    });
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.fetchPriority = 'low';
+    img.draggable = false;
+    img.addEventListener('error', () => { link.remove(); li.dataset.blmIThumb = 'none'; }, { once: true });
+    img.src = href;
+    link.append(img);
+    li.prepend(link);
+  }
+}
+function untagThumbs() {
+  document.querySelector('.blm-i-lightbox')?.blmClose?.();
+  document.querySelectorAll('.blm-i-thumb, .blm-i-att-toggle').forEach(el => el.remove());
+  document.querySelectorAll('[data-blm-i-thumb]').forEach(el => { delete el.dataset.blmIThumb; });
+  document.querySelectorAll('[data-blm-i-collapsed]').forEach(el => { delete el.dataset.blmICollapsed; });
+}
+
+// A disclosure row above each wiki attachment list ("› Attachments  24"), the list
+// collapsed by default on every page load: two dozen screenshots shouldn't push the
+// page's end down, and a hidden list's previews don't load at all. The count
+// follows uploads/deletes; a list Angular re-renders gets a new row and starts
+// collapsed again, and a row whose list is gone is removed.
+let attToggleSeq = 0;
+function tagAttachmentToggles() {
+  for (const btn of document.querySelectorAll('.blm-i-att-toggle')) {
+    if (!btn.nextElementSibling?.matches('.op-file-list')) btn.remove();
+  }
+  for (const list of document.querySelectorAll('.op-file-list')) {
+    let btn = list.previousElementSibling;
+    if (!btn?.matches('.blm-i-att-toggle')) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'blm-i-att-toggle';
+      btn.innerHTML = '<svg class="blm-i-att-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        + '<span class="blm-i-att-label">Attachments</span><span class="blm-i-att-count"></span>';
+      if (!list.id) list.id = `blm-i-att-list-${++attToggleSeq}`;
+      btn.setAttribute('aria-controls', list.id);
+      btn.addEventListener('click', () => {
+        const open = list.dataset.blmICollapsed === '1';
+        list.dataset.blmICollapsed = open ? '0' : '1';
+        btn.setAttribute('aria-expanded', String(open));
+      });
+      if (!list.dataset.blmICollapsed) list.dataset.blmICollapsed = '1';
+      btn.setAttribute('aria-expanded', String(list.dataset.blmICollapsed !== '1'));
+      list.before(btn);
+    }
+    const n = String(list.querySelectorAll(':scope > .op-file-list--item').length);
+    const count = btn.querySelector('.blm-i-att-count');
+    if (count.textContent !== n) count.textContent = n;   // unchanged text: no new mutation, no loop
+  }
+}
+
+// The preview's lightbox: the full image over a dimmed, blurred page, with its
+// name and "3 of 24" in a top bar, a close button and ‹ › when there are others.
+// Esc / a click on the backdrop closes; ← → step; Ctrl + wheel (or a pinch) zooms
+// round the pointer, drag pans while zoomed, double-click toggles 1× / 2×.
+// Focus moves to the close button and returns to the preview it came from.
+function openLightbox(items, index, opener) {
+  document.querySelector('.blm-i-lightbox')?.blmClose?.();
+  const box = document.createElement('div');
+  box.className = 'blm-i-lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.innerHTML = `
+    <div class="blm-i-lb-bar">
+      <span class="blm-i-lb-title"><span class="blm-i-lb-name"></span><span class="blm-i-lb-count"></span></span>
+      <a class="blm-i-lb-btn blm-i-lb-open" target="_blank" rel="noopener" title="Open in new tab" aria-label="Open in new tab">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5V13a.5.5 0 0 1-.5.5h-8A.5.5 0 0 1 3 13V5a.5.5 0 0 1 .5-.5H7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <button type="button" class="blm-i-lb-btn blm-i-lb-close" title="Close (Esc)" aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="blm-i-lb-stage"><img alt="" draggable="false"></div>`;
+  const img = box.querySelector('img');
+  const stage = box.querySelector('.blm-i-lb-stage');
+  const openLink = box.querySelector('.blm-i-lb-open');
+  const nameEl = box.querySelector('.blm-i-lb-name');
+  const countEl = box.querySelector('.blm-i-lb-count');
+  if (items.length > 1) {
+    for (const [cls, label, step, d] of [['prev', 'Previous image', -1, 'M10 3 5 8l5 5'], ['next', 'Next image', 1, 'M6 3l5 5-5 5']]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `blm-i-lb-btn blm-i-lb-nav ${cls}`;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      b.addEventListener('click', (e) => { e.stopPropagation(); show(step); });
+      box.append(b);
+    }
+  }
+
+  let scale = 1, x = 0, y = 0, drag = null, moved = false;
+  const transform = () => {
+    img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    box.classList.toggle('zoomed', scale > 1.01);
+  };
+  const reset = () => { scale = 1; x = 0; y = 0; transform(); };
+  function show(step) {
+    index = (index + step + items.length) % items.length;
+    const it = items[index];
+    box.classList.add('loading');
+    img.onload = img.onerror = () => box.classList.remove('loading');
+    img.src = it.src;
+    img.alt = it.name;
+    openLink.href = it.src;
+    nameEl.textContent = it.name;
+    countEl.textContent = items.length > 1 ? `${index + 1} of ${items.length}` : '';
+    box.setAttribute('aria-label', it.name);
+    reset();
+  }
+  // Zoom keeping the point under the pointer still.
+  const zoomAt = (factor, cx, cy) => {
+    const next = Math.min(8, Math.max(1, scale * factor));
+    const r = stage.getBoundingClientRect();
+    const px = cx - (r.left + r.width / 2), py = cy - (r.top + r.height / 2);
+    x = px - (px - x) * (next / scale);
+    y = py - (py - y) * (next / scale);
+    scale = next;
+    if (scale === 1) { x = 0; y = 0; }
+    transform();
+  };
+  box.addEventListener('wheel', (e) => {
+    e.preventDefault();   // the page behind must not scroll or zoom
+    if (e.ctrlKey) zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
+    else if (scale > 1) { x -= e.deltaX; y -= e.deltaY; transform(); }
+  }, { passive: false });
+  img.addEventListener('dblclick', (e) => { if (scale > 1) reset(); else zoomAt(2, e.clientX, e.clientY); });
+  img.addEventListener('pointerdown', (e) => {
+    if (e.button || scale <= 1) return;
+    drag = { x: e.clientX - x, y: e.clientY - y };
+    img.setPointerCapture(e.pointerId);
+    box.classList.add('dragging');
+  });
+  img.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    moved = true;
+    x = e.clientX - drag.x; y = e.clientY - drag.y;
+    transform();
+  });
+  const endDrag = () => { drag = null; box.classList.remove('dragging'); };
+  img.addEventListener('pointerup', endDrag);
+  img.addEventListener('pointercancel', endDrag);
+  box.addEventListener('pointerdown', () => { moved = false; });
+  box.addEventListener('click', (e) => {
+    if (moved) return;
+    if (e.target === box || e.target === stage) close();
+  });
+  box.querySelector('.blm-i-lb-close').addEventListener('click', () => close());
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (items.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault(); e.stopPropagation();
+      show(e.key === 'ArrowLeft' ? -1 : 1);
+    } else if (e.key === 'Tab') {   // keep focus inside the dialog
+      const f = [...box.querySelectorAll('a[href], button')];
+      const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    }
+  };
+  const overflow = document.documentElement.style.overflow;
+  function close() {
+    document.removeEventListener('keydown', onKey, true);
+    document.documentElement.style.overflow = overflow;
+    box.remove();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  }
+  box.blmClose = close;
+  document.addEventListener('keydown', onKey, true);
+  document.documentElement.style.overflow = 'hidden';
+  document.body.append(box);
+  show(0);
+  box.querySelector('.blm-i-lb-close').focus({ preventScroll: true });
 }
 
 // ── Optimistic UI ───────────────────────────────────────────────────────────
@@ -550,6 +760,7 @@ function schedule() {
     dirty.clear();
     if (!enabled) return;
     tagPopups();
+    if (onWikiPage()) { tagAttachmentToggles(); tagThumbs(); }
     if (!(onWorkPackagePage() || onBacklogsPage() || onNotificationsPage())) return;
     tagPage();
     for (const root of roots) tagIn(root);
