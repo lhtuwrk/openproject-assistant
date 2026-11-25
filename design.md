@@ -212,14 +212,67 @@ sets one model for every ask, Sonnet 5 by default. The extra hues are shared tok
 teal), `--ai-glow` and `--claude` (its fixed brand orange, in `tokens.css`). Under `prefers-reduced-motion` all of it stops; the phase text and stages
 still change. The stages are timed, not real progress.
 
-The same switch also shows a floating round button (bottom-right, `--claude` fill, the spark icon,
+**The AI mark** (`shared/claude-icon.js`, motion in `shared/ai-mark.css`): OpenProject's one-line
+o·p mark in `--op-blue` (#1a67a3 light, #4a95d6 dark) with Claude's four-point spark in `--claude`
+in its empty top-left corner. A `data-mark` attribute on an ancestor sets its motion by task —
+`idle` (spark twinkles, one bead strolls the line), `thinking` (two beads chase round the line,
+spark spins), `writing` (light runs down the line, spark beats), `drafting` (the line redraws),
+`applying` (the line pulses, a bead rushes through), `done` (line drawn once, spark bursts, plays
+once), `error`/`offline` (greyed; error shakes once); without it the mark is still. Past chat
+replies stay still. Reduced motion stops all of it.
+
+The same switch also shows a floating round button (bottom-right, `--claude` fill, the AI mark in white with an orange bead,
 turning into × while open) on the backlog's work-package list and detail pages, behind
 `content/assistant-fab.js`. It opens a small chat popup (`pages/assistant.html`, same bubble/caret
 look as the strip's Chat, no skill picker) anchored above the button — a card, not the full-height
 drawer the Burndown button and quick settings use, so the backlog page stays visible and usable
 behind it (Escape closes it; a stray click on the page does not). Its system prompt is whatever the
-user is looking at — the open story's description, subtasks and comments, or just the project name
-on a list — and follows along live as they navigate the SPA, without reopening the popup.
+user is looking at — the open story's description, subtasks and comments, or, on a list with a
+saved view, its actual rows (id, type, subject, status, priority, assignee, points; capped at 60,
+the rest only counted) — and follows along live as they navigate the SPA, without reopening the popup.
+
+The popup opens 460 × 640 px (capped to the window) and resizes from a grip in its top-left corner
+(it is anchored bottom-right); the size is kept in `__blm_assistant_size`, and a double-click on the
+grip resets it. Beyond the screen it also reads, through `shared/assistant-context.js`: the sprint's
+day-by-day burndown from this extension's own snapshots (only for tracked sprints; on a list, the
+sprint most rows belong to), and on a story its parent, relations and attachments, with the text of
+up to three small text files. The starter questions follow the screen (story vs list).
+
+Replies render a small markdown subset (paragraphs, `-`/`1.` lists, `**bold**`, `code`, fenced
+code, http(s) links), escaped first. The conversation lives only in the open popup; nothing is
+stored. The button turns grey (`#6b6f78`) with a
+tooltip while the bridge doesn't answer, and text selected on the page when it is pressed is
+quoted into the input.
+
+Writes stay with the user: Claude may end a reply with a fenced `blm-actions` JSON block, and the
+popup shows it as a "Proposed change" card (`--claude` rim, the AI gradient rim while applying) and
+writes it through `shared/api.js` only on **Apply**, for the story (or list) open at that moment.
+The kinds live in one table, `shared/assistant-tools.js`, each with a shape allow-list and a check
+against what OpenProject itself allows (the story's edit form, its allowed next statuses, the
+project's assignees, types and sprints), so a value OpenProject would refuse shows up skipped, with
+the reason, instead of failing at Apply. On a **story**: rename, replace the description, add
+subtasks, post a comment, status, assignee, story points (the team scale 0–100: 0, 1, 2, 3, 5, 8, 13,
+20, 40, 100), priority, label, sprint (or none), a relation to another story, rename/retype one of
+its own subtasks, and change one of its subtasks' status. On a **list**: create a story in the
+project. Nothing else; no time logging, no deleting, no bulk edits. Each row of the card reads
+`old → new` (struck-through old value), a closing status or leaving a sprint adds a `--claude`
+warning line, and a skipped row says why and is left out of "Apply n of m". After Apply, the card
+offers **Undo** for everything that can be reversed (a patch is put back, a relation deleted;
+comments, new subtasks and new stories have none, since removing them is not something to offer).
+After applying, OpenProject's
+own app re-reads the story in place (`OpenProject.getPluginContext()` →
+`apiV3Service.work_packages.id(id).refresh()`, run in the page world by background.js; a full
+reload only where that isn't available), the popup stays open, and each changed text on the page glows in `--claude`
+with a light sweep three times (~4 s) — the second exception to "no extra motion"; with reduced
+motion it is a static outline instead. A new story on a list is the one change that reloads the
+page (a list has no per-story refresh), and the popup then stays closed.
+
+Claude can also ask to read more, with a `blm-read` block: another story (with its subtasks and
+relations), a search, a story's comments, another sprint's burndown, hours logged on a story or in
+a sprint, and the workload per person. Reads change nothing, so they run without a click: the chat
+shows one quiet line per read (a ring that turns, then a green dot, or red when it failed), the
+results go back to Claude, and it answers. At most 3 rounds of up to 5 reads, then it must answer.
+`docs/ai-assistant-tools.check.mjs` runs every tool's checks in node (`node docs/ai-assistant-tools.check.mjs`).
 
 ## Injected skin on OpenProject
 `jira-skin.js` dresses OpenProject itself, not an extension page, so it follows

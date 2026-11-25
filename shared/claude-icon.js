@@ -1,20 +1,17 @@
-// claude-icon.js — the Claude spark, in Claude's orange (--claude): eleven petals, thin where they
-// meet the centre and widening to a rounded tip, at uneven angles and lengths so it reads hand-cut
-// rather than a gear. Shared by every surface that shows the Claude mark (Planning's Claude strip,
-// the floating assistant).
+// claude-icon.js — the AI mark: OpenProject's one-line o·p mark (in --op-blue) with the Claude spark
+// (in --claude) in its empty top-left corner. Shared by every surface that shows it (Planning's Claude
+// strip, the floating assistant's popup). Its parts move per task through a data-mark attribute on an
+// ancestor, styled in shared/ai-mark.css: idle, thinking, writing, drafting, applying, done, error,
+// offline; with no data-mark it stays still. content/assistant-fab.js keeps its own copy (a content
+// script can't import a module) — keep the two in step.
 
-export const CLAUDE_ICON = (() => {
-  const RAYS = [   // [angle° clockwise from top, length, tip width]
-    [0, 10.6, 2.9], [33, 8.3, 2.5], [63, 9.9, 2.8], [96, 7.6, 2.4], [127, 10.3, 2.9], [160, 8.7, 2.6],
-    [191, 10.0, 2.8], [222, 7.7, 2.4], [253, 10.5, 2.9], [287, 8.1, 2.5], [318, 9.5, 2.7],
-  ];
-  const R0 = 1.0, W0 = 0.75, f = n => +n.toFixed(2);
-  const petal = ([deg, len, w]) => {
-    const a = (deg - 90) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-    const P = (x, y) => `${f(x * c - y * s)} ${f(x * s + y * c)}`;   // a petal drawn along +x, then turned
-    const r = w / 2, tip = len - r;
-    return `M${P(R0, -W0 / 2)}L${P(tip, -r)}A${f(r)} ${f(r)} 0 0 1 ${P(tip, r)}L${P(R0, W0 / 2)}Z`;
-  };
-  const d = RAYS.map(petal).join('') + 'M-1.7 0a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0 -3.4 0Z';
-  return `<svg class="claude-icon" viewBox="-12 -12 24 24" aria-hidden="true" focusable="false"><path d="${d}" /></svg>`;
-})();
+/** The o·p as one line: the p's stem (its stub under the bar, then above it), the p's bowl, the bar
+ *  running left, the o's bowl, ending just under the bar. The gaps are where the line passes beneath the bar. */
+export const MARK_LINE = 'M13.92 17.62V15.8M13.92 11.93V5.82A2.4 2.4 0 0 1 16.32 3.42H18.43A2.4 2.4 0 0 1 20.83 5.82V9.53A2.4 2.4 0 0 1 18.43 11.93H5.52A2.4 2.4 0 0 0 3.12 14.33V18.15A2.4 2.4 0 0 0 5.52 20.55H7.53A2.4 2.4 0 0 0 9.93 18.15V15.8';
+const SPARK = 'M6.4 2.9C6.76 5.11 7.49 5.84 9.7 6.2C7.49 6.56 6.76 7.29 6.4 9.5C6.04 7.29 5.31 6.56 3.1 6.2C5.31 5.84 6.04 5.11 6.4 2.9Z';
+const RAYS = 'M6.4 0.6V1.8M11.9 6.2H10.7M0.9 6.2H2.1M2.3 2.1L3.1 2.9';
+const bead = cls => `<circle class="m-bead ${cls}" r="1.9" style="offset-path: path('${MARK_LINE}')" />`;
+
+export const CLAUDE_ICON = `<svg class="claude-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+<path class="m-line" pathLength="100" d="${MARK_LINE}" /><path class="m-glint" pathLength="100" d="${MARK_LINE}" />
+${bead('b1')}${bead('b2')}<path class="m-spark" d="${SPARK}" /><path class="m-ray" d="${RAYS}" /></svg>`;

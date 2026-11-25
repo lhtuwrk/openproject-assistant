@@ -7,6 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning · Backlog Monitor</title>
   <link rel="stylesheet" href="../shared/tokens.css" />
+  <link rel="stylesheet" href="../shared/ai-mark.css" />
   <link rel="stylesheet" href="../shared/shell.css" />
   <style>
     /* Hallmark · genre: modern-minimal · macrostructure: Workbench (app) · page: Planning (sprint planning game) · design-system: design.md · designed-as-app
@@ -525,11 +526,9 @@
     @keyframes ai-turn { to { --ai-turn: 360deg; } }
 
     .ai-bar { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
-    .claude-icon { display: block; width: 1em; height: 1em; fill: currentColor; }
-    .ai-mark, .ai-spark { display: inline-flex; flex: none; color: var(--claude); line-height: 1; }
-    .ai-mark { font-size: 16px; }
-    .ai-spark { font-size: 14px; }
-    .ai[data-state="thinking"] .ai-bar .ai-mark { animation: ai-spin 1.6s var(--ease-in-out) infinite; }
+    .ai-mark, .ai-spark { display: inline-flex; flex: none; line-height: 1; }
+    .ai-mark { font-size: 18px; }
+    .ai-spark { font-size: 15px; }
     .ai-name { font-size: var(--text-sm); }
     .ai-hint { color: var(--muted); font-size: var(--text-xs); }
     .ai-bar .spacer { flex: 1; }
@@ -542,16 +541,12 @@
     .ai-btn:hover:not(:disabled) { background: linear-gradient(var(--surface2), var(--surface2)) padding-box, linear-gradient(90deg, var(--ai-1), var(--ai-2), var(--ai-3)) border-box; transform: translateY(-1px); }
     .ai-btn:disabled { opacity: .55; cursor: default; }
     .ai-btn.is-on { opacity: 1; background: linear-gradient(var(--accent-bg), var(--accent-bg)) padding-box, linear-gradient(90deg, var(--ai-1), var(--ai-2), var(--ai-3)) border-box; }
-    .ai-btn.is-on .ai-spark { animation: ai-spin 1.6s var(--ease-in-out) infinite; }
-    @keyframes ai-spin { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(1.35); } 100% { transform: rotate(360deg) scale(1); } }
 
     .ai-think { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--space-sm); align-items: start; padding: var(--space-xs) 2px; }
-    /* The thinking mark: the Claude spark turning slowly over a breathing orange glow. */
-    .ai-orb { position: relative; display: grid; place-items: center; width: 36px; height: 36px; margin: 4px; color: var(--claude); }
-    .ai-orb::before { content: ''; position: absolute; inset: 2px; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--claude) 55%, transparent), transparent 70%); filter: blur(6px); animation: ai-breathe 2.4s var(--ease-in-out) infinite; }
-    .ai-orb .claude-icon { position: relative; font-size: 30px; animation: ai-orbit 6s linear infinite, ai-pulse 2.4s var(--ease-in-out) infinite; }
-    @keyframes ai-orbit { to { rotate: 360deg; } }
-    @keyframes ai-pulse { 0%, 100% { scale: .92; } 50% { scale: 1.06; } }
+    /* The thinking mark: the AI mark in its thinking motion (shared/ai-mark.css) over a breathing glow. */
+    .ai-orb { position: relative; display: grid; place-items: center; width: 36px; height: 36px; margin: 4px; }
+    .ai-orb::before { content: ''; position: absolute; inset: 2px; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--op-blue) 45%, transparent), transparent 70%); filter: blur(6px); animation: ai-breathe 2.4s var(--ease-in-out) infinite; }
+    .ai-orb .claude-icon { position: relative; font-size: 30px; }
     @keyframes ai-breathe { 0%, 100% { transform: scale(.85); } 50% { transform: scale(1.15); } }
     .ai-think-head { display: flex; align-items: baseline; gap: var(--space-xs); }
     .ai-label { color: var(--muted); font-size: var(--text-xs); font-weight: 600; }
@@ -624,7 +619,6 @@
     .msg-ai { align-self: flex-start; display: flex; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
     .msg-ai .ai-mark { flex: none; margin-top: 2px; }
     .msg-ai.is-live { border-color: transparent; background: linear-gradient(var(--surface2), var(--surface2)) padding-box, linear-gradient(120deg, var(--ai-1), var(--ai-2), var(--ai-3)) border-box; }
-    .msg-ai.is-live .ai-mark { animation: ai-spin 1.6s var(--ease-in-out) infinite; }
     .msg-ai.is-live .msg-text:not(:empty)::after { content: ''; display: inline-block; width: 7px; height: 1.05em; margin-left: 2px; vertical-align: -2px; border-radius: 1px; background: var(--accent); animation: ai-caret 1s steps(1) infinite; }
     @keyframes ai-caret { 50% { opacity: 0; } }
     .msg-ai.is-err { border-color: var(--red); }

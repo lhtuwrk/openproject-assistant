@@ -1317,7 +1317,7 @@ async function postAiOut(id) {
 function aiThinkingHtml(b) {
   const n = aiPhase(b), ask = AI_ASKS[b.what];
   return `<div class="ai-think" role="status" aria-live="polite">
-      <div class="ai-orb" aria-hidden="true">${CLAUDE_ICON}</div>
+      <div class="ai-orb" data-mark="thinking" aria-hidden="true">${CLAUDE_ICON}</div>
       <div class="ai-think-main">
         <div class="ai-think-head"><span class="ai-label">${esc(ask.label)}</span><span class="num ai-clock" data-role="ai-clock">${Math.floor((Date.now() - b.start) / 1000)}s</span></div>
         <p class="ai-phase" data-role="ai-phase">${esc(ask.steps[n])}…</p>
@@ -1393,7 +1393,12 @@ ${storyBrief(id, d, true)}`;
     await streamChat(prompt, system, piece => {
       reply.text += piece;
       const live = document.querySelector('[data-role="chat-live"]');
-      if (live) { live.textContent = reply.text; scrollChat(); }
+      if (live) {
+        live.textContent = reply.text;
+        live.previousElementSibling?.setAttribute('data-mark', 'writing');   // the first words: thinking → writing
+        live.parentElement?.querySelector('.typing')?.remove();
+        scrollChat();
+      }
     }, ch.ctrl.signal);
   } catch (err) {
     if (err.name !== 'AbortError') { reply.err = true; reply.text = reply.text ? `${reply.text}\n\n— ${err.message}` : err.message; }
@@ -1410,7 +1415,7 @@ function chatHtml(id) {
   if (!ch.open) return '';
   const msgs = ch.msgs.map(m => m.role === 'user'
     ? `<li class="msg msg-user ai-in">${esc(m.text)}</li>`
-    : `<li class="msg msg-ai${m.live ? ' is-live' : ''}${m.err ? ' is-err' : ''} ai-in"><span class="ai-mark" aria-hidden="true">${CLAUDE_ICON}</span><span class="msg-text"${m.live ? ' data-role="chat-live"' : ''}>${esc(m.text)}</span>${m.live && !m.text ? '<span class="typing" aria-label="Claude is writing"><i></i><i></i><i></i></span>' : ''}</li>`).join('');
+    : `<li class="msg msg-ai${m.live ? ' is-live' : ''}${m.err ? ' is-err' : ''} ai-in"><span class="ai-mark" data-mark="${m.live ? (m.text ? 'writing' : 'thinking') : ''}" aria-hidden="true">${CLAUDE_ICON}</span><span class="msg-text"${m.live ? ' data-role="chat-live"' : ''}>${esc(m.text)}</span>${m.live && !m.text ? '<span class="typing" aria-label="Claude is writing"><i></i><i></i><i></i></span>' : ''}</li>`).join('');
   const starters = ch.msgs.length ? '' : `<div class="chat-starters">${CHAT_STARTERS.map(t => `<button type="button" class="ghost chip" data-act="chat-starter" data-id="${esc(id)}" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
   return `<div class="chat">
       <div class="chat-head"><b>Chat about #${esc(id)}</b><span class="muted">Claude reads the story and its comments</span><span class="spacer"></span>
@@ -1435,14 +1440,15 @@ function aiPanelHtml(id) {
   const err = rt.aiErr?.id === id ? rt.aiErr.msg : '';
   const ch = chatFor(id);
   const state = mine || ch.streaming ? 'thinking' : err ? 'error' : out || ch.msgs.length ? 'done' : 'idle';
-  const btn = (act, what, label) => `<button type="button" class="ai-btn${mine && b.what === what ? ' is-on' : ''}" data-act="${act}" data-id="${esc(id)}"${b || ch.streaming ? ' disabled' : ''}${mine && b.what === what ? ' aria-busy="true"' : ''}><span class="ai-spark" aria-hidden="true">${CLAUDE_ICON}</span>${label}</button>`;
+  const btn = (act, what, label) => `<button type="button" class="ai-btn${mine && b.what === what ? ' is-on' : ''}" data-act="${act}" data-id="${esc(id)}"${b || ch.streaming ? ' disabled' : ''}${mine && b.what === what ? ' aria-busy="true"' : ''}><span class="ai-spark" data-mark="${mine && b.what === what ? 'thinking' : ''}" aria-hidden="true">${CLAUDE_ICON}</span>${label}</button>`;
+  const barMark = state === 'thinking' ? (ch.streaming ? 'writing' : 'thinking') : state === 'error' ? 'error' : 'idle';
   return `<section class="ai" data-state="${state}" aria-label="Claude">
       <div class="ai-bar">
-        <span class="ai-mark" aria-hidden="true">${CLAUDE_ICON}</span><b class="ai-name">Claude</b>
+        <span class="ai-mark" data-mark="${barMark}" aria-hidden="true">${CLAUDE_ICON}</span><b class="ai-name">Claude</b>
         <span class="ai-hint">${esc(MODELS.find(m => m.id === rt.model)?.name ?? '')} · on this machine · nothing is written until you say so</span>
         <span class="spacer"></span>
         ${btn('ai-sum', 'sum', 'Summarize requirement')}${btn('ai-sub', 'sub', 'Suggest subtasks')}${btn('ai-tc', 'tc', 'Design test cases')}
-        <button type="button" class="ai-btn${ch.open ? ' is-on' : ''}" data-act="chat-toggle" data-id="${esc(id)}" aria-expanded="${ch.open}"><span class="ai-spark" aria-hidden="true">${CLAUDE_ICON}</span>Chat</button>
+        <button type="button" class="ai-btn${ch.open ? ' is-on' : ''}" data-act="chat-toggle" data-id="${esc(id)}" aria-expanded="${ch.open}"><span class="ai-spark" data-mark="${ch.streaming ? 'writing' : ''}" aria-hidden="true">${CLAUDE_ICON}</span>Chat</button>
       </div>
       ${chatHtml(id)}
       ${mine ? aiThinkingHtml(b) : ''}
