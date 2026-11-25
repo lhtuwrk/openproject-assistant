@@ -208,9 +208,18 @@ deliberate exception to "no extra motion": only while Claude works, the strip's 
 arrive row by row. The strip's Chat opens a streamed conversation about the story (user bubbles in `--accent2`, Claude's
 on `--surface2`; the reply being written gets the gradient rim, a blinking caret and bouncing dots
 before its first word; Enter sends, ■ Stop aborts). The model picker (Settings, and the chat head)
-sets one model for every ask, Sonnet 5 by default. The extra hues are page tokens `--ai-1..3` (cobalt mixed with violet and
-teal) and `--ai-glow`. Under `prefers-reduced-motion` all of it stops; the phase text and stages
+sets one model for every ask, Sonnet 5 by default. The extra hues are shared tokens `--ai-1..3` (cobalt mixed with violet and
+teal), `--ai-glow` and `--claude` (its fixed brand orange, in `tokens.css`). Under `prefers-reduced-motion` all of it stops; the phase text and stages
 still change. The stages are timed, not real progress.
+
+The same switch also shows a floating round button (bottom-right, `--claude` fill, the spark icon,
+turning into × while open) on the backlog's work-package list and detail pages, behind
+`content/assistant-fab.js`. It opens a small chat popup (`pages/assistant.html`, same bubble/caret
+look as the strip's Chat, no skill picker) anchored above the button — a card, not the full-height
+drawer the Burndown button and quick settings use, so the backlog page stays visible and usable
+behind it (Escape closes it; a stray click on the page does not). Its system prompt is whatever the
+user is looking at — the open story's description, subtasks and comments, or just the project name
+on a list — and follows along live as they navigate the SPA, without reopening the popup.
 
 ## Injected skin on OpenProject
 `jira-skin.js` dresses OpenProject itself, not an extension page, so it follows

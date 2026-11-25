@@ -22,6 +22,8 @@ const SESSION_KEY = '__blm_planning_session';
 const LABEL_FIELD = 'customField6';   // the backlog's "Label" list custom field
 import { requireHost } from '../shared/config.js';
 import { AI_KEY, BRIDGE_KEY, MODELS, DEFAULT_MODEL, askClaude, streamChat, bridgeConfig, setModel } from '../shared/claude-bridge.js';
+import { CLAUDE_ICON } from '../shared/claude-icon.js';
+import { storyBrief } from '../shared/story-brief.js';
 const BACKLOG_URL = await requireHost();
 const START_AT    = '14:30';
 const END_AT      = '18:00';
@@ -1185,40 +1187,7 @@ function suggestHtml(id, d) {
     </section>`;
 }
 
-// The Claude spark, in Claude's orange (--claude): eleven petals, thin where they meet the centre and
-// widening to a rounded tip, at uneven angles and lengths so it reads hand-cut rather than a gear.
-const CLAUDE_ICON = (() => {
-  const RAYS = [   // [angle° clockwise from top, length, tip width]
-    [0, 10.6, 2.9], [33, 8.3, 2.5], [63, 9.9, 2.8], [96, 7.6, 2.4], [127, 10.3, 2.9], [160, 8.7, 2.6],
-    [191, 10.0, 2.8], [222, 7.7, 2.4], [253, 10.5, 2.9], [287, 8.1, 2.5], [318, 9.5, 2.7],
-  ];
-  const R0 = 1.0, W0 = 0.75, f = n => +n.toFixed(2);
-  const petal = ([deg, len, w]) => {
-    const a = (deg - 90) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-    const P = (x, y) => `${f(x * c - y * s)} ${f(x * s + y * c)}`;   // a petal drawn along +x, then turned
-    const r = w / 2, tip = len - r;
-    return `M${P(R0, -W0 / 2)}L${P(tip, -r)}A${f(r)} ${f(r)} 0 0 1 ${P(tip, r)}L${P(R0, W0 / 2)}Z`;
-  };
-  const d = RAYS.map(petal).join('') + 'M-1.7 0a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0 -3.4 0Z';
-  return `<svg class="claude-icon" viewBox="-12 -12 24 24" aria-hidden="true" focusable="false"><path d="${d}" /></svg>`;
-})();
-
 // ─── Claude: subtasks, test cases and a requirement summary, through the local bridge ─
-
-/** The story as Claude reads it: plain fields only, no HTML; with comments when the ask needs the whole thread. */
-function storyBrief(id, d, withComments = false) {
-  const kids = (d.kids ?? []).map(k => `- ${k.subject}`).join('\n') || '(none)';
-  const comments = withComments
-    ? `\n\nComments, oldest first:\n${(d.comments ?? []).slice(-30).map(c => `- ${c._links?.user?.title ?? 'Someone'}: ${(c.comment?.raw ?? '').trim().slice(0, 2000)}`).join('\n') || '(none)'}`
-    : '';
-  return `Work package #${id} (${d.wp._links?.type?.title ?? 'Story'}): ${d.wp.subject}
-
-Description:
-${(d.wp.description?.raw ?? '').trim() || '(empty)'}
-
-Existing subtasks:
-${kids}${comments}`;
-}
 
 const str = { type: 'string' }, strs = { type: 'array', items: str };
 const obj = props => ({ type: 'object', additionalProperties: false, required: Object.keys(props), properties: props });

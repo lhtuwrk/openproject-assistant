@@ -508,14 +508,7 @@
     .sug-foot { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; padding-top: var(--space-xs); }
 
     /* ── Claude (Settings → Experimental). The one place Planning moves while it waits:
-          a turning gradient rim, an orb, shimmering copy. All cobalt-led page tokens. ── */
-    :root {
-      --ai-1: var(--accent);
-      --ai-2: color-mix(in oklab, var(--accent) 55%, #b06cff);
-      --ai-3: color-mix(in oklab, var(--accent) 55%, #2fd4c9);
-      --ai-glow: color-mix(in oklab, var(--accent) 28%, transparent);
-      --claude: #d97757;   /* Claude's orange, only for its spark mark */
-    }
+          a turning gradient rim, an orb, shimmering copy. Palette tokens live in tokens.css. ── */
     @property --ai-turn { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
     .ai {
       --ai-turn: 0deg;

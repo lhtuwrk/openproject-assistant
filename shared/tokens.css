@@ -141,6 +141,16 @@
   --scheme: light;
 }
 
+/* ── Claude palette: the turning gradient rim and orb while Claude works (Planning's
+      Claude strip, the floating assistant), all cobalt-led, plus its fixed brand orange. ── */
+:root {
+  --ai-1: var(--accent);
+  --ai-2: color-mix(in oklab, var(--accent) 55%, #b06cff);
+  --ai-3: color-mix(in oklab, var(--accent) 55%, #2fd4c9);
+  --ai-glow: color-mix(in oklab, var(--accent) 28%, transparent);
+  --claude: #d97757;   /* Claude's orange, only for its spark mark */
+}
+
 /* ── Shared atoms ─────────────────────────────────────────────────────── */
 .avatar {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;

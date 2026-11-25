@@ -869,6 +869,8 @@ async function doRegisterHostScripts() {
   await chrome.scripting.registerContentScripts([
     { id: `${HOST_SCRIPT_PREFIX}content`, matches: [`${host}/projects/*/work_packages*`],
       js: ['content/content.js'], runAt: 'document_idle' },
+    { id: `${HOST_SCRIPT_PREFIX}assistant`, matches: [`${host}/projects/*/work_packages*`],
+      js: ['content/assistant-fab.js'], runAt: 'document_idle' },
     // Only the chosen skin is registered: a skin's CSS costs style time on every
     // element even while its html class is off (thousands of rules Chrome has to
     // try), so the others aren't loaded at all. Switching skins injects the new
