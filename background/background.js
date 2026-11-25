@@ -850,6 +850,15 @@ async function cleanupExpiredSprints() {
 // configured origin and re-registered whenever it changes.
 
 const HOST_SCRIPT_PREFIX = 'blm-host-';
+const PIN_LINK_MENU = 'blm-pin-link';
+const PIN_PAGE_MENU = 'blm-pin-page';
+
+// pinned-backlog.js (content script) names and stores the pin; it can see the clicked link's text, we can't.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  const page = info.menuItemId === PIN_PAGE_MENU;
+  if (tab?.id == null || (!page && info.menuItemId !== PIN_LINK_MENU)) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'blm-pin-add', url: page ? info.pageUrl : info.linkUrl, page }).catch(() => {});
+});
 
 let lastSkin = null;   // the skin the registered scripts are for
 let registering = Promise.resolve();   // calls overlap (startup, permission and storage events); run one at a time
@@ -860,10 +869,14 @@ async function doRegisterHostScripts() {
   const ids = old.map(s => s.id).filter(id => id.startsWith(HOST_SCRIPT_PREFIX));
   if (ids.length) await chrome.scripting.unregisterContentScripts({ ids });
 
+  await chrome.contextMenus.removeAll();
   const host = await getHost();
   if (!host) return;
   const all = `${host}/*`;
   if (!(await chrome.permissions.contains({ origins: [all] }))) return;
+  for (const [id, title, contexts] of [[PIN_LINK_MENU, 'Pin this link', ['link']], [PIN_PAGE_MENU, 'Pin this page', ['page']]]) {
+    chrome.contextMenus.create({ id, title, contexts, documentUrlPatterns: [all] });
+  }
   const skin = currentSkin(await chrome.storage.local.get(SKIN_KEYS));
   lastSkin = skin;
 

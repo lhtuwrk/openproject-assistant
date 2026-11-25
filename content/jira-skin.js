@@ -1655,6 +1655,12 @@ html.${WP_CLASS} .blm-jx-create-cancel:focus-visible { outline: 2px solid var(--
 html.${WP_CLASS} .blm-jx-create-error { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--jx-error); }
 html.${WP_CLASS} .blm-jx-children-empty { margin: 0; font-family: var(--jx-font); font-size: 14px; color: var(--jx-text-subtlest); }
 html.${WP_CLASS} .blm-jx-children.empty .blm-jx-children-head { margin-bottom: var(--jx-space-1); }
+/* Page-level loading: OpenProject's own mark drawn as one line, in place of its five bars */
+html.${ROOT_CLASS} .loading-indicator > * { display: none !important; }
+html.${ROOT_CLASS} .loading-indicator::before {
+  content: ""; display: block; width: 76px; height: 74px; margin: 0 auto;
+  background: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='170%20180%20660%20640'%3E%3Cstyle%3E.a,.b%7Bfill:none;stroke-width:44;stroke-linecap:round;stroke-linejoin:round%7D.a%7Bstroke:%230770b8;stroke-dasharray:1;stroke-dashoffset:1;animation:d%202s%20cubic-bezier(.65,0,.35,1)%20infinite%7D.b%7Bstroke:%233ddc84;opacity:0;animation:g%202s%20ease%20infinite%7D%40keyframes%20d%7B0%25%7Bstroke-dashoffset:1;opacity:1%7D60%25%7Bstroke-dashoffset:0;opacity:1%7D88%25%7Bstroke-dashoffset:0;opacity:1%7D100%25%7Bstroke-dashoffset:0;opacity:0%7D%7D%40keyframes%20g%7B0%25,52%25%7Bopacity:0%7D64%25,88%25%7Bopacity:1%7D100%25%7Bopacity:0%7D%7D%40media%20(prefers-reduced-motion:reduce)%7B.a,.b%7Banimation-duration:5s%7D%7D%3C/style%3E%3Cpath%20class='a'%20pathLength='1'%20d='M443%20578V678A82%2082%200%200%201%20361%20760H311A82%2082%200%200%201%20229%20678V582A82%2082%200%200%201%20311%20500H688A82%2082%200%200%200%20770%20418V321A82%2082%200%200%200%20688%20239H640A82%2082%200%200%200%20558%20321V500'/%3E%3Cpath%20class='b'%20d='M558%20578V662'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 /* Loading skeleton: grey blocks in the rows' own columns, pulsing gently */
 html.${WP_CLASS} .blm-jx-sr {
   position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
@@ -5053,6 +5059,25 @@ function observe() {
 if (document.body) observe();
 else document.addEventListener('DOMContentLoaded', observe, { once: true });
 if (typeof window.navigation !== 'undefined') {
-  window.navigation.addEventListener('navigatesuccess', () => { if (anyEnabled()) schedule(); });
+  // Back from a full work-package page to the list: the table is still on screen, so for a few
+  // seconds it refreshes quietly (no veil and bars over its rows). Skin-independent, so its one rule
+  // is injected here rather than in a skin sheet.
+  const FULL_WP = /\/work_packages\/\d+(\/|$)/;
+  const SILENT_ATTR = 'data-blm-silent-list';
+  let lastPath = location.pathname;
+  let silentTimer = 0;
+  const quiet = document.createElement('style');
+  quiet.textContent = `html[${SILENT_ATTR}] [data-indicator-name="table"]:has(tr.wp-table--row) .loading-indicator--background { display: none !important; }`;
+  document.documentElement.append(quiet);
+  window.navigation.addEventListener('navigatesuccess', () => {
+    const wasFull = FULL_WP.test(lastPath);
+    lastPath = location.pathname;
+    if (wasFull && !FULL_WP.test(lastPath)) {
+      document.documentElement.setAttribute(SILENT_ATTR, '');
+      clearTimeout(silentTimer);
+      silentTimer = setTimeout(() => document.documentElement.removeAttribute(SILENT_ATTR), 5000);
+    }
+    if (anyEnabled()) schedule();
+  });
 }
 })();
