@@ -189,6 +189,24 @@ export async function fetchRecentWorkPackages(filters, maxPages) {
 }
 
 /**
+ * Fetches the rows a saved list view shows, via the project's work-package collection with
+ * query_id set — the same call OpenProject's own UI makes, so the result matches that view's
+ * filters, sort and grouping exactly (a plain filters object can't reproduce a saved query).
+ * Capped at maxPages (200 each) so a huge saved query stays bounded.
+ * @param {number|string} projectId
+ * @param {number|string} queryId
+ * @param {number} maxPages
+ * @returns {Promise<Array>}
+ */
+export async function fetchWorkPackagesByQuery(projectId, queryId, maxPages = 1) {
+  return collectPages(
+    offset => `/api/v3/projects/${projectId}/work_packages?query_id=${queryId}&pageSize=200&offset=${offset}`,
+    200,
+    maxPages,
+  );
+}
+
+/**
  * Fetches a single work package by id (regardless of which version it currently
  * belongs to).  Used to re-fetch stories that have LEFT a tracked version so their
  * activity can still be replayed.  Throws HTTP 404 if the WP was deleted.
@@ -396,6 +414,11 @@ export function createRelation(wpId, toId, type, { description } = {}) {
     type, ...(description ? { description } : {}),
     _links: { to: { href: `/api/v3/work_packages/${toId}` } },
   });
+}
+
+/** Removes a relation (what undoing createRelation does). */
+export function deleteRelation(relationId) {
+  return apiWrite('DELETE', `/api/v3/relations/${relationId}`);
 }
 
 /**

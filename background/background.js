@@ -36,6 +36,7 @@ import { sprintInfo, sprintIndexForDate } from '../shared/sprint.js';
 import { setupReminder } from './reminder.js';
 import { getHost, HOST_KEY, SETUP_URL } from '../shared/config.js';
 import { SKIN_KEYS, currentSkin } from '../shared/skins.js';
+import { bridgeHealth } from '../shared/claude-bridge.js';
 
 'use strict';
 
@@ -849,6 +850,15 @@ async function cleanupExpiredSprints() {
 // configured origin and re-registered whenever it changes.
 
 const HOST_SCRIPT_PREFIX = 'blm-host-';
+const PIN_LINK_MENU = 'blm-pin-link';
+const PIN_PAGE_MENU = 'blm-pin-page';
+
+// pinned-backlog.js (content script) names and stores the pin; it can see the clicked link's text, we can't.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  const page = info.menuItemId === PIN_PAGE_MENU;
+  if (tab?.id == null || (!page && info.menuItemId !== PIN_LINK_MENU)) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'blm-pin-add', url: page ? info.pageUrl : info.linkUrl, page }).catch(() => {});
+});
 
 let lastSkin = null;   // the skin the registered scripts are for
 let registering = Promise.resolve();   // calls overlap (startup, permission and storage events); run one at a time
@@ -859,16 +869,22 @@ async function doRegisterHostScripts() {
   const ids = old.map(s => s.id).filter(id => id.startsWith(HOST_SCRIPT_PREFIX));
   if (ids.length) await chrome.scripting.unregisterContentScripts({ ids });
 
+  await chrome.contextMenus.removeAll();
   const host = await getHost();
   if (!host) return;
   const all = `${host}/*`;
   if (!(await chrome.permissions.contains({ origins: [all] }))) return;
+  for (const [id, title, contexts] of [[PIN_LINK_MENU, 'Pin this link', ['link']], [PIN_PAGE_MENU, 'Pin this page', ['page']]]) {
+    chrome.contextMenus.create({ id, title, contexts, documentUrlPatterns: [all] });
+  }
   const skin = currentSkin(await chrome.storage.local.get(SKIN_KEYS));
   lastSkin = skin;
 
   await chrome.scripting.registerContentScripts([
     { id: `${HOST_SCRIPT_PREFIX}content`, matches: [`${host}/projects/*/work_packages*`],
       js: ['content/content.js'], runAt: 'document_idle' },
+    { id: `${HOST_SCRIPT_PREFIX}assistant`, matches: [`${host}/projects/*/work_packages*`],
+      js: ['content/assistant-fab.js'], runAt: 'document_idle' },
     // Only the chosen skin is registered: a skin's CSS costs style time on every
     // element even while its html class is off (thousands of rules Chrome has to
     // try), so the others aren't loaded at all. Switching skins injects the new
@@ -1016,5 +1032,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ started: true });
     // Reconstruction refreshes today with its burn detail; live sync then covers versions without a start date
     reconstructMissingDays().then(() => syncTracked());
+  }
+  // The floating assistant's button greys out while the local Claude bridge is down; a content
+  // script can't reach the bridge itself (its CORS answer only allows extension origins).
+  // After the assistant applies a change, ask OpenProject's own Angular app (page world) to re-read
+  // that work package: it updates the open story, its activity and its list row in place, no reload.
+  // Resolves false where the page has no plugin context, and the content script then reloads instead.
+  if (msg.type === 'blm-op-refresh' && /^\d+$/.test(String(msg.wp)) && _sender.tab?.id != null) {
+    chrome.scripting.executeScript({
+      target: { tabId: _sender.tab.id, frameIds: [_sender.frameId ?? 0] },
+      world: 'MAIN',
+      args: [String(msg.wp)],
+      func: async id => {
+        const ctx = await window.OpenProject?.getPluginContext?.();
+        const wp = ctx?.services?.apiV3Service?.work_packages?.id?.(id);
+        if (!wp?.refresh) return false;
+        await wp.refresh();
+        // The same notice progress-hook.js sends after a save, so the skin's own Child work items
+        // list (and the subtask bars) refetch too — OpenProject's refresh doesn't reach them.
+        window.postMessage({ source: 'blm-progress-hook', type: 'wp-updated', id }, location.origin);
+        return true;
+      },
+    }).then(([r]) => sendResponse({ ok: r?.result === true }), () => sendResponse({ ok: false }));
+    return true;
+  }
+  if (msg.type === 'blm-bridge-health') {
+    bridgeHealth().then(() => sendResponse({ ok: true }), err => sendResponse({ ok: false, error: err.message }));
+    return true;
   }
 });

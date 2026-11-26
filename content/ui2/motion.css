@@ -64,28 +64,24 @@ html.blm-ui2.blm-no-anim .blm-g-shake { animation: none; }
 @media (prefers-reduced-motion: reduce) { html.blm-ui2 .blm-g-shake { animation: none; } }
 
 /* ── Smoothness pass ─────────────────────────────────────────────────────────
-   Loading placeholders instead of OpenProject's blocks spinner; the split panel and
+   The OpenProject mark instead of its blocks spinner; the split panel and
    a tab's content fade in as they are created; a field that just saved glows softly
    (ui2.js adds .blm-g-flash).
    OpenProject-internal selectors: .loading-indicator--background, .loading-indicator,
    .work-packages--details, .work-package-details-activities-activity, #rb li.story. */
 
-/* Placeholders: grey rows with a sheen, only if loading takes longer than 150 ms */
+/* Loading: OpenProject's own mark drawn as one line on a plain veil, shown only if loading takes
+   longer than 150 ms; OpenProject's five bars are hidden and the mark takes their box */
 html.blm-ui2 .loading-indicator--background {
-  overflow: hidden;
-  background-color: var(--g-bg) !important;
-  background-image: repeating-linear-gradient(180deg, transparent 0 15px, var(--g-fill) 15px 29px, transparent 29px 44px) !important;
-  background-size: calc(100% - 48px) 100% !important; background-position: 24px 56px !important; background-repeat: no-repeat !important;
+  background-color: color-mix(in srgb, var(--g-bg) 82%, transparent) !important;
   animation: blm-g-appear .2s var(--g-ease) .15s both;
 }
-html.blm-ui2 .loading-indicator--background > .loading-indicator { display: none !important; }
-html.blm-ui2 .loading-indicator--background::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--g-shimmer), transparent);
-  transform: translateX(-100%); animation: blm-g-sheen 1.3s linear infinite;
+html.blm-ui2 .loading-indicator > * { display: none !important; }
+html.blm-ui2 .loading-indicator::before {
+  content: ""; display: block; width: 76px; height: 74px; margin: 0 auto;
+  background: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='170%20180%20660%20640'%3E%3Cstyle%3E.a,.b%7Bfill:none;stroke-width:44;stroke-linecap:round;stroke-linejoin:round%7D.a%7Bstroke:%230770b8;stroke-dasharray:1;stroke-dashoffset:1;animation:d%202s%20cubic-bezier(.65,0,.35,1)%20infinite%7D.b%7Bstroke:%233ddc84;opacity:0;animation:g%202s%20ease%20infinite%7D%40keyframes%20d%7B0%25%7Bstroke-dashoffset:1;opacity:1%7D60%25%7Bstroke-dashoffset:0;opacity:1%7D88%25%7Bstroke-dashoffset:0;opacity:1%7D100%25%7Bstroke-dashoffset:0;opacity:0%7D%7D%40keyframes%20g%7B0%25,52%25%7Bopacity:0%7D64%25,88%25%7Bopacity:1%7D100%25%7Bopacity:0%7D%7D%40media%20(prefers-reduced-motion:reduce)%7B.a,.b%7Banimation-duration:5s%7D%7D%3C/style%3E%3Cpath%20class='a'%20pathLength='1'%20d='M443%20578V678A82%2082%200%200%201%20361%20760H311A82%2082%200%200%201%20229%20678V582A82%2082%200%200%201%20311%20500H688A82%2082%200%200%200%20770%20418V321A82%2082%200%200%200%20688%20239H640A82%2082%200%200%200%20558%20321V500'/%3E%3Cpath%20class='b'%20d='M558%20578V662'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 @keyframes blm-g-appear { from { opacity: 0; } to { opacity: 1; } }
-@keyframes blm-g-sheen { to { transform: translateX(100%); } }
 
 /* The split panel, and a tab's content when switching tabs, fade in from the
    moment they are created (CSS on insertion): an animation started after
@@ -111,12 +107,11 @@ html.blm-ui2 img.op-avatar, html.blm-ui2 .op-avatar { aspect-ratio: 1 / 1; flex:
 html.blm-ui2-bl #rb li.story:not(.ui-sortable-helper):not(.editing) { content-visibility: auto; contain-intrinsic-size: auto 44px; }
 html.blm-ui2-wp .work-package-details-activities-activity { content-visibility: auto; contain-intrinsic-size: auto 120px; }
 
-html.blm-ui2.blm-no-anim :is(.loading-indicator--background, .loading-indicator--background::after, .work-packages--details, .work-packages--details-content > *, .blm-g-flash::after) { animation: none !important; }
+html.blm-ui2.blm-no-anim :is(.loading-indicator--background, .work-packages--details, .work-packages--details-content > *, .blm-g-flash::after) { animation: none !important; }
 html.blm-ui2.blm-no-anim .blm-g-flash::after { display: none; }
 @media (prefers-reduced-motion: reduce) {
   html.blm-ui2 :is(.loading-indicator--background, .work-packages--details, .work-packages--details-content > *) { animation: none !important; }
   html.blm-ui2 .blm-g-flash::after { display: none; }
-  html.blm-ui2 .loading-indicator--background::after { display: none; }
 }
 
 /* Opening a story (ui2.js): the clicked row shows as chosen and the open panel
