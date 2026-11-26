@@ -2,8 +2,7 @@
    page (.work-packages--show-view), laid out the iOS way: a large title, status
    and type capsules, attribute groups as inset grouped lists (white cards of
    44 px rows, label left, value right, inset hairlines), the tabs as a segmented
-   control and activity entries as cards. CSS only, except the "Show N empty
-   fields" footer that ios.js adds after a group's card: OpenProject's layout is
+   control and activity entries as cards. CSS only: OpenProject's layout is
    kept and no nodes are moved, so there is nothing to restore when the switch is off.
    The Jira layout on top of it (Child work items under the description, and on
    the full page the status and attribute groups in a right-hand column) is
@@ -300,23 +299,34 @@ html.blm-ios-wp .attributes-key-value--value-container:has(.inline-edit--contain
 html.blm-ios-wp .attributes-key-value--value-container:has(.inline-edit--container.-active) > * { flex: 1 1 auto; }
 html.blm-ios-wp .attributes-key-value--value-container .inline-edit--container.-active * { color: var(--g-text); }
 
-/* Empty values are hidden behind a "Show N empty fields" footer (ios.js).
-   A group whose fields are all empty keeps only its header and the footer. */
-html.blm-ios-wp .attributes-group:not([data-blm-i-show-empty]) .wp-attribute-group--attribute[data-blm-i-empty] { display: none !important; }
-html.blm-ios-wp .attributes-group:not([data-blm-i-show-empty])[data-blm-i-all-empty] .wp-attribute-group { display: none !important; }
-/* With empties hidden, a hairline goes above a visible row only when a visible row precedes it */
-html.blm-ios-wp .attributes-group:not([data-blm-i-show-empty]) .wp-attribute-group--attribute + .wp-attribute-group--attribute::before { content: none; }
-html.blm-ios-wp .attributes-group:not([data-blm-i-show-empty]) .wp-attribute-group--attribute:not([data-blm-i-empty]) ~ .wp-attribute-group--attribute:not([data-blm-i-empty])::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 16px;
-  height: 1px; background: var(--g-row-sep); pointer-events: none;
+/* Wide panel: each card lays its rows out in two columns, so a short label and
+   value don't leave half the row empty. Only when the group is wide enough
+   (the Jira side column stays one column). Every row gets a top hairline and a
+   card-coloured strip covers the first line (which holds two rows). A row
+   being edited, or holding long text, spans both columns so its editor gets
+   the full width. */
+html.blm-ios-wp .attributes-group:not(.description-group) { container: blm-i-attrs / inline-size; }
+@container blm-i-attrs (min-width: 600px) {
+  html.blm-ios-wp .wp-attribute-group {
+    display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: relative;
+  }
+  html.blm-ios-wp .wp-attribute-group::before {
+    content: ""; position: absolute; z-index: 1; top: 0; left: 0; right: 0;
+    height: 1px; background: var(--g-card); pointer-events: none;
+    border-radius: var(--g-radius-card) var(--g-radius-card) 0 0;
+  }
+  html.blm-ios-wp .wp-attribute-group .wp-attribute-group--attribute::before {
+    content: ""; position: absolute; top: 0; left: 16px; right: 16px;
+    height: 1px; background: var(--g-row-sep); pointer-events: none;
+  }
+  html.blm-ios-wp .wp-attribute-group--attribute:is(
+    :has(.inline-edit--container.-active),
+    :has(.op-uc-container, op-ckeditor, .wp-edit-formattable-field)) {
+    grid-column: 1 / -1;
+  }
+  html.blm-ios-wp .wp-attribute-group .attributes-key-value--key { flex: 0 1 auto !important; max-width: 48%; }
 }
-html.blm-ios-wp .blm-i-empty-toggle {
-  display: block; margin: 6px 0 0; padding: 2px 16px; border: 0; background: none;
-  font-family: var(--g-font); font-size: 13px; font-weight: 500; color: var(--g-accent);
-  cursor: pointer; border-radius: 6px;
-}
-html.blm-ios-wp .blm-i-empty-toggle:hover { text-decoration: underline; }
-html.blm-ios-wp .blm-i-empty-toggle:focus-visible { outline: 2px solid var(--g-focus); outline-offset: 2px; }
 
 /* ── Tabs: a segmented control ────────────────────────────────────────────── */
 html.blm-ios-wp .op-scrollable-tabs,

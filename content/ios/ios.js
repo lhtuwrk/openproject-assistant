@@ -134,8 +134,6 @@ function tagGrowCell(a) {
   if (cell && cell !== a) setAttr(cell, 'data-blm-i-grow', true);
 }
 
-const DETAIL_VIEWS = '.work-packages--details, .work-packages--show-view';
-
 const RULES = [
   // List: priority gets a tone for its dot, lone "-" cells go quiet, and a
   // group's "(6)" count becomes a bare number for its capsule.
@@ -187,7 +185,6 @@ const RULES = [
     const blank = !d.textContent.trim();
     if (d.classList.contains('blm-i-blank') !== blank) d.classList.toggle('blm-i-blank', blank);
   }],
-  [`:is(${DETAIL_VIEWS}) .attributes-group:not(.description-group)`, (g) => tagGroup(g)],
   // Parts OpenProject names inconsistently, matched here by class fragment so the
   // CSS can use a stable marker (see tagPopups for why not `[class*="…"]` in CSS).
   ['[class*="relations"] [class*="group-by"] .button', (b) => setClass(b, 'blm-i-groupby', true)],
@@ -295,59 +292,9 @@ function tagPage() {
   }
 }
 
-// Work-package detail: rows whose value is empty ("-") are hidden behind a
-// "Show N empty fields" footer after their group's card. Required fields and a
-// row being edited always stay visible. Which groups are open is kept by group
-// title for this tab, so it survives Angular re-rendering the group.
-const openEmptyGroups = new Set();
-
-function isEmptyRow(row) {
-  if (row.querySelector('.inline-edit--container.-active')) return false;
-  const key = row.querySelector('.attributes-key-value--key')?.textContent ?? '';
-  if (key.includes('*')) return false;
-  const field = row.querySelector('.attributes-key-value--value-container .inline-edit--display-field');
-  if (!field || field.closest('[hidden]')) return false;
-  const text = field.textContent.trim();
-  return (text === '-' || text === '') && !field.querySelector('img, .op-avatar');
-}
-
 function setAttr(el, name, on) {
   if (on) { if (!el.hasAttribute(name)) el.setAttribute(name, ''); }
   else if (el.hasAttribute(name)) el.removeAttribute(name);
-}
-
-function tagGroup(group) {
-  const card = group.querySelector('.wp-attribute-group');
-  if (!card) return;
-  const rows = [...card.querySelectorAll(':scope > .wp-attribute-group--attribute')];
-  let empty = 0;
-  for (const row of rows) {
-    const isEmpty = isEmptyRow(row);
-    setAttr(row, 'data-blm-i-empty', isEmpty);
-    if (isEmpty) empty++;
-  }
-  const title = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
-  const open = openEmptyGroups.has(title);
-  setAttr(group, 'data-blm-i-show-empty', open);
-  setAttr(group, 'data-blm-i-all-empty', rows.length > 0 && empty === rows.length);
-
-  let toggle = group.querySelector(':scope > .blm-i-empty-toggle');
-  if (!empty) { toggle?.remove(); return; }
-  if (!toggle) {
-    toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'blm-i-empty-toggle';
-    toggle.addEventListener('click', () => {
-      const t = group.querySelector('.attributes-group--header-text')?.textContent.trim() ?? '';
-      if (openEmptyGroups.has(t)) openEmptyGroups.delete(t); else openEmptyGroups.add(t);
-      tagGroup(group);
-    });
-  }
-  if (toggle.previousElementSibling !== card) card.after(toggle);
-  const label = open ? 'Hide empty fields'
-    : `Show ${empty} empty field${empty === 1 ? '' : 's'}`;
-  if (toggle.textContent !== label) toggle.textContent = label;
-  toggle.setAttribute('aria-expanded', String(open));
 }
 
 function untagCells() {
@@ -355,7 +302,6 @@ function untagCells() {
     el.classList.remove('blm-i-chip', 'blm-i-status');
     delete el.dataset.blmITone;
   });
-  document.querySelectorAll('.blm-i-empty-toggle').forEach(el => el.remove());
   document.querySelectorAll('.blm-i-dash').forEach(el => el.classList.remove('blm-i-dash'));
   document.querySelectorAll('.blm-i-blank').forEach(el => el.classList.remove('blm-i-blank'));
   document.querySelectorAll('[data-blm-i-was-tone]').forEach(el => {
@@ -367,8 +313,7 @@ function untagCells() {
     delete el.dataset.blmICount;
     delete el.dataset.blmIType;
   });
-  const ATTRS = ['data-blm-i-empty', 'data-blm-i-show-empty', 'data-blm-i-all-empty',
-    'data-blm-i-last', 'data-blm-i-rel-list', 'data-blm-i-notif-list', 'data-blm-i-watch-list', 'data-blm-i-grow',
+  const ATTRS = ['data-blm-i-last', 'data-blm-i-rel-list', 'data-blm-i-notif-list', 'data-blm-i-watch-list', 'data-blm-i-grow',
     'data-blm-i-group', 'data-blm-i-cf', 'data-blm-i-act', 'data-blm-i-lt'];
   document.querySelectorAll(ATTRS.map(a => `[${a}]`).join(', ')).forEach(el => {
     for (const a of ATTRS) el.removeAttribute(a);
@@ -737,7 +682,7 @@ window.addEventListener('message', (e) => {
 // goes down, before the click (and whatever request it starts) even fires.
 const PRESSABLE = [
   'button', '.button', 'a.op-tab-row--link', '.menu-item', '.ng-option',
-  '.inline-edit--display-field', '.blm-i-empty-toggle',
+  '.inline-edit--display-field',
   '.work-package-table tr.wp-table--row', '#rb li.story', '#rb .backlog > .header .toggler',
 ].join(', ');
 let pressed = null;
