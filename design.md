@@ -297,7 +297,7 @@ Appearance → Style (`__blm_ios`, default off; Jira style, UI 2.0 and iOS are
 mutually exclusive). Same graphite and cobalt `--g-*` tokens as the original
 UI 2.0, scoped under `html.blm-ios`, with light and dark from
 `html[data-blm-ios-theme]`; its JS hooks use a `blm-i-` prefix
-(`.blm-i-chip`, `data-blm-i-empty`…) so it never fights UI 2.0's `ui2.js`.
+(`.blm-i-chip`, `data-blm-i-last`…) so it never fights UI 2.0's `ui2.js`.
 - Work-package detail (split view and full page) follows iOS grouped lists:
   the panel is the grouped background (`--g-grouped`, #f2f2f7 / near-black, glass),
   content sits on solid `--g-card` cards with 12 px radii. Title 28 px bold (22 px

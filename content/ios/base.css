@@ -538,7 +538,7 @@ html.blm-ios .blm-i-unclip:not(#blm-x) { overflow: visible !important; }
    Press feedback: anything pressable dips the moment the pointer goes down, as
    iOS controls do, before the click or its request has even started. Rows and
    inline values tint instead of shrinking, so the table never shifts. */
-html.blm-ios :is(button, .button, a.op-tab-row--link, .blm-i-empty-toggle, #rb .backlog > .header .toggler).blm-i-pressed {
+html.blm-ios :is(button, .button, a.op-tab-row--link, #rb .backlog > .header .toggler).blm-i-pressed {
   transform: scale(.96); opacity: .72; transition: transform 80ms ease-out, opacity 80ms ease-out !important;
 }
 html.blm-ios :is(.menu-item, .ng-option, .inline-edit--display-field).blm-i-pressed {
