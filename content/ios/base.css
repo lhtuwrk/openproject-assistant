@@ -145,61 +145,22 @@ html.blm-ios #main-menu {
    reset since Chrome ignores the pseudo-elements while it is set (and it is
    inherited from the dark theme's html rule). The resize grip and its line
    only show while hovered. */
-html.blm-ios #main-menu *,
-html.blm-ios #content-wrapper,
-html.blm-ios #content-wrapper *,
-html.blm-ios .work-packages--show-view,
-html.blm-ios .work-packages--show-view *,
-html.blm-ios .work-packages--details,
-html.blm-ios .work-packages--details * {
+/* One selector per pseudo-element: each rule here is checked against every element on
+   every style recalc (e.g. each move of the split-view resizer), so listing the four
+   panes separately cost 4x. */
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details), html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) * {
   scrollbar-color: auto; scrollbar-width: auto;
 }
-html.blm-ios #main-menu *::-webkit-scrollbar,
-html.blm-ios #content-wrapper::-webkit-scrollbar,
-html.blm-ios #content-wrapper *::-webkit-scrollbar,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar,
-html.blm-ios .work-packages--details::-webkit-scrollbar,
-html.blm-ios .work-packages--details *::-webkit-scrollbar {
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar {
   width: 6px; height: 6px; background: transparent;
 }
-html.blm-ios #main-menu *::-webkit-scrollbar-track,
-html.blm-ios #content-wrapper::-webkit-scrollbar-track,
-html.blm-ios #content-wrapper *::-webkit-scrollbar-track,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar-track,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar-track,
-html.blm-ios .work-packages--details::-webkit-scrollbar-track,
-html.blm-ios .work-packages--details *::-webkit-scrollbar-track,
-html.blm-ios #main-menu *::-webkit-scrollbar-corner,
-html.blm-ios #content-wrapper::-webkit-scrollbar-corner,
-html.blm-ios #content-wrapper *::-webkit-scrollbar-corner,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar-corner,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar-corner,
-html.blm-ios .work-packages--details::-webkit-scrollbar-corner,
-html.blm-ios .work-packages--details *::-webkit-scrollbar-corner { background: transparent; }
-html.blm-ios #main-menu *::-webkit-scrollbar-button,
-html.blm-ios #content-wrapper::-webkit-scrollbar-button,
-html.blm-ios #content-wrapper *::-webkit-scrollbar-button,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar-button,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar-button,
-html.blm-ios .work-packages--details::-webkit-scrollbar-button,
-html.blm-ios .work-packages--details *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-html.blm-ios #main-menu *::-webkit-scrollbar-thumb,
-html.blm-ios #content-wrapper::-webkit-scrollbar-thumb,
-html.blm-ios #content-wrapper *::-webkit-scrollbar-thumb,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar-thumb,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar-thumb,
-html.blm-ios .work-packages--details::-webkit-scrollbar-thumb,
-html.blm-ios .work-packages--details *::-webkit-scrollbar-thumb {
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar-track, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar-track,
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar-corner, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar-corner { background: transparent; }
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar-button, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar-thumb, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar-thumb {
   background: var(--g-scroll-thumb); border-radius: 999px;
 }
-html.blm-ios #main-menu *::-webkit-scrollbar-thumb:hover,
-html.blm-ios #content-wrapper::-webkit-scrollbar-thumb:hover,
-html.blm-ios #content-wrapper *::-webkit-scrollbar-thumb:hover,
-html.blm-ios .work-packages--show-view::-webkit-scrollbar-thumb:hover,
-html.blm-ios .work-packages--show-view *::-webkit-scrollbar-thumb:hover,
-html.blm-ios .work-packages--details::-webkit-scrollbar-thumb:hover,
-html.blm-ios .work-packages--details *::-webkit-scrollbar-thumb:hover {
+html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details)::-webkit-scrollbar-thumb:hover, html.blm-ios :is(#main-menu, #content-wrapper, .work-packages--show-view, .work-packages--details) *::-webkit-scrollbar-thumb:hover {
   background: var(--g-scroll-thumb-hover);
 }
 /* The sidebar itself shows no bar: the list inside it is what scrolls, and

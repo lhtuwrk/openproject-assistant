@@ -71,7 +71,7 @@ html.blm-ios-notif .op-ian-item--top-line {
   color: var(--g-text3) !important; font: 400 13px var(--g-font) !important;
 }
 html.blm-ios-notif .op-ian-item--top-line * { font-family: var(--g-font) !important; }
-html.blm-ios-notif .op-ian-item--top-line :is(a, span, div):not([class*="__hl_"]):not(.op-bubble):not(.op-ian-item--buttons *) {
+html.blm-ios-notif .op-ian-item--top-line :is(a, span, div):not([class*="__hl_"]):not(.op-bubble):not(.op-bubble *):not(.op-ian-item--buttons *) {
   color: var(--g-text3) !important; font-weight: 400 !important;
 }
 /* Status: a soft tinted chip with a dot in its tone, as in the list (the tone is
@@ -101,11 +101,24 @@ html.blm-ios-notif .op-ian-item .blm-i-chip[class*="__hl_background_status"]::be
 }
 /* Subject: the type in its colour, small caps; the title in body text */
 html.blm-ios-notif .op-ian-item [class*="__hl_inline_type"] {
-  font: 600 12px var(--g-font) !important; letter-spacing: .03em; margin-right: 4px;
+  display: inline-flex !important; align-items: center; height: 18px; padding: 0 6px !important;
+  margin-right: 6px; vertical-align: 2px;
+  border: 0 !important; outline: 0 !important; box-shadow: none !important; border-radius: 5px !important;
+  background: color-mix(in srgb, currentColor 12%, transparent) !important;
+  font: 700 10.5px/1 var(--g-font) !important; letter-spacing: .05em; text-transform: uppercase;
 }
 html.blm-ios-notif .op-ian-item :is(.op-ian-item--subject, [class*="--subject"]) {
   color: var(--g-text) !important; font: 600 15px/1.35 var(--g-font) !important;
+  text-align: left !important; justify-self: start !important; align-self: start !important;
+  margin-left: 0 !important; margin-right: auto !important; width: auto !important;
 }
+html.blm-ios-notif .op-ian-item :is(.op-ian-item--subject, [class*="--subject"]) * { text-align: left !important; }
+/* OpenProject centres the title line; pin every row block to the left */
+html.blm-ios-notif .op-ian-item,
+html.blm-ios-notif .op-ian-item :not(.op-ian-item--buttons):not(.op-ian-item--buttons *):not(button) {
+  text-align: left !important; justify-content: flex-start; justify-items: start;
+}
+html.blm-ios-notif .op-ian-item--top-line { justify-content: flex-start !important; }
 html.blm-ios-notif .op-ian-item_read :is(.op-ian-item--subject, [class*="--subject"]) { font-weight: 400 !important; }
 html.blm-ios-notif .op-ian-item > :not(.op-ian-item--top-line):not(.op-ian-item--bottom-line) { margin-top: 2px; }
 /* Bottom line: time and author, grey */
@@ -138,8 +151,11 @@ html.blm-ios-notif .op-bubble {
 }
 html.blm-ios-notif .op-ian-item .op-bubble,
 html.blm-ios-notif #main-menu :is(.selected, [aria-current]) .op-bubble {
-  background: var(--g-accent) !important; color: var(--g-on-accent) !important;
+  background: var(--g-accent) !important; color: var(--g-on-accent, #fff) !important;
 }
+/* The row's count: a small round accent badge, its number always readable */
+html.blm-ios-notif .op-ian-item .op-bubble { min-width: 18px; height: 18px; padding: 0 5px; font-size: 11px !important; }
+html.blm-ios-notif .op-bubble * { color: inherit !important; font: inherit !important; background: transparent !important; }
 
 /* Sidebar section titles (REASON, UNREAD BY PROJECT): iOS list headers */
 html.blm-ios-notif #main-menu :is(.op-sidemenu--title, [class*="sidemenu--title"]) {
